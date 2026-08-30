@@ -18,6 +18,7 @@ copy hydroc/lpp.py;     copy hydroc/lppd.py
 copy hydroc/presets.py; copy hydroc/hotkeys.py
 copy hydroc/version.py
 copy hydroc/deps.py;    copy hydroc/kmod.py
+copy hydroc/fancurve.py
 copy hydroc/desktop.py; copy hydroc/desktop_files
 copy hydroc/ui;         copy hydroc/systemd
 

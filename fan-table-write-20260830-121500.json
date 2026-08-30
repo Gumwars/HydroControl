@@ -1,0 +1,76 @@
+{
+  "started": "2026-08-30T12:14:57",
+  "slots": [
+    {
+      "addr": "0x0F00",
+      "name": "CPU DownT[0]",
+      "baseline": 0,
+      "wrote": 42,
+      "readback": 42,
+      "held": true,
+      "restored": true
+    },
+    {
+      "addr": "0x0F10",
+      "name": "CPU UpT[0]",
+      "baseline": 0,
+      "wrote": 43,
+      "readback": 43,
+      "held": true,
+      "restored": true
+    },
+    {
+      "addr": "0x0F20",
+      "name": "CPU Duty[0]",
+      "baseline": 0,
+      "wrote": 44,
+      "readback": 44,
+      "held": true,
+      "restored": true
+    },
+    {
+      "addr": "0x0F30",
+      "name": "GPU DownT[0]",
+      "baseline": 0,
+      "wrote": 45,
+      "readback": 45,
+      "held": true,
+      "restored": true
+    },
+    {
+      "addr": "0x0F40",
+      "name": "GPU UpT[0]",
+      "baseline": 0,
+      "wrote": 46,
+      "readback": 46,
+      "held": true,
+      "restored": true
+    },
+    {
+      "addr": "0x0F50",
+      "name": "GPU Duty[0]",
+      "baseline": 0,
+      "wrote": 47,
+      "readback": 47,
+      "held": true,
+      "restored": true
+    }
+  ],
+  "pre": {
+    "0x0741": 1,
+    "0x07C6": 0,
+    "0x07C5": 0,
+    "0x0751": 0,
+    "fans": [
+      1603,
+      1629
+    ]
+  },
+  "post": {
+    "fans": [
+      1605,
+      1629
+    ],
+    "0x07C6": 0
+  }
+}

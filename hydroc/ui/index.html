@@ -168,6 +168,10 @@ input[type=range]:disabled{opacity:.4}
 .gaugeval b{font:500 26px/1 var(--font-mono);font-variant-numeric:tabular-nums}
 .gaugeval span{font-size:10.5px;color:var(--color-neutral-500)}
 .chart{width:100%;height:92px;display:block;overflow:visible}
+.curvechart{width:100%;aspect-ratio:520/210;height:auto;display:block;
+  overflow:visible;touch-action:none}
+.curvechart .cpt{fill:var(--color-accent);cursor:ns-resize}
+.curvechart .cpt:hover{r:7}
 .chart .fill{fill:color-mix(in oklab,var(--color-accent) 18%,transparent)}
 .chart .line{fill:none;stroke:var(--color-accent);stroke-width:1.6;
   stroke-linejoin:round;stroke-linecap:round}
@@ -199,6 +203,7 @@ const NAV=[
  {id:'overview',name:'Overview',sub:'live telemetry · 1 Hz'},
  {id:'perf',name:'Performance',sub:'EC power limits · volatile'},
  {id:'batt',name:'Battery',sub:'charging policy · health'},
+ {id:'fans',name:'Fans',sub:'curve control · verified'},
  {id:'light',name:'Lighting',sub:'keyboard · chin bar'},
  {id:'lpp',name:'Cooling dock',sub:'LPP · Bluetooth LE',optional:true},
  {id:'sys',name:'System',sub:'platform toggles'}];
@@ -356,6 +361,9 @@ async function refreshState(){
   }
   const l=await api('/api/lpp');
   S.lpp=l||{running:false};
+  const f=await api('/api/fan');if(f)S.fan=Object.assign(S.fan||{},f,
+    {cpu:(S.fanDirty?S.fan.cpu:f.cpu)||f.presets.balanced.cpu,
+     gpu:(S.fanDirty?S.fan.gpu:f.gpu)||f.presets.balanced.gpu});
   if(S.lppFan===null&&typeof S.lpp.fan==='number')S.lppFan=S.lpp.fan;
   if(S.section==='lpp'&&!S.lpp.present)S.section='overview';
   render();
@@ -391,7 +399,7 @@ function render(){
   const cur=NAV.find(n=>n.id===S.section);
   $('#secName').textContent=cur.name;$('#secSub').textContent=cur.sub;
   renderHealth();renderBanners();
-  $('#view').innerHTML=({overview:vOverview,perf:vPerf,batt:vBatt,light:vLight,lpp:vLpp,sys:vSys})[S.section]();
+  $('#view').innerHTML=({overview:vOverview,perf:vPerf,batt:vBatt,fans:vFans,light:vLight,lpp:vLpp,sys:vSys})[S.section]();
   paintTelemetry();bind();
 }
 function renderHealth(){
@@ -508,6 +516,135 @@ function vOverview(){
       <div class="row"><span class="lbl">AC connected</span><span class="kv" data-t="ac_online">—</span></div>
     </div>
   </div>`;
+}
+
+// ── Fans ────────────────────────────────────────────────────────────────────
+// The editor works in DUTY PERCENT, not rpm. We command duty; rpm is a
+// measurement that drifts with dust, altitude and fan age, so an rpm axis would
+// promise a setpoint we cannot hold. Measured rpm is overlaid read-only instead.
+const CW=520,CH=210,CPAD={l:34,r:10,t:12,b:24},TMIN=30,TMAX=105;
+function cx(t){return CPAD.l+(t-TMIN)/(TMAX-TMIN)*(CW-CPAD.l-CPAD.r);}
+function cy(d){return CH-CPAD.b-(d/100)*(CH-CPAD.t-CPAD.b);}
+function curveChart(fan){
+  const pts=S.fan[fan]||[],floor=S.fan.min_duty||25;
+  const live=fan==='cpu'?{t:S.tel.cpu_temp_c,p:S.tel.pwm1}:{t:S.tel.gpu_temp_c,p:S.tel.pwm2};
+  const path=pts.map((p,i)=>`${i?'L':'M'}${cx(p[0]).toFixed(1)},${cy(p[2]).toFixed(1)}`).join('');
+  const grid=[40,50,60,70,80,90,100].map(t=>
+    `<line x1="${cx(t)}" y1="${CPAD.t}" x2="${cx(t)}" y2="${CH-CPAD.b}" stroke="var(--color-divider)"/>
+     <text x="${cx(t)}" y="${CH-8}" fill="var(--color-neutral-400)" font-size="9" text-anchor="middle">${t}</text>`).join('');
+  const yax=[0,25,50,75,100].map(d=>
+    `<line x1="${CPAD.l}" y1="${cy(d)}" x2="${CW-CPAD.r}" y2="${cy(d)}" stroke="var(--color-divider)"/>
+     <text x="${CPAD.l-5}" y="${cy(d)+3}" fill="var(--color-neutral-400)" font-size="9" text-anchor="end">${d}</text>`).join('');
+  const dots=pts.map((p,i)=>`<circle class="cpt" data-fan="${fan}" data-i="${i}"
+     cx="${cx(p[0]).toFixed(1)}" cy="${cy(p[2]).toFixed(1)}" r="5"><title>${p[0]}°C → ${p[2]}%  (falls back below ${p[1]}°C)</title></circle>`).join('');
+  const now=(live.t!=null&&live.p!=null)?
+    `<circle cx="${cx(live.t).toFixed(1)}" cy="${cy(Math.round(live.p*200/255)/2).toFixed(1)}"
+       r="4" fill="none" stroke="var(--color-warn)" stroke-width="2"/>`:'';
+  return `<svg class="curvechart" viewBox="0 0 ${CW} ${CH}" data-curve="${fan}">
+    <rect x="${CPAD.l}" y="${cy(floor)}" width="${CW-CPAD.l-CPAD.r}" height="${CH-CPAD.b-cy(floor)}"
+      fill="var(--color-danger-tint)"/>
+    ${yax}${grid}
+    <path d="${path}" fill="none" stroke="var(--color-accent)" stroke-width="2"/>
+    ${dots}${now}</svg>`;
+}
+function vFans(){
+  if(!S.fan)return `<div class="card">reading fan state…</div>`;
+  const manual=S.state.fan_mode==='manual',floor=S.fan.min_duty||25;
+  return `
+  <div class="card">
+    <div class="row"><div class="kick">Fan control</div>
+      <div class="seg" id="fanmode">
+        <button data-v="auto" aria-pressed="${!manual}">Auto</button>
+        <button data-v="manual" aria-pressed="${manual}">Manual</button></div></div>
+    <div class="lbl">Auto leaves the fans to the firmware. Manual writes your curve into the
+      EC's own tables — it honours both the duty and the fall-back temperature, and it is
+      reversible. Verified on this hardware; see DESIGN.md §3.6.</div>
+    <div class="lbl">Two things worth knowing. The EC ramps toward a new duty at about
+      ${S.fan.slew_pct_per_s}%/s, so a change takes seconds to hear — it has not failed.
+      And no point may go below <b>${floor}%</b>: whether the firmware still overrides in a
+      thermal emergency is untested, so a curve that can command zero is not allowed to exist.
+      That means giving up the stock silent-below-55°C band for now.</div>
+  </div>
+  ${manual?`
+  <div class="card" style="margin-top:var(--space-4)">
+    <div class="row"><div class="kick">Load a curve</div>
+      <div class="seg" id="fanpreset">${['office','balanced','performance'].map(n=>
+        `<button data-v="${n}">${n[0].toUpperCase()+n.slice(1)}</button>`).join('')}</div></div>
+    <div class="lbl">Each power preset carries a matching curve. Picking one here loads it for
+      editing; drag any point up or down to change its duty.</div>
+  </div>
+  <div class="card" style="margin-top:var(--space-4)">
+    <div class="row"><div class="kick">CPU fan</div><span class="kv"><span data-t="fan1_rpm">—</span> rpm</span></div>
+    ${curveChart('cpu')}
+    <div class="lbl">Temperature °C across, duty % up. The ring is where the machine is right now.</div>
+  </div>
+  <div class="card" style="margin-top:var(--space-4)">
+    <div class="row"><div class="kick">GPU fan</div><span class="kv"><span data-t="fan2_rpm">—</span> rpm</span></div>
+    ${curveChart('gpu')}
+    <div class="lbl">A separate table really does drive this fan — SPLIT_TABLES was verified by
+      writing 40% to the CPU table and 75% to this one and watching them diverge.</div>
+  </div>
+  <div class="card" style="margin-top:var(--space-4)">
+    <button class="btn" id="fanapply"${S.fanDirty?'':' disabled'}>Apply curve</button>
+    <span class="lbl" style="margin-left:10px">${S.fanDirty?'unsaved changes':'no changes'}</span>
+  </div>`:''}`;
+}
+
+// Monotonic by construction: dragging a point drags its neighbours out of the
+// way rather than letting the user build a curve the daemon will reject. The
+// floor is clamped here too, so the invalid state is unreachable in the UI
+// instead of being caught after the fact.
+function setDuty(fan,i,q){
+  const a=S.fan[fan],floor=S.fan.min_duty||25;
+  q=Math.max(floor,Math.min(100,Math.round(q)));
+  a[i][2]=q;
+  for(let j=i-1;j>=0;j--)a[j][2]=Math.min(a[j][2],q);
+  for(let j=i+1;j<a.length;j++)a[j][2]=Math.max(a[j][2],q);
+  S.fanDirty=true;
+}
+function redrawCurve(fan){
+  const svg=document.querySelector(`[data-curve="${fan}"]`);if(!svg)return;
+  const pts=S.fan[fan];
+  svg.querySelector('path').setAttribute('d',
+    pts.map((p,i)=>`${i?'L':'M'}${cx(p[0]).toFixed(1)},${cy(p[2]).toFixed(1)}`).join(''));
+  svg.querySelectorAll('.cpt').forEach(c=>{
+    const i=+c.dataset.i;c.setAttribute('cy',cy(pts[i][2]).toFixed(1));
+    const t=c.querySelector('title');
+    if(t)t.textContent=`${pts[i][0]}°C → ${pts[i][2]}%  (falls back below ${pts[i][1]}°C)`;});
+}
+function bindFans(){
+  const mode=$('#fanmode');
+  if(mode)mode.onclick=e=>{const b=e.target.closest('[data-v]');if(!b)return;
+    if(b.dataset.v==='manual'){
+      applySettings({fan_mode:'manual',fan_curve_cpu:S.fan.cpu,fan_curve_gpu:S.fan.gpu});
+    }else{applySettings({fan_mode:'auto'});}
+    S.fanDirty=false;};
+  const pre=$('#fanpreset');
+  if(pre)pre.onclick=e=>{const b=e.target.closest('[data-v]');if(!b)return;
+    const c=S.fan.presets[b.dataset.v];if(!c)return;
+    S.fan.cpu=c.cpu.map(p=>p.slice());S.fan.gpu=c.gpu.map(p=>p.slice());
+    S.fanDirty=true;render();};
+  const ap=$('#fanapply');
+  if(ap)ap.onclick=()=>{S.fanDirty=false;
+    applySettings({fan_mode:'manual',fan_curve_cpu:S.fan.cpu,fan_curve_gpu:S.fan.gpu});};
+
+  document.querySelectorAll('[data-curve]').forEach(svg=>{
+    let dragging=null;
+    const dutyAt=ev=>{const r=svg.getBoundingClientRect();
+      const yv=(ev.clientY-r.top)/r.height*CH;
+      return (CH-CPAD.b-yv)/(CH-CPAD.t-CPAD.b)*100;};
+    svg.addEventListener('pointerdown',ev=>{
+      const c=ev.target.closest('.cpt');if(!c)return;
+      dragging={fan:c.dataset.fan,i:+c.dataset.i};
+      svg.setPointerCapture(ev.pointerId);ev.preventDefault();});
+    svg.addEventListener('pointermove',ev=>{
+      if(!dragging)return;
+      setDuty(dragging.fan,dragging.i,dutyAt(ev));redrawCurve(dragging.fan);});
+    svg.addEventListener('pointerup',ev=>{
+      if(!dragging)return;dragging=null;
+      try{svg.releasePointerCapture(ev.pointerId);}catch(_){}
+      render();});
+  });
 }
 function chargeName(id){const c=CHARGE.find(c=>c.id===id);return c?c.name:(id||'—');}
 
@@ -957,6 +1094,7 @@ function bind(){
       body:JSON.stringify({mode:S.chin.mode,color:S.chin.color,brightness:S.chin.bri,
         speed:toWireSpeed(S.chin.speed)})});
     msg('#chinmsg',d&&d.ok?`chin bar → ${S.chin.mode}`:'failed: '+((d&&d.error)||'no response'),!(d&&d.ok));};
+  bindFans();
 }
 window.addEventListener('keydown',e=>{
   if(S.section!=='light'||S.kbTab!=='perkey')return;

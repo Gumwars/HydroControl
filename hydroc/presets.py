@@ -58,6 +58,21 @@ CUSTOM = "custom"
 PRESET_KEYS = ("custom_profile", "cpu_pl1", "cpu_pl2", "cpu_pl4", "gpu_ctgp_offset")
 
 
+def fan_for(name: str) -> dict | None:
+    """The fan curve pair belonging to a preset, or None.
+
+    Deliberately NOT part of ["settings"]. match() compares every settings key
+    against live state, and the curves are only readable while manual fan
+    control is on -- folding them in would make every preset report "custom"
+    whenever the fans are on firmware control, which is most of the time.
+    Power and cooling are applied together; they are compared separately.
+    """
+    from . import fancurve
+    pair = fancurve.PRESET_CURVES.get(name)
+    return {"cpu": [list(p) for p in pair["cpu"]],
+            "gpu": [list(p) for p in pair["gpu"]]} if pair else None
+
+
 def match(state: dict) -> str:
     """Which preset the hardware currently matches, or 'custom'.
 

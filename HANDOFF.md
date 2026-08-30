@@ -137,6 +137,8 @@ hydroc/            the application
   rgb.py           visual key id -> matrix bridge; chin bar modes
   lpp.py           LPP dock protocol (pure, no transport)
   lppd.py          LPP sidecar daemon — BLE, Unix socket at /run/hydroc/lpp.sock
+  deps.py          "can the ROOT daemon import this?" — one answer, three-valued
+  kmod.py          refuses a module unload with no file to load back
   cli.py           status · state · telemetry · drift · apply · doctor
   server.py        loopback HTTP bridge, /api/*
   desktop.py       GTK4 + WebKitGTK window; pkexec to start the daemon
@@ -298,24 +300,28 @@ four modes. `lppd` keeps the last 40 notifications for correlation.
 tuxedo-drivers; neither `Trickle` nor `Long_Life` caps charging over one cycle.
 Do not present them as percentage caps.
 
-**The charge threshold does not hold — write-path tested, clobbering still open.**
-Setting 80% stops charging briefly, then it resumes. `charge_path_probe.py`
-(2026-08-27) A/B-tested the two write paths live: plain ECRW writes to `0x07B9`
-and `0x07A6` **land and hold** (the FIXCGLM overlay's "ECRW is dead" premise is
-disproven on this EC), and the SCHG shadow set (`0x07CD`, `0x0497`, `0x087F`,
-`0x04AB`) is partially WKBC-writable — `0x07CD` and `0x0497` land, `0x087F`
-never moved, `0x04AB` is EC-managed. At baseline `0x07CD` held **90%** while the
-real threshold was **85%**: the app writes only `0x07B9`, never the shadow set.
-The "stops then resumes" behaviour is consistent with the EC checking the shadow
-(0x07CD=90) or clobbering `0x07B9` from it when it sets `CHARGE_CTRL_REACHED`.
-The clobbering itself is still unproven — it needs a charge cycle with
-`charge_ctrl_watch.py` running. Fix direction: write the full SCHG set together.
-See DESIGN.md §3.2. **Timeline resolved:** the probe's 85% baseline was the boot
-apply (06:16:40 logged `100 -> 85`), and the register reading 80 now is the
-user's own post-probe change (profile mtime 12:16:30) — no unattended drift,
-and the user-set 80 has held via the ECRW path since. **Process gap:** the probe
-run had no saved artifact; re-run with output saved before drawing further
-conclusions.
+**The charge threshold: write path settled, behaviour never measured.**
+`charge_path_probe.py` (2026-08-27, artifact saved) A/B-tested both paths with
+*distinct* values, so they are distinguishable — and **both ECRW and WKBC write
+`0x07B9`**, which holds for hours. An earlier run wrote the same value on both
+paths, could not tell them apart, and produced a "WKBC does not write it"
+reading that the clean re-test disproves.
+
+The "SCHG shadow set" turns out to be mostly unwritable, and maps exactly onto
+the two-window model: `0x0497` and `0x04AB` are in the `0x04xx` live window and
+cannot be written (`0x04AB` took `0xFF` and the EC restored it within 5 s),
+`0x087F` sits outside both windows and rejects writes, and `0x07CD` is the
+overlay's own GCHG readback slot — not a shadow of anything, never written on
+this machine, named by no upstream driver. **So there is no shadow set to write,
+and that fix direction is retired.**
+
+What is genuinely open is whether the threshold *holds across a charge cycle*.
+It has never been measured. "Stops at 80, then resumes" was never instrumented
+and is also exactly what a working threshold looks like — the driver exposes
+only an end threshold, so the EC's own hysteresis is invisible. **The
+discriminator is whether capacity ever climbs past the threshold to 100.** One
+cycle with `charge_ctrl_watch.py` settles it; fix its missing EC pacing first.
+See DESIGN.md §3.2.
 
 **The 30% shutdown.** Machine powers off at ~30% reported charge at idle.
 Discriminator: cell voltage at cutoff (~3.6 V/cell = real reserve; ~3.0–3.2 =
@@ -336,14 +342,13 @@ a wrong MUX write leaves no display, making it the highest-stakes write here.
    (read temp → interpolate → write `0x0F20`/`0x0F50`) with a duty floor and a
    temperature abort. Derive curves from `fan_characterise*.py` measurements,
    not from vendor JSON.
-3. **Charge threshold**: write the full SCHG set (`0x07B9` + `0x07A6` +
-   `0x0497` + `0x087F` + `0x07CD`) together, via WKBC, in the app's
-   charge-threshold path — the shadow set is currently never written and was
-   found out of sync (0x07CD=90 vs 0x07B9=85). Note `SCHG` itself does not
-   exist in this firmware's DSDT; the sequence must be replicated via WKBC
-   (see `hydroc-driver/acpi_table_fix.asl`). Then run a charge cycle with
-   `charge_ctrl_watch.py` to settle whether the EC clobbers `0x07B9` at the
-   stop point. See DESIGN.md §3.2.
+3. **Charge threshold**: measure one charge cycle. Discharge below the
+   threshold on normal use, plug in with `charge_ctrl_watch.py` running, and
+   record whether capacity plateaus near the threshold or climbs to 100. Add the
+   6 ms EC pacing to that script first — it has none, and a multi-hour run at
+   its default 0.5 s interval is several times the daemon's sustained read rate
+   (DESIGN.md §4.2). Writing the "SCHG shadow set" is **not** the fix and has
+   been retired; see DESIGN.md §3.2.
 4. **LPP**: decode the `0x31` reply frame; probe the ASCII console (`?`, `help`)
    carefully — it drives a pump.
 5. **envycontrol integration** by detect-and-delegate, not vendoring.
@@ -371,9 +376,10 @@ but **`SCHG` exists in no DSDT on this machine** (0 hits in both `kbctrl/dsdt.ds
 and `hydroc-driver/dsdt.dsl`; it lives only in the never-loaded FIXCGLM overlay,
 `hydroc-driver/acpi_table_fix.asl` / `Misc/ssdt12.dsl`). The reference driver is
 older upstream plus April-session patches calling a method that does not exist in
-this firmware. The overlay's *shadow-register map* (`0x07CD`, `0x0497`, `0x087F`,
-`0x04AB`) is real and worth keeping — its "ECRW is dead" premise is disproven
-(see DESIGN.md §3.2). Also note the April tree names `0x07CC` `CHARGE_PRIO` while
+this firmware. The overlay's *shadow-register map* does not survive testing either:
+`0x0497` and `0x04AB` are live-window and unwritable, `0x087F` rejects writes,
+and `0x07CD` is the overlay's own readback slot. Its "ECRW is dead" premise is
+disproven in both directions (see DESIGN.md §3.2). Also note the April tree names `0x07CC` `CHARGE_PRIO` while
 newer upstream calls it `USB_C_POWER_PRIORITY` — that tree's register semantics
 are local guesses and at least one is a mis-naming.
 

@@ -143,6 +143,7 @@ hydroc/            the application
   ui/index.html    the app — no build step, no dependencies
   systemd/         apply · resume · server · lpp units (@INSTALL_DIR@ templated)
 
+tests/             unittest suite — pure logic, no hardware, no dependencies
 kbctrl/            RGB transports (ITE 8291 libusb, ITE 8233 hidraw)
 uniwill-laptop/    patched kernel module — GPL-2.0-or-later, do NOT copy out
 hydroc-driver/     Windows reference material (~830 MB, excluded from bundles)
@@ -391,6 +392,27 @@ transport is write-without-response; only a fan you can hear settles it.
 **Change one thing at a time.** A fix and a workaround applied together taught
 us nothing about which mattered — the `sw`-sent-twice theory is still unproven
 because the UI's Apply button changed in the same step.
+
+**Run the tests before and after.** Stdlib `unittest`, no dependencies, no
+hardware access:
+
+```bash
+python3 -m unittest discover -s tests -t .
+```
+
+They pin the things that have already caused real bugs rather than chasing
+coverage: the half-scale PL4 quantiser, renamed keys becoming phantom drift, the
+LPP pump codes that are deliberately *not* in speed order, presets staying
+applicable (an odd PL4 can never be matched after it is applied), and the two
+rules that were learned the hard way — an unprivileged dependency check is
+UNKNOWN and never FAILED, and a module is never unloaded without a file to load
+back.
+
+Every test was verified by mutation: break the behaviour it claims to protect
+and it fails. A test that cannot fail is decoration. One trap when doing that
+yourself — restoring a source file can leave stale `__pycache__` that shadows it,
+so the suite goes on testing the mutated code. Run `python3 -B` and clear
+`__pycache__`, or you will debug the harness instead of the code.
 
 **Write the corrections down.** DESIGN.md carries several entries that say "this
 was wrong and here is why". They are worth more than the entries that were right

@@ -1,0 +1,47 @@
+__pycache__/
+*.pyc
+*.o
+*.ko
+*.mod
+*.mod.c
+*.cmd
+.*.cmd
+Module.symvers
+modules.order
+*.log
+design/_*.raw.json
+battery-*.csv
+
+# ── Vendor material — never commit ───────────────────────────────────────────
+# Windows Control Center binaries, installers, DLLs and EC firmware dumps.
+# Three independent reasons: they are Eluktronics/Uniwill copyright and not ours
+# to redistribute; single files exceed GitHub's 100 MB hard limit; and they are
+# reference material, not part of the build. Roughly 1 GB of the working tree,
+# none of which ships. Keep them locally; they stay useful (read with
+# `strings -el` — .NET stores UTF-16).
+hydroc-driver/
+kbctrl/Resources/
+ec_firmware/
+*.ELUK
+*.dll
+*.exe
+
+# Probe artefacts — evidence from a specific run on a specific machine.
+charge-path-probe-*.json
+
+# ── Third-party: Chokotodake/kbctrl ──────────────────────────────────────────
+# kbctrl/ began as a clone of https://github.com/Chokotodake/kbctrl. These five
+# files are authored by Chokotodake <nolanmckay3@gmail.com> and that repo ships
+# NO licence, so by default all rights are reserved and they cannot be
+# redistributed or relicensed here. Everything HydroControl actually uses --
+# kbctrl/kbctrl/, key_matrix.json, pyproject.toml -- is our own MIT work and is
+# committed. Keep these locally if useful; they must not be published.
+# (kbctrl.py also shadows our kbctrl/ package on sys.path.)
+kbctrl/README.md
+kbctrl/hidpoke.py
+kbctrl/kbctrl.py
+kbctrl/lsusb_detail.py
+kbctrl/rgb_sanitycheck.sh
+
+# Editor/manual backups — git makes these redundant
+*.bak

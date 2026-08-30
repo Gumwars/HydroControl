@@ -1,0 +1,413 @@
+{
+  "kernel": "7.2.0-1-cachyos",
+  "cpus": 32,
+  "pwm_max": 200,
+  "points": [
+    {
+      "equilibrium_cpu_c": 57.8,
+      "equilibrium_gpu_c": 42.0,
+      "watts": 45.0,
+      "rpm1": 1601,
+      "rpm2": 1633,
+      "ec_override": true,
+      "samples": [
+        {
+          "t": 2.1,
+          "cpu_c": 57.0,
+          "gpu_c": 42.0,
+          "watts": 45.0,
+          "rpm1": 1601,
+          "rpm2": 1631,
+          "pwm1": 76
+        },
+        {
+          "t": 4.3,
+          "cpu_c": 58.0,
+          "gpu_c": 42.0,
+          "watts": 45.0,
+          "rpm1": 1601,
+          "rpm2": 1633,
+          "pwm1": 76
+        },
+        {
+          "t": 6.4,
+          "cpu_c": 58.0,
+          "gpu_c": 42.0,
+          "watts": 45.0,
+          "rpm1": 1603,
+          "rpm2": 1629,
+          "pwm1": 76
+        },
+        {
+          "t": 8.5,
+          "cpu_c": 58.0,
+          "gpu_c": 42.0,
+          "watts": 45.0,
+          "rpm1": 1604,
+          "rpm2": 1633,
+          "pwm1": 76
+        },
+        {
+          "t": 10.6,
+          "cpu_c": 58.0,
+          "gpu_c": 42.0,
+          "watts": 45.0,
+          "rpm1": 1601,
+          "rpm2": 1633,
+          "pwm1": 76
+        }
+      ],
+      "duty_pct": 35,
+      "duty_reg": 70,
+      "applied": false
+    },
+    {
+      "equilibrium_cpu_c": 59.2,
+      "equilibrium_gpu_c": 43.4,
+      "watts": 45.0,
+      "rpm1": 1605,
+      "rpm2": 1631,
+      "ec_override": true,
+      "samples": [
+        {
+          "t": 2.1,
+          "cpu_c": 59.0,
+          "gpu_c": 43.0,
+          "watts": 45.0,
+          "rpm1": 1603,
+          "rpm2": 1631,
+          "pwm1": 76
+        },
+        {
+          "t": 4.2,
+          "cpu_c": 59.0,
+          "gpu_c": 43.0,
+          "watts": 45.0,
+          "rpm1": 1604,
+          "rpm2": 1631,
+          "pwm1": 76
+        },
+        {
+          "t": 6.3,
+          "cpu_c": 59.0,
+          "gpu_c": 43.0,
+          "watts": 45.0,
+          "rpm1": 1604,
+          "rpm2": 1633,
+          "pwm1": 76
+        },
+        {
+          "t": 8.5,
+          "cpu_c": 59.0,
+          "gpu_c": 44.0,
+          "watts": 45.0,
+          "rpm1": 1603,
+          "rpm2": 1631,
+          "pwm1": 76
+        },
+        {
+          "t": 10.6,
+          "cpu_c": 60.0,
+          "gpu_c": 44.0,
+          "watts": 45.0,
+          "rpm1": 1605,
+          "rpm2": 1631,
+          "pwm1": 76
+        }
+      ],
+      "duty_pct": 45,
+      "duty_reg": 90,
+      "applied": false
+    },
+    {
+      "equilibrium_cpu_c": 60.0,
+      "equilibrium_gpu_c": 44.8,
+      "watts": 45.0,
+      "rpm1": 1604,
+      "rpm2": 1634,
+      "ec_override": true,
+      "samples": [
+        {
+          "t": 2.1,
+          "cpu_c": 60.0,
+          "gpu_c": 44.0,
+          "watts": 45.0,
+          "rpm1": 1603,
+          "rpm2": 1632,
+          "pwm1": 76
+        },
+        {
+          "t": 4.2,
+          "cpu_c": 60.0,
+          "gpu_c": 45.0,
+          "watts": 45.0,
+          "rpm1": 1605,
+          "rpm2": 1634,
+          "pwm1": 76
+        },
+        {
+          "t": 6.3,
+          "cpu_c": 60.0,
+          "gpu_c": 45.0,
+          "watts": 45.0,
+          "rpm1": 1604,
+          "rpm2": 1632,
+          "pwm1": 76
+        },
+        {
+          "t": 8.4,
+          "cpu_c": 60.0,
+          "gpu_c": 45.0,
+          "watts": 45.0,
+          "rpm1": 1603,
+          "rpm2": 1632,
+          "pwm1": 76
+        },
+        {
+          "t": 10.5,
+          "cpu_c": 60.0,
+          "gpu_c": 45.0,
+          "watts": 45.0,
+          "rpm1": 1604,
+          "rpm2": 1634,
+          "pwm1": 76
+        }
+      ],
+      "duty_pct": 55,
+      "duty_reg": 110,
+      "applied": false
+    },
+    {
+      "equilibrium_cpu_c": 61.4,
+      "equilibrium_gpu_c": 45.8,
+      "watts": 45.0,
+      "rpm1": 1603,
+      "rpm2": 1633,
+      "ec_override": true,
+      "samples": [
+        {
+          "t": 2.2,
+          "cpu_c": 61.0,
+          "gpu_c": 45.0,
+          "watts": 45.0,
+          "rpm1": 1604,
+          "rpm2": 1634,
+          "pwm1": 76
+        },
+        {
+          "t": 4.3,
+          "cpu_c": 61.0,
+          "gpu_c": 46.0,
+          "watts": 45.0,
+          "rpm1": 1605,
+          "rpm2": 1634,
+          "pwm1": 76
+        },
+        {
+          "t": 6.4,
+          "cpu_c": 61.0,
+          "gpu_c": 46.0,
+          "watts": 45.0,
+          "rpm1": 1604,
+          "rpm2": 1633,
+          "pwm1": 76
+        },
+        {
+          "t": 8.5,
+          "cpu_c": 62.0,
+          "gpu_c": 46.0,
+          "watts": 45.0,
+          "rpm1": 1604,
+          "rpm2": 1633,
+          "pwm1": 76
+        },
+        {
+          "t": 10.6,
+          "cpu_c": 62.0,
+          "gpu_c": 46.0,
+          "watts": 45.0,
+          "rpm1": 1603,
+          "rpm2": 1633,
+          "pwm1": 76
+        }
+      ],
+      "duty_pct": 65,
+      "duty_reg": 130,
+      "applied": false
+    },
+    {
+      "equilibrium_cpu_c": 61.4,
+      "equilibrium_gpu_c": 46.2,
+      "watts": 34.5,
+      "rpm1": 1606,
+      "rpm2": 1632,
+      "ec_override": true,
+      "samples": [
+        {
+          "t": 2.1,
+          "cpu_c": 61.0,
+          "gpu_c": 46.0,
+          "watts": 34.7,
+          "rpm1": 1605,
+          "rpm2": 1634,
+          "pwm1": 76
+        },
+        {
+          "t": 4.2,
+          "cpu_c": 61.0,
+          "gpu_c": 46.0,
+          "watts": 34.0,
+          "rpm1": 1606,
+          "rpm2": 1633,
+          "pwm1": 76
+        },
+        {
+          "t": 6.4,
+          "cpu_c": 61.0,
+          "gpu_c": 46.0,
+          "watts": 34.4,
+          "rpm1": 1604,
+          "rpm2": 1633,
+          "pwm1": 76
+        },
+        {
+          "t": 8.5,
+          "cpu_c": 62.0,
+          "gpu_c": 46.0,
+          "watts": 34.6,
+          "rpm1": 1605,
+          "rpm2": 1632,
+          "pwm1": 76
+        },
+        {
+          "t": 10.7,
+          "cpu_c": 62.0,
+          "gpu_c": 47.0,
+          "watts": 34.7,
+          "rpm1": 1606,
+          "rpm2": 1632,
+          "pwm1": 76
+        }
+      ],
+      "duty_pct": 75,
+      "duty_reg": 150,
+      "applied": false
+    },
+    {
+      "equilibrium_cpu_c": 62.0,
+      "equilibrium_gpu_c": 47.0,
+      "watts": 34.9,
+      "rpm1": 1605,
+      "rpm2": 1632,
+      "ec_override": true,
+      "samples": [
+        {
+          "t": 2.1,
+          "cpu_c": 62.0,
+          "gpu_c": 47.0,
+          "watts": 34.7,
+          "rpm1": 1604,
+          "rpm2": 1636,
+          "pwm1": 76
+        },
+        {
+          "t": 4.2,
+          "cpu_c": 62.0,
+          "gpu_c": 47.0,
+          "watts": 34.9,
+          "rpm1": 1606,
+          "rpm2": 1634,
+          "pwm1": 76
+        },
+        {
+          "t": 6.3,
+          "cpu_c": 62.0,
+          "gpu_c": 47.0,
+          "watts": 34.9,
+          "rpm1": 1605,
+          "rpm2": 1633,
+          "pwm1": 76
+        },
+        {
+          "t": 8.4,
+          "cpu_c": 62.0,
+          "gpu_c": 47.0,
+          "watts": 34.9,
+          "rpm1": 1605,
+          "rpm2": 1634,
+          "pwm1": 76
+        },
+        {
+          "t": 10.6,
+          "cpu_c": 62.0,
+          "gpu_c": 47.0,
+          "watts": 34.9,
+          "rpm1": 1605,
+          "rpm2": 1632,
+          "pwm1": 76
+        }
+      ],
+      "duty_pct": 85,
+      "duty_reg": 170,
+      "applied": false
+    },
+    {
+      "equilibrium_cpu_c": 63.0,
+      "equilibrium_gpu_c": 47.0,
+      "watts": 35.0,
+      "rpm1": 1604,
+      "rpm2": 1633,
+      "ec_override": true,
+      "samples": [
+        {
+          "t": 2.1,
+          "cpu_c": 63.0,
+          "gpu_c": 47.0,
+          "watts": 35.0,
+          "rpm1": 1605,
+          "rpm2": 1634,
+          "pwm1": 76
+        },
+        {
+          "t": 4.2,
+          "cpu_c": 63.0,
+          "gpu_c": 47.0,
+          "watts": 35.0,
+          "rpm1": 1605,
+          "rpm2": 1634,
+          "pwm1": 76
+        },
+        {
+          "t": 6.3,
+          "cpu_c": 63.0,
+          "gpu_c": 47.0,
+          "watts": 35.0,
+          "rpm1": 1606,
+          "rpm2": 1634,
+          "pwm1": 76
+        },
+        {
+          "t": 8.4,
+          "cpu_c": 63.0,
+          "gpu_c": 47.0,
+          "watts": 35.0,
+          "rpm1": 1606,
+          "rpm2": 1633,
+          "pwm1": 76
+        },
+        {
+          "t": 10.5,
+          "cpu_c": 63.0,
+          "gpu_c": 47.0,
+          "watts": 35.0,
+          "rpm1": 1604,
+          "rpm2": 1633,
+          "pwm1": 76
+        }
+      ],
+      "duty_pct": 100,
+      "duty_reg": 200,
+      "applied": false
+    }
+  ]
+}

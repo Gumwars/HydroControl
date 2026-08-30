@@ -1,0 +1,16 @@
+[Unit]
+Description=HydroControl — re-apply hardware settings after resume
+Documentation=file:@INSTALL_DIR@/DESIGN.md
+After=suspend.target hibernate.target hybrid-sleep.target suspend-then-hibernate.target
+
+[Service]
+Type=oneshot
+ExecStartPre=-/usr/bin/modprobe acpi_call
+WorkingDirectory=@INSTALL_DIR@
+ExecStart=/usr/bin/python3 -m hydroc.cli apply
+Environment=PYTHONPATH=@INSTALL_DIR@
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=suspend.target hibernate.target hybrid-sleep.target suspend-then-hibernate.target

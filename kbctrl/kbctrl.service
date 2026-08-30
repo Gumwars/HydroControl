@@ -1,0 +1,22 @@
+[Unit]
+Description=kbctrl — restore RGB keyboard profile at boot
+Documentation=https://github.com/gumwars/kbctrl
+After=multi-user.target
+# Give USB subsystem time to settle
+After=systemd-udev-settle.service
+
+[Service]
+Type=oneshot
+# Run as root — required for hidraw access.
+# Alternative: add udev rule granting a group access to /dev/hidraw*
+#   KERNEL=="hidraw*", ATTRS{idVendor}=="048d", GROUP="plugdev", MODE="0660"
+User=root
+ExecStart=/usr/bin/python3 -m kbctrl.apply
+# Adjust PYTHONPATH if kbctrl is installed in a non-standard location
+Environment=PYTHONPATH=/home/gumwars/kbctrl
+RemainAfterExit=yes
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

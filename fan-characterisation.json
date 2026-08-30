@@ -1,0 +1,292 @@
+{
+  "kernel": "7.2.0-1-cachyos",
+  "cpus": 32,
+  "pwm_max": 200,
+  "points": [
+    {
+      "equilibrium_cpu_c": 48.4,
+      "equilibrium_gpu_c": 30.8,
+      "watts": 60.0,
+      "rpm1": 0,
+      "rpm2": 0,
+      "ec_override": true,
+      "samples": [
+        {
+          "t": 2.1,
+          "cpu_c": 48.0,
+          "gpu_c": 30.0,
+          "watts": 59.8,
+          "rpm1": 0,
+          "rpm2": 0,
+          "pwm1": 0
+        },
+        {
+          "t": 4.2,
+          "cpu_c": 48.0,
+          "gpu_c": 30.0,
+          "watts": 60.1,
+          "rpm1": 0,
+          "rpm2": 0,
+          "pwm1": 0
+        },
+        {
+          "t": 6.3,
+          "cpu_c": 48.0,
+          "gpu_c": 31.0,
+          "watts": 59.9,
+          "rpm1": 0,
+          "rpm2": 0,
+          "pwm1": 0
+        },
+        {
+          "t": 8.4,
+          "cpu_c": 49.0,
+          "gpu_c": 31.0,
+          "watts": 60.1,
+          "rpm1": 0,
+          "rpm2": 0,
+          "pwm1": 0
+        },
+        {
+          "t": 10.5,
+          "cpu_c": 49.0,
+          "gpu_c": 32.0,
+          "watts": 59.9,
+          "rpm1": 0,
+          "rpm2": 0,
+          "pwm1": 0
+        }
+      ],
+      "duty_pct": 40,
+      "duty_reg": 80
+    },
+    {
+      "equilibrium_cpu_c": 49.8,
+      "equilibrium_gpu_c": 33.6,
+      "watts": 60.0,
+      "rpm1": 0,
+      "rpm2": 0,
+      "ec_override": true,
+      "samples": [
+        {
+          "t": 2.1,
+          "cpu_c": 49.0,
+          "gpu_c": 33.0,
+          "watts": 60.0,
+          "rpm1": 0,
+          "rpm2": 0,
+          "pwm1": 0
+        },
+        {
+          "t": 4.3,
+          "cpu_c": 50.0,
+          "gpu_c": 33.0,
+          "watts": 60.0,
+          "rpm1": 0,
+          "rpm2": 0,
+          "pwm1": 0
+        },
+        {
+          "t": 6.4,
+          "cpu_c": 50.0,
+          "gpu_c": 34.0,
+          "watts": 60.0,
+          "rpm1": 0,
+          "rpm2": 0,
+          "pwm1": 0
+        },
+        {
+          "t": 8.5,
+          "cpu_c": 50.0,
+          "gpu_c": 34.0,
+          "watts": 60.0,
+          "rpm1": 0,
+          "rpm2": 0,
+          "pwm1": 0
+        },
+        {
+          "t": 10.6,
+          "cpu_c": 50.0,
+          "gpu_c": 34.0,
+          "watts": 60.0,
+          "rpm1": 0,
+          "rpm2": 0,
+          "pwm1": 0
+        }
+      ],
+      "duty_pct": 55,
+      "duty_reg": 110
+    },
+    {
+      "equilibrium_cpu_c": 51.0,
+      "equilibrium_gpu_c": 34.0,
+      "watts": 60.0,
+      "rpm1": 0,
+      "rpm2": 0,
+      "ec_override": true,
+      "samples": [
+        {
+          "t": 2.1,
+          "cpu_c": 51.0,
+          "gpu_c": 34.0,
+          "watts": 60.0,
+          "rpm1": 0,
+          "rpm2": 0,
+          "pwm1": 0
+        },
+        {
+          "t": 4.3,
+          "cpu_c": 51.0,
+          "gpu_c": 34.0,
+          "watts": 60.0,
+          "rpm1": 0,
+          "rpm2": 0,
+          "pwm1": 0
+        },
+        {
+          "t": 6.4,
+          "cpu_c": 51.0,
+          "gpu_c": 34.0,
+          "watts": 60.0,
+          "rpm1": 0,
+          "rpm2": 0,
+          "pwm1": 0
+        },
+        {
+          "t": 8.5,
+          "cpu_c": 51.0,
+          "gpu_c": 34.0,
+          "watts": 60.0,
+          "rpm1": 0,
+          "rpm2": 0,
+          "pwm1": 0
+        },
+        {
+          "t": 10.6,
+          "cpu_c": 51.0,
+          "gpu_c": 34.0,
+          "watts": 60.0,
+          "rpm1": 0,
+          "rpm2": 0,
+          "pwm1": 0
+        }
+      ],
+      "duty_pct": 70,
+      "duty_reg": 140
+    },
+    {
+      "equilibrium_cpu_c": 52.4,
+      "equilibrium_gpu_c": 35.8,
+      "watts": 60.0,
+      "rpm1": 0,
+      "rpm2": 0,
+      "ec_override": true,
+      "samples": [
+        {
+          "t": 2.1,
+          "cpu_c": 52.0,
+          "gpu_c": 35.0,
+          "watts": 60.0,
+          "rpm1": 0,
+          "rpm2": 0,
+          "pwm1": 0
+        },
+        {
+          "t": 4.2,
+          "cpu_c": 52.0,
+          "gpu_c": 36.0,
+          "watts": 60.0,
+          "rpm1": 0,
+          "rpm2": 0,
+          "pwm1": 0
+        },
+        {
+          "t": 6.3,
+          "cpu_c": 52.0,
+          "gpu_c": 36.0,
+          "watts": 60.0,
+          "rpm1": 0,
+          "rpm2": 0,
+          "pwm1": 0
+        },
+        {
+          "t": 8.4,
+          "cpu_c": 53.0,
+          "gpu_c": 36.0,
+          "watts": 60.0,
+          "rpm1": 0,
+          "rpm2": 0,
+          "pwm1": 0
+        },
+        {
+          "t": 10.5,
+          "cpu_c": 53.0,
+          "gpu_c": 36.0,
+          "watts": 60.0,
+          "rpm1": 0,
+          "rpm2": 0,
+          "pwm1": 0
+        }
+      ],
+      "duty_pct": 85,
+      "duty_reg": 170
+    },
+    {
+      "equilibrium_cpu_c": 54.0,
+      "equilibrium_gpu_c": 36.6,
+      "watts": 60.0,
+      "rpm1": 0,
+      "rpm2": 0,
+      "ec_override": true,
+      "samples": [
+        {
+          "t": 2.1,
+          "cpu_c": 54.0,
+          "gpu_c": 36.0,
+          "watts": 60.0,
+          "rpm1": 0,
+          "rpm2": 0,
+          "pwm1": 0
+        },
+        {
+          "t": 4.3,
+          "cpu_c": 54.0,
+          "gpu_c": 36.0,
+          "watts": 60.0,
+          "rpm1": 0,
+          "rpm2": 0,
+          "pwm1": 0
+        },
+        {
+          "t": 6.5,
+          "cpu_c": 54.0,
+          "gpu_c": 37.0,
+          "watts": 60.0,
+          "rpm1": 0,
+          "rpm2": 0,
+          "pwm1": 0
+        },
+        {
+          "t": 8.6,
+          "cpu_c": 54.0,
+          "gpu_c": 37.0,
+          "watts": 60.0,
+          "rpm1": 0,
+          "rpm2": 0,
+          "pwm1": 0
+        },
+        {
+          "t": 10.7,
+          "cpu_c": 54.0,
+          "gpu_c": 37.0,
+          "watts": 60.0,
+          "rpm1": 0,
+          "rpm2": 0,
+          "pwm1": 0
+        }
+      ],
+      "duty_pct": 100,
+      "duty_reg": 200
+    }
+  ]
+}

@@ -1,0 +1,226 @@
+[
+  {
+    "label": "row0_commit1_bri50",
+    "row": 0,
+    "commit": true,
+    "brightness": 50,
+    "status": "ok (64 bytes)",
+    "result": "still colour-cycling"
+  },
+  {
+    "label": "row0_commit1_bri25",
+    "row": 0,
+    "commit": true,
+    "brightness": 25,
+    "status": "ok (64 bytes)",
+    "result": "still colour-cycling"
+  },
+  {
+    "label": "row0_commit0_bri50",
+    "row": 0,
+    "commit": false,
+    "brightness": 50,
+    "status": "ok (64 bytes)",
+    "result": "still colour-cycling"
+  },
+  {
+    "label": "row0_commit0_bri25",
+    "row": 0,
+    "commit": false,
+    "brightness": 25,
+    "status": "ok (64 bytes)",
+    "result": "still colour-cycling"
+  },
+  {
+    "label": "row1_commit1_bri50",
+    "row": 1,
+    "commit": true,
+    "brightness": 50,
+    "status": "ok (64 bytes)",
+    "result": "still colour-cycling"
+  },
+  {
+    "label": "row1_commit1_bri25",
+    "row": 1,
+    "commit": true,
+    "brightness": 25,
+    "status": "ok (64 bytes)",
+    "result": "still colour-cycling"
+  },
+  {
+    "label": "row1_commit0_bri50",
+    "row": 1,
+    "commit": false,
+    "brightness": 50,
+    "status": "ok (64 bytes)",
+    "result": "still colour-cycling"
+  },
+  {
+    "label": "row1_commit0_bri25",
+    "row": 1,
+    "commit": false,
+    "brightness": 25,
+    "status": "ok (64 bytes)",
+    "result": "still colour-cycling"
+  },
+  {
+    "label": "row2_commit1_bri50",
+    "row": 2,
+    "commit": true,
+    "brightness": 50,
+    "status": "ok (64 bytes)",
+    "result": "still colour-cycling"
+  },
+  {
+    "label": "row2_commit1_bri25",
+    "row": 2,
+    "commit": true,
+    "brightness": 25,
+    "status": "ok (64 bytes)",
+    "result": "still colour-cycling"
+  },
+  {
+    "label": "row2_commit0_bri50",
+    "row": 2,
+    "commit": false,
+    "brightness": 50,
+    "status": "ok (64 bytes)",
+    "result": "still colour-cycling"
+  },
+  {
+    "label": "row2_commit0_bri25",
+    "row": 2,
+    "commit": false,
+    "brightness": 25,
+    "status": "ok (64 bytes)",
+    "result": "still colour-cycling"
+  },
+  {
+    "label": "row3_commit1_bri50",
+    "row": 3,
+    "commit": true,
+    "brightness": 50,
+    "status": "ok (64 bytes)",
+    "result": "still colour-cycling"
+  },
+  {
+    "label": "row3_commit1_bri25",
+    "row": 3,
+    "commit": true,
+    "brightness": 25,
+    "status": "ok (64 bytes)",
+    "result": "still colour-cycling"
+  },
+  {
+    "label": "row3_commit0_bri50",
+    "row": 3,
+    "commit": false,
+    "brightness": 50,
+    "status": "ok (64 bytes)",
+    "result": "still colour-cycling"
+  },
+  {
+    "label": "row3_commit0_bri25",
+    "row": 3,
+    "commit": false,
+    "brightness": 25,
+    "status": "ok (64 bytes)",
+    "result": "still colour-cycling"
+  },
+  {
+    "label": "row4_commit1_bri50",
+    "row": 4,
+    "commit": true,
+    "brightness": 50,
+    "status": "ok (64 bytes)",
+    "result": "still colour-cycling"
+  },
+  {
+    "label": "row4_commit1_bri25",
+    "row": 4,
+    "commit": true,
+    "brightness": 25,
+    "status": "ok (64 bytes)",
+    "result": "still colour-cycling"
+  },
+  {
+    "label": "row4_commit0_bri50",
+    "row": 4,
+    "commit": false,
+    "brightness": 50,
+    "status": "ok (64 bytes)",
+    "result": "cc"
+  },
+  {
+    "label": "row4_commit0_bri25",
+    "row": 4,
+    "commit": false,
+    "brightness": 25,
+    "status": "ok (64 bytes)",
+    "result": "still colour-cycling"
+  },
+  {
+    "label": "row5_commit1_bri50",
+    "row": 5,
+    "commit": true,
+    "brightness": 50,
+    "status": "ok (64 bytes)",
+    "result": "still colour-cycling"
+  },
+  {
+    "label": "row5_commit1_bri25",
+    "row": 5,
+    "commit": true,
+    "brightness": 25,
+    "status": "ok (64 bytes)",
+    "result": "still colour-cycling"
+  },
+  {
+    "label": "row5_commit0_bri50",
+    "row": 5,
+    "commit": false,
+    "brightness": 50,
+    "status": "ok (64 bytes)",
+    "result": "still colour-cycling"
+  },
+  {
+    "label": "row5_commit0_bri25",
+    "row": 5,
+    "commit": false,
+    "brightness": 25,
+    "status": "ok (64 bytes)",
+    "result": "still colour-cycling"
+  },
+  {
+    "label": "row6_commit1_bri50",
+    "row": 6,
+    "commit": true,
+    "brightness": 50,
+    "status": "ok (64 bytes)",
+    "result": "still colour-cycling"
+  },
+  {
+    "label": "row6_commit1_bri25",
+    "row": 6,
+    "commit": true,
+    "brightness": 25,
+    "status": "ok (64 bytes)",
+    "result": "still colour-cycling"
+  },
+  {
+    "label": "row6_commit0_bri50",
+    "row": 6,
+    "commit": false,
+    "brightness": 50,
+    "status": "ok (64 bytes)",
+    "result": "still colour-cycling"
+  },
+  {
+    "label": "row6_commit0_bri25",
+    "row": 6,
+    "commit": false,
+    "brightness": 25,
+    "status": "ok (64 bytes)",
+    "result": "still colour-cycling"
+  }
+]

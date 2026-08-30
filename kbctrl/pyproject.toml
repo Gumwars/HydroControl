@@ -1,0 +1,22 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "kbctrl"
+version = "0.1.0"
+description = "RGB keyboard controller for Eluktronics HYDROC-16 (ITE 8291/8233)"
+requires-python = ">=3.10"
+dependencies = [
+    "textual>=0.40",
+    "pyusb",
+]
+
+[project.scripts]
+kbctrl-tui   = "kbctrl.tui:main"
+kbctrl-apply = "kbctrl.apply:main"
+kbctrld      = "kbctrl.daemon:main"
+kbctrl-ctl   = "kbctrl.ctl:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["kbctrl"]

@@ -1,0 +1,44 @@
+MIT License
+
+Copyright (c) 2026 HydroControl contributors
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+---
+
+NOT COVERED BY THE ABOVE
+========================
+
+uniwill-laptop/
+    GPL-2.0-or-later. Derived from tuxedo-drivers (TUXEDO Computers GmbH),
+    which is GPL-2.0-or-later, so it cannot be relicensed. Its own LICENSE
+    file governs. This is a one-way boundary: MIT code may be used inside a
+    GPL work, but GPL code may not be moved out into the MIT part of this
+    tree. Do not copy code from uniwill-laptop/ into hydroc/ or kbctrl/.
+
+Runtime dependencies are installed separately by the user and are not
+distributed with this software:
+
+    ite8291r3-ctl   GPL-2.0   keyboard RGB transport, imported by kbctrl
+    acpi_call       GPL-2.0   kernel module, how the daemon reaches the EC
+
+Hardware protocol details in this tree were reverse-engineered, or read from
+published drivers and reimplemented. Register addresses, packet layouts and
+bit assignments are facts about the hardware and carry no licence. Sources
+consulted are credited in DESIGN.md.

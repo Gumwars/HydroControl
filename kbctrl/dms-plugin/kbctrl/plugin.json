@@ -1,0 +1,14 @@
+{
+  "id": "kbctrl",
+  "name": "kbctrl RGB",
+  "description": "RGB keyboard + lightbar control for Eluktronics HYDROC-16, backed by the kbctrld daemon",
+  "version": "1.0.0",
+  "author": "gumwars",
+  "icon": "keyboard",
+  "type": "widget",
+  "capabilities": ["dankbar-widget"],
+  "component": "./KbCtrlWidget.qml",
+  "settings": "./KbCtrlSettings.qml",
+  "startupCheck": "./StartupCheck.qml",
+  "permissions": ["settings_read", "settings_write"]
+}

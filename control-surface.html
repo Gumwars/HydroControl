@@ -1,0 +1,343 @@
+<title>HYDROC Control Surface</title>
+<style>
+  :root {
+    --ground: #F5F7F9; --surface: #FFFFFF; --surface-2: #EEF2F6;
+    --ink: #131C26; --ink-muted: #5B6875; --line: #DCE3EA;
+    --accent: #A8500B; --accent-soft: #FBF0E3;
+    --ok: #0E6A5E; --ok-soft: #E4F2EF;
+    --warn: #8F3111; --warn-soft: #FBEAE3;
+    --font-ui: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #0D131A; --surface: #141C24; --surface-2: #1B242D;
+      --ink: #E3EAF1; --ink-muted: #93A1AF; --line: #26313C;
+      --accent: #E5924A; --accent-soft: #2A1C10;
+      --ok: #46B5A4; --ok-soft: #102623;
+      --warn: #EE9068; --warn-soft: #2B160E;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground: #0D131A; --surface: #141C24; --surface-2: #1B242D;
+    --ink: #E3EAF1; --ink-muted: #93A1AF; --line: #26313C;
+    --accent: #E5924A; --accent-soft: #2A1C10;
+    --ok: #46B5A4; --ok-soft: #102623;
+    --warn: #EE9068; --warn-soft: #2B160E;
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--ground); color:var(--ink);
+         font-family:var(--font-ui); font-size:16px; line-height:1.6;
+         -webkit-font-smoothing:antialiased; }
+  .wrap { max-width:58rem; margin:0 auto;
+          padding:clamp(2rem,5vw,3.5rem) clamp(1rem,4vw,2rem) 6rem;
+          display:flex; flex-direction:column; gap:2.5rem; }
+  .masthead { display:flex; flex-direction:column; gap:.8rem;
+              padding-bottom:1.6rem; border-bottom:2px solid var(--ink); }
+  .eyebrow { font-family:var(--font-mono); font-size:.7rem; letter-spacing:.14em;
+             text-transform:uppercase; color:var(--accent); margin:0; }
+  h1 { font-size:clamp(1.8rem,4.5vw,2.5rem); line-height:1.1;
+       letter-spacing:-.02em; margin:0; text-wrap:balance; }
+  .standfirst { font-size:1.04rem; color:var(--ink-muted); margin:0; max-width:44rem; }
+  section { display:flex; flex-direction:column; gap:.8rem; }
+  h2 { font-size:1.25rem; margin:0; letter-spacing:-.01em; text-wrap:balance;
+       display:flex; align-items:center; gap:.6rem; flex-wrap:wrap; }
+  h3 { font-size:.95rem; margin:.4rem 0 0; }
+  p { margin:0; }
+  code { font-family:var(--font-mono); font-size:.85em; background:var(--surface-2);
+         border:1px solid var(--line); border-radius:3px; padding:.08em .34em; }
+  pre { font-family:var(--font-mono); font-size:.8rem; line-height:1.5;
+        background:var(--surface-2); border:1px solid var(--line);
+        border-left:3px solid var(--accent); border-radius:4px;
+        padding:.8rem 1rem; margin:0; overflow-x:auto; }
+  pre code { background:none; border:none; padding:0; font-size:inherit; }
+  .tablewrap { overflow-x:auto; }
+  table { border-collapse:collapse; width:100%; font-size:.86rem; min-width:34rem; }
+  th,td { text-align:left; padding:.45rem .65rem; border-bottom:1px solid var(--line);
+          vertical-align:top; }
+  th { font-family:var(--font-mono); font-size:.66rem; letter-spacing:.1em;
+       text-transform:uppercase; color:var(--ink-muted);
+       border-bottom:1px solid var(--ink-muted); }
+  td.p { font-family:var(--font-mono); font-size:.8rem; white-space:nowrap; color:var(--accent); }
+  td.m { font-family:var(--font-mono); font-size:.8rem; }
+  .chip { font-family:var(--font-mono); font-size:.62rem; letter-spacing:.08em;
+          text-transform:uppercase; border-radius:3px; padding:.15rem .45rem;
+          white-space:nowrap; border:1px solid; }
+  .chip.rw { color:var(--ok); border-color:var(--ok); background:var(--ok-soft); }
+  .chip.ro { color:var(--ink-muted); border-color:var(--line); background:var(--surface-2); }
+  .chip.no { color:var(--warn); border-color:var(--warn); background:var(--warn-soft); }
+  .note { border-radius:4px; padding:.8rem 1rem; font-size:.92rem;
+          border:1px solid var(--line); background:var(--surface); }
+  .note.warn { background:var(--warn-soft); border-color:var(--warn); }
+  .note.ok { background:var(--ok-soft); border-color:var(--ok); }
+  .note .tag { font-family:var(--font-mono); font-size:.66rem; letter-spacing:.12em;
+               text-transform:uppercase; display:block; margin-bottom:.25rem; }
+  .note.warn .tag { color:var(--warn); }
+  .note.ok .tag { color:var(--ok); }
+  .foot { font-size:.86rem; color:var(--ink-muted);
+          border-top:1px solid var(--line); padding-top:1.1rem; }
+</style>
+
+<div class="wrap">
+
+<header class="masthead">
+  <p class="eyebrow">Eluktronics HYDROC-16 G1 &middot; Linux</p>
+  <h1>Control surface reference</h1>
+  <p class="standfirst">Every path, packet, and register the UI binds against — with value ranges,
+  what is writable, and what is still unmapped. Verified on kernel 7.1.8 with the patched
+  <code>uniwill-laptop</code> module loaded.</p>
+</header>
+
+<section>
+  <h2>Resolve, never hardcode</h2>
+  <p>Two of these paths carry an index assigned at probe/enumeration order. They are stable
+  across a given boot and <em>not</em> across reboots or USB changes. Hardcoding either is the
+  single most likely source of "works sometimes" bugs — it already cost this project weeks
+  on the chin bar.</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Surface</th><th>Resolve by</th><th>Never assume</th></tr></thead>
+    <tbody>
+      <tr><td>Chin bar</td><td class="m">hidraw whose <code>uevent</code> contains <code>0000048D:00007001</code></td><td class="m">/dev/hidraw1</td></tr>
+      <tr><td>Keyboard</td><td class="m">USB VID/PID <code>048d:600b</code></td><td class="m">a fixed bus/addr</td></tr>
+      <tr><td>Fans &amp; temps</td><td class="m">hwmon whose <code>name</code> reads <code>uniwill</code></td><td class="m">/sys/class/hwmon/hwmon6</td></tr>
+      <tr><td>Platform toggles</td><td class="m"><code>INOU0000:00</code> — ACPI-derived, stable</td><td>—</td></tr>
+      <tr><td>Battery</td><td class="m"><code>BAT0</code> — stable on this machine</td><td>—</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section>
+  <h2>Battery <span class="chip rw">working</span></h2>
+  <p>Base path <code>/sys/class/power_supply/BAT0/</code></p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Attribute</th><th>Access</th><th>Values</th><th>Notes</th></tr></thead>
+    <tbody>
+      <tr><td class="p">charge_types</td><td><span class="chip rw">RW</span></td><td class="m">Trickle · Standard · Long_Life</td><td>Active one is bracketed on read. Write the bare token.</td></tr>
+      <tr><td class="p">charge_control_end_threshold</td><td><span class="chip rw">RW</span></td><td class="m">1–100</td><td>Reads 100. Relationship to the modes is unconfirmed.</td></tr>
+      <tr><td class="p">status</td><td><span class="chip ro">RO</span></td><td class="m">Charging · Discharging · Full</td><td>Most reliable state signal.</td></tr>
+      <tr><td class="p">current_now</td><td><span class="chip ro">RO</span></td><td class="m">µA</td><td>Non-zero ⇒ genuinely charging. Hardest value to fake.</td></tr>
+      <tr><td class="p">charge_now / charge_full</td><td><span class="chip ro">RO</span></td><td class="m">µAh</td><td>Both 6400 mAh here; <code>charge_full</code> has not been observed to move.</td></tr>
+      <tr><td class="p">charge_full_design</td><td><span class="chip ro">RO</span></td><td class="m">6400000 µAh</td><td>Use as the denominator for a true percentage.</td></tr>
+      <tr><td class="p">capacity</td><td><span class="chip ro">RO</span></td><td class="m">0–100</td><td>Derived. Prefer <code>charge_now/charge_full_design</code>.</td></tr>
+    </tbody>
+  </table></div>
+  <div class="note warn">
+    <span class="tag">Settings do not survive a power cycle</span>
+    The charging profile lives in volatile EC state. After a reboot,
+    <code>0x07A6</code> reverts to <code>00</code> (HIGH_CAPACITY) regardless of what was
+    selected — the driver never writes this register at probe, so nothing in Linux restores
+    it. This is almost certainly why Control Center ships a background service:
+    something has to re-apply EC settings at every boot. The frontend needs an equivalent
+    (a systemd unit, or folding it into <code>kbctrld</code>), and the UI should read actual
+    state at startup rather than trusting a stored preference.
+  </div>
+  <div class="note warn">
+    <span class="tag">Open question — do not label these in the UI yet</span>
+    Which Control Center name (<em>Stationary</em> / <em>Balanced</em> / <em>Long&nbsp;Haul</em>) maps to which
+    token is <strong>unverified</strong>. The kernel's names come from another vendor's
+    reverse engineering. Measurement so far: <code>Trickle</code> (EC profile 2) charged
+    past 83% at full current with a perfectly honest gauge, so it does <em>not</em> cap the
+    initial charge. Until the mapping is confirmed, show the raw tokens rather than
+    guessing a friendly label — a mode that silently caps charging is worse mislabelled
+    than unlabelled.
+  </div>
+</section>
+
+<section>
+  <h2>Thermals &amp; fans <span class="chip ro">read-only</span></h2>
+  <p>Base path: the hwmon directory whose <code>name</code> is <code>uniwill</code>.</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Attribute</th><th>Access</th><th>Units</th><th>Notes</th></tr></thead>
+    <tbody>
+      <tr><td class="p">temp1_input</td><td><span class="chip ro">RO</span></td><td class="m">m°C</td><td>CPU. Divide by 1000.</td></tr>
+      <tr><td class="p">temp2_input</td><td><span class="chip ro">RO</span></td><td class="m">m°C</td><td>GPU.</td></tr>
+      <tr><td class="p">fan1_input / fan2_input</td><td><span class="chip ro">RO</span></td><td class="m">RPM</td><td>Main / Secondary. Labels in <code>fanN_label</code>.</td></tr>
+      <tr><td class="p">pwm1 / pwm2</td><td><span class="chip ro">RO</span></td><td class="m">0–255</td><td>Duty cycle. <strong>Not writable</strong> — see gaps below.</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section>
+  <h2>Platform toggles <span class="chip rw">working</span></h2>
+  <p>Base path <code>/sys/bus/platform/devices/INOU0000:00/</code>. All are <code>0</code>/<code>1</code> unless noted.</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Attribute</th><th>Access</th><th>Notes</th></tr></thead>
+    <tbody>
+      <tr><td class="p">fn_lock</td><td><span class="chip rw">RW</span></td><td>Fn-lock state.</td></tr>
+      <tr><td class="p">super_key_enable</td><td><span class="chip rw">RW</span></td><td>Enable/disable the Super key.</td></tr>
+      <tr><td class="p">touchpad_toggle_enable</td><td><span class="chip rw">RW</span></td><td>Touchpad toggle hotkey.</td></tr>
+      <tr><td class="p">ac_auto_boot</td><td><span class="chip rw">RW</span></td><td>Power on when AC is connected. Mutually exclusive with USB powershare.</td></tr>
+      <tr><td class="p">usb_powershare_high</td><td><span class="chip rw">RW</span></td><td>USB power when off/hibernating. Mutually exclusive with AC auto-boot.</td></tr>
+      <tr><td class="p">ctgp_offset</td><td><span class="chip rw">RW</span></td><td>GPU configurable TGP offset, in watts on top of base TGP. Reads 0. Max is device-specific; setting the maximum disables Dynamic Boost.</td></tr>
+    </tbody>
+  </table></div>
+  <div class="note">
+    <span class="tag">UI hint</span>
+    <code>ac_auto_boot</code> and <code>usb_powershare_high</code> cannot both be on — the driver
+    rejects it. Present them as a three-way choice (neither / one / the other) rather than
+    two independent switches that can enter an invalid state.
+  </div>
+</section>
+
+<section>
+  <h2>Chin bar — ITE 8233 <span class="chip rw">working</span></h2>
+  <p>8-byte feature reports over hidraw, <code>HIDIOCSFEATURE(9) = 0xC0094806</code>, report-id
+  <code>0x00</code> prefixed. Protocol matches tuxedo-drivers <code>ite_8291_lb.c</code> and
+  OpenRGB MR&nbsp;3166. Setting colour or brightness turns the bar on; no commit needed.</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Action</th><th>Packets</th></tr></thead>
+    <tbody>
+      <tr><td>Static colour</td><td class="m">14 00 01 R G B 00 00<br>08 22 01 01 <em>bri</em> 01 00 00</td></tr>
+      <tr><td>Breathing</td><td class="m">08 22 02 <em>speed</em> <em>bri</em> 00 00 00</td></tr>
+      <tr><td>Off</td><td class="m">12 00 03 … → 08 05 … → 08 01 … → 1A … 01</td></tr>
+    </tbody>
+  </table></div>
+  <p><code>bri</code> is <strong>0–100</strong>, <code>speed</code> 1–10. Colour goes into palette
+  slot 1; the mode command is what makes it visible.</p>
+  <div class="note">
+    <span class="tag">Not yet mapped</span>
+    Control Center models the bar as <strong>7 colour blocks</strong> with per-block RGB
+    (<code>ColorBlocks: 7</code> in <code>RGBKeyboard.reg</code>), plus effects with speed and
+    direction. Only whole-bar static and breathing are proven here. Mode bytes beyond
+    <code>08 22 01</code>/<code>02</code> are unswept — that is where the remaining effects and
+    any per-block addressing live.
+  </div>
+  <div class="note warn">
+    <span class="tag">Dead end — do not use</span>
+    The EC lightbar registers (<code>0x0748</code>–<code>0x074B</code>) and the
+    <code>uniwill:multicolor:status</code> LED class accept writes but drive nothing on this
+    model. <code>LIGHTBAR</code> was removed from the device descriptor for this reason, so that
+    LED node no longer appears. Drive the bar over hidraw only.
+  </div>
+</section>
+
+<section>
+  <h2>Keyboard RGB — ITE 8291 <span class="chip rw">working</span></h2>
+  <p>USB <code>048d:600b</code>, driven through <code>kbctrl</code> over
+  <code>ite8291r3-ctl</code> (libusb, not hidraw). Bind to <code>kbctrl</code> rather than the
+  device directly.</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Capability</th><th>Range</th><th>Notes</th></tr></thead>
+    <tbody>
+      <tr><td>Effects</td><td class="m">breathing, wave, random, rainbow, ripple, marquee, raindrop, aurora, fireworks</td><td>Per-effect params in <code>EFFECT_PARAMS</code>.</td></tr>
+      <tr><td>Effect colour</td><td class="m">8 palette names + random</td><td>Built-in effects take a palette index, not RGB.</td></tr>
+      <tr><td>Per-key colour</td><td class="m">(row, col) → RGB</td><td>Full RGB. <code>save</code> flag writes to onboard storage.</td></tr>
+      <tr><td>Brightness</td><td class="m">0–100</td><td>—</td></tr>
+    </tbody>
+  </table></div>
+  <div class="note ok">
+    <span class="tag">Persistence — resolved</span>
+    The <code>save</code> flag is now wired through <code>apply_per_key</code> and
+    <code>set_effect</code>, so per-key colours and effects are written to the controller's
+    onboard storage. They survive power loss and are restored by the keyboard itself before
+    userspace starts, rather than being re-pushed by the daemon at boot.
+    <code>restore_palette()</code> resets to the ITE factory palette.
+  </div>
+  <div class="note">
+    <span class="tag">Effect colours remain palette-indexed</span>
+    <code>set_effect</code> takes <code>color_idx</code>, not RGB — the firmware effects
+    accept an index into the controller's palette, so effect colours are limited to the eight
+    named entries plus random. Per-key mode is unrestricted RGB. Arbitrary colour in an
+    <em>animated</em> effect would mean driving per-key frames from the host on a timer,
+    which is a different mechanism rather than a missing parameter.
+  </div>
+</section>
+
+<section>
+  <h2>CPU power limits <span class="chip rw">working</span></h2>
+  <p>Verified end to end on this machine: setting 75&nbsp;W produced 75.0&nbsp;W sustained
+  package draw, setting 45&nbsp;W produced 45.0&nbsp;W. Measured via the RAPL energy counter
+  under <code>stress-ng --cpu-method matrixprod</code>.</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Step</th><th>Register</th><th>Value</th></tr></thead>
+    <tbody>
+      <tr><td>1. Arm custom profile mode</td><td class="p">0x0727 bit 6</td><td>Set. The profile LED beside the power button turns white — the same indication Windows uses for a custom profile.</td></tr>
+      <tr><td>2. Write the limit</td><td class="p">0x0783 PL1_SETTING<br>0x0784 PL2_SETTING</td><td>Watts, directly. <code>0</code> = firmware default.</td></tr>
+      <tr><td>3. Confirm</td><td class="p">0x046A PL1L<br>0x046B PL2L</td><td>Live readback; mirrors the setting once applied.</td></tr>
+    </tbody>
+  </table></div>
+  <div class="note warn">
+    <span class="tag">Write to the setting, not the readback</span>
+    <code>ECRW</code> accepts writes to <code>0x046A</code>/<code>0x046B</code> and reports
+    success, but they do not persist — that window is the EC's live view. The write side is
+    <code>0x0783</code>/<code>0x0784</code>. Without step 1, writes are accepted and ignored.
+  </div>
+  <div class="note warn">
+    <span class="tag">Volatile — needs restoring at boot</span>
+    Both the <code>0x0727</code> latch and the PL values clear on power cycle, exactly like
+    the charging profile. The same boot-restore service has to re-apply them.
+  </div>
+  <div class="note">
+    <span class="tag">Not the RAPL MSRs</span>
+    <code>/sys/class/powercap/intel-rapl</code> continues to report 205&nbsp;W throughout —
+    the EC enforces its envelope outside the MSR path. Any UI showing "current power limit"
+    must read the EC, not RAPL. Actual draw is only observable through the RAPL
+    <em>energy counter</em> under load.
+  </div>
+  <p>Also present: <code>0x046F PL4L</code> = 125&nbsp;W (peak), <code>0x046E PL3L</code> = 0,
+  and <code>0x0466</code> bit 0 = turbo enable.</p>
+</section>
+
+<section>
+  <h2>Not available <span class="chip no">missing</span></h2>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Feature</th><th>EC register</th><th>Status</th></tr></thead>
+    <tbody>
+      <tr><td>Performance profiles</td><td class="p">0x07A5</td><td><code>FAN_QUIET</code> bit&nbsp;2, <code>OVERBOOST</code> bit&nbsp;4, <code>HIGH_POWER</code> bit&nbsp;7. Reads <code>00</code>. Not wired to <code>platform_profile</code>.</td></tr>
+      <tr><td>Fan curves</td><td class="p">0x078E</td><td><code>pwm1</code>/<code>pwm2</code> registered read-only. <code>UNIVERSAL_FAN_CTRL</code> (bit&nbsp;6) <em>is</em> set, so manual control is gated open in firmware — the driver simply does not implement it.</td></tr>
+    </tbody>
+  </table></div>
+  <p>Leave space in the UI for these two, but do not ship placeholder controls — neither can
+  be written today. Both have prior art in tuxedo-drivers worth mining first:
+  <code>0x078E</code> bit 6 already indicates fan control is available on this machine, and
+  the profile button beside the power key appears to drive <code>0x0727</code>.</p>
+</section>
+
+<section>
+  <h2>Escape hatch: direct EC access</h2>
+  <p>The DSDT exposes the EC as memory-mapped I/O at <code>0xFE410000</code>, wrapped by
+  <code>\_SB.INOU.ECRR</code> (read) and <code>\_SB.INOU.ECRW</code> (write), serialised behind
+  the ACPI mutex <code>UWOL</code>. With <code>acpi_call</code> loaded, userspace can reach any
+  register — including those the driver deliberately withholds.</p>
+  <pre><code>sudo modprobe acpi_call
+sudo python3 ec_dump.py                 # annotated dump of 0x0700-0x07FF
+sudo python3 ec_poke.py read 0x7A6      # single register</code></pre>
+  <div class="note warn">
+    <span class="tag">Reads yes, writes no</span>
+    <code>ECRW</code> validates nothing. This is a debugging tool, not a UI backend — the
+    frontend should never call it. The driver's regmap whitelist exists precisely to stop
+    writes to registers whose semantics are unknown, and a bad PL1 value is among the few
+    things here that can require a battery-disconnect to recover.
+  </div>
+</section>
+
+<section>
+  <h2>Privileges</h2>
+  <p>Every write above needs root today, and hidraw needs root even to open. A GUI should not
+  run as root. Two udev rules move almost everything to a group:</p>
+  <pre><code># /etc/udev/rules.d/99-hydroc.rules
+KERNEL=="hidraw*", ATTRS{idVendor}=="048d", ATTRS{idProduct}=="7001", \
+  GROUP="plugdev", MODE="0660"
+KERNEL=="hidraw*", ATTRS{idVendor}=="048d", ATTRS{idProduct}=="600b", \
+  GROUP="plugdev", MODE="0660"
+
+SUBSYSTEM=="platform", KERNEL=="INOU0000:00", \
+  RUN+="/bin/sh -c 'chgrp plugdev /sys%p/fn_lock /sys%p/super_key_enable \
+  /sys%p/touchpad_toggle_enable /sys%p/ac_auto_boot /sys%p/usb_powershare_high \
+  /sys%p/ctgp_offset; chmod g+w /sys%p/fn_lock /sys%p/super_key_enable \
+  /sys%p/touchpad_toggle_enable /sys%p/ac_auto_boot /sys%p/usb_powershare_high \
+  /sys%p/ctgp_offset'"</code></pre>
+  <p>Battery attributes under <code>power_supply</code> are the awkward case — they are
+  recreated on hotplug events, so a udev rule there is fragile. A small privileged helper
+  (the existing <code>kbctrld</code> pattern, or a polkit action) is the sturdier route for
+  <code>charge_types</code> and the charge threshold.</p>
+</section>
+
+<hr style="border:none;border-top:1px solid var(--line)">
+<p class="foot">
+  Verified on kernel 7.1.8-1-cachyos-bore with the patched <code>uniwill-laptop</code>
+  module. The device descriptor is a local addition and not upstream, so a stock kernel
+  will expose none of the platform or battery attributes.
+</p>
+
+</div>

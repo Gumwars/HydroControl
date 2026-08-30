@@ -1,0 +1,20 @@
+[Unit]
+Description=kbctrld — RGB keyboard persistence daemon
+Documentation=https://github.com/gumwars/kbctrl
+# Resume from suspend/hibernate — system-sleep hook sends SIGUSR1
+# (daemon stays running through suspend cycles; no target deps needed)
+After=multi-user.target systemd-udev-settle.service
+
+[Service]
+Type=simple
+User=root
+ExecStart=/usr/bin/python3 -m kbctrl.daemon
+ExecReload=/bin/kill -USR1 $MAINPID
+Environment=PYTHONPATH=/home/gumwars/kbctrl
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

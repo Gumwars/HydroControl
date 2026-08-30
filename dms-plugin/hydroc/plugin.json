@@ -1,0 +1,14 @@
+{
+  "id": "hydroc",
+  "name": "HydroControl",
+  "description": "Full machine control for the Eluktronics HYDROC-16: keyboard RGB, lightbar, power presets, charge profile, telemetry — backed by hydroc-server",
+  "version": "1.0.0",
+  "author": "gumwars",
+  "icon": "keyboard",
+  "type": "widget",
+  "capabilities": ["dankbar-widget"],
+  "component": "./HydrocWidget.qml",
+  "settings": "./HydrocSettings.qml",
+  "startupCheck": "./StartupCheck.qml",
+  "permissions": ["settings_read", "settings_write"]
+}

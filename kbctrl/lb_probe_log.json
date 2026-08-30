@@ -1,0 +1,307 @@
+[
+  {
+    "label": "09 02 brightness=0",
+    "packet": "09 02 00 00 00 00 00 00",
+    "result": "nothing"
+  },
+  {
+    "label": "09 02 brightness=5",
+    "packet": "09 02 05 00 00 00 00 00",
+    "result": "Color cycle"
+  },
+  {
+    "label": "09 02 brightness=10",
+    "packet": "09 02 0A 00 00 00 00 00",
+    "result": "Color cycle, slightly brighter"
+  },
+  {
+    "label": "09 02 brightness=20",
+    "packet": "09 02 14 00 00 00 00 00",
+    "result": "Colory cycle, brighter still"
+  },
+  {
+    "label": "09 02 brightness=30",
+    "packet": "09 02 1E 00 00 00 00 00",
+    "result": "Cycle, brighter"
+  },
+  {
+    "label": "09 02 brightness=40",
+    "packet": "09 02 28 00 00 00 00 00",
+    "result": "Cycle, brightness seems the same"
+  },
+  {
+    "label": "09 02 brightness=50",
+    "packet": "09 02 32 00 00 00 00 00",
+    "result": "Cycle, brightest"
+  },
+  {
+    "label": "14 01 01 static-red",
+    "packet": "14 01 01 FF 00 00 00 00",
+    "result": "Nothing"
+  },
+  {
+    "label": "14 01 01 static-green",
+    "packet": "14 01 01 00 FF 00 00 00",
+    "result": "Nothing"
+  },
+  {
+    "label": "14 01 01 static-blue",
+    "packet": "14 01 01 00 00 FF 00 00",
+    "result": "Nothing"
+  },
+  {
+    "label": "14 01 01 static-white",
+    "packet": "14 01 01 FF FF FF 00 00",
+    "result": "Nothing"
+  },
+  {
+    "label": "14 00 01 alt-static-red",
+    "packet": "14 00 01 FF 00 00 00 00",
+    "result": "Nothing"
+  },
+  {
+    "label": "14 00 01 alt-static-blue",
+    "packet": "14 00 01 00 00 FF 00 00",
+    "result": "Nothing"
+  },
+  {
+    "label": "08 02 eid=0x00 spd=5 bri=25 col=1 dir=1",
+    "packet": "08 02 00 05 19 01 01 00",
+    "result": "Nothing"
+  },
+  {
+    "label": "08 02 eid=0x01 spd=5 bri=25 col=1 dir=1",
+    "packet": "08 02 01 05 19 01 01 00",
+    "result": "Nothing"
+  },
+  {
+    "label": "08 02 eid=0x02 spd=5 bri=25 col=1 dir=1",
+    "packet": "08 02 02 05 19 01 01 00",
+    "result": "Nothing"
+  },
+  {
+    "label": "08 02 eid=0x03 spd=5 bri=25 col=1 dir=1",
+    "packet": "08 02 03 05 19 01 01 00",
+    "result": "Nothing"
+  },
+  {
+    "label": "08 02 eid=0x04 spd=5 bri=25 col=1 dir=1",
+    "packet": "08 02 04 05 19 01 01 00",
+    "result": "Nothing"
+  },
+  {
+    "label": "08 02 eid=0x05 spd=5 bri=25 col=1 dir=1",
+    "packet": "08 02 05 05 19 01 01 00",
+    "result": "Nothing"
+  },
+  {
+    "label": "08 02 eid=0x06 spd=5 bri=25 col=1 dir=1",
+    "packet": "08 02 06 05 19 01 01 00",
+    "result": "Nothing"
+  },
+  {
+    "label": "08 02 eid=0x07 spd=5 bri=25 col=1 dir=1",
+    "packet": "08 02 07 05 19 01 01 00",
+    "result": "Nothing"
+  },
+  {
+    "label": "08 02 eid=0x08 spd=5 bri=25 col=1 dir=1",
+    "packet": "08 02 08 05 19 01 01 00",
+    "result": "Nothing"
+  },
+  {
+    "label": "08 02 eid=0x09 spd=5 bri=25 col=1 dir=1",
+    "packet": "08 02 09 05 19 01 01 00",
+    "result": "Nothing"
+  },
+  {
+    "label": "08 02 eid=0x0A spd=5 bri=25 col=1 dir=1",
+    "packet": "08 02 0A 05 19 01 01 00",
+    "result": "Nothing"
+  },
+  {
+    "label": "08 02 eid=0x0B spd=5 bri=25 col=1 dir=1",
+    "packet": "08 02 0B 05 19 01 01 00",
+    "result": "Nothing"
+  },
+  {
+    "label": "08 02 eid=0x0C spd=5 bri=25 col=1 dir=1",
+    "packet": "08 02 0C 05 19 01 01 00",
+    "result": "Nothing"
+  },
+  {
+    "label": "08 02 eid=0x0D spd=5 bri=25 col=1 dir=1",
+    "packet": "08 02 0D 05 19 01 01 00",
+    "result": "Nothing"
+  },
+  {
+    "label": "08 02 eid=0x0E spd=5 bri=25 col=1 dir=1",
+    "packet": "08 02 0E 05 19 01 01 00",
+    "result": "Nothing"
+  },
+  {
+    "label": "08 02 eid=0x0F spd=5 bri=25 col=1 dir=1",
+    "packet": "08 02 0F 05 19 01 01 00",
+    "result": "Nothing"
+  },
+  {
+    "label": "08 02 eid=0x10 spd=5 bri=25 col=1 dir=1",
+    "packet": "08 02 10 05 19 01 01 00",
+    "result": "Nothing"
+  },
+  {
+    "label": "08 02 eid=0x11 spd=5 bri=25 col=1 dir=1",
+    "packet": "08 02 11 05 19 01 01 00",
+    "result": "Nothing"
+  },
+  {
+    "label": "08 02 eid=0x12 spd=5 bri=25 col=1 dir=1",
+    "packet": "08 02 12 05 19 01 01 00",
+    "result": "Nothing"
+  },
+  {
+    "label": "08 02 eid=0x13 spd=5 bri=25 col=1 dir=1",
+    "packet": "08 02 13 05 19 01 01 00",
+    "result": "Nothing"
+  },
+  {
+    "label": "08 02 eid=0x14 spd=5 bri=25 col=1 dir=1",
+    "packet": "08 02 14 05 19 01 01 00",
+    "result": "Nothing"
+  },
+  {
+    "label": "08 02 eid=0x15 spd=5 bri=25 col=1 dir=1",
+    "packet": "08 02 15 05 19 01 01 00",
+    "result": "Nothing"
+  },
+  {
+    "label": "08 02 eid=0x02 dir=0",
+    "packet": "08 02 02 05 19 01 00 00",
+    "result": "Nothing"
+  },
+  {
+    "label": "08 02 eid=0x03 dir=0",
+    "packet": "08 02 03 05 19 01 00 00",
+    "result": "NNothing"
+  },
+  {
+    "label": "08 02 eid=0x04 dir=0",
+    "packet": "08 02 04 05 19 01 00 00",
+    "result": "NNothing"
+  },
+  {
+    "label": "08 02 eid=0x05 dir=0",
+    "packet": "08 02 05 05 19 01 00 00",
+    "result": "Nothing"
+  },
+  {
+    "label": "08 02 eid=0x06 dir=0",
+    "packet": "08 02 06 05 19 01 00 00",
+    "result": "Nothing"
+  },
+  {
+    "label": "08 02 eid=0x0A dir=0",
+    "packet": "08 02 0A 05 19 01 00 00",
+    "result": "Nothing"
+  },
+  {
+    "label": "08 02 eid=0x0E dir=0",
+    "packet": "08 02 0E 05 19 01 00 00",
+    "result": "NNothing"
+  },
+  {
+    "label": "08 02 eid=0x11 dir=0",
+    "packet": "08 02 11 05 19 01 00 00",
+    "result": "Nothing"
+  },
+  {
+    "label": "16 00 eid=0x00",
+    "packet": "16 00 00 00 00 00 00 00",
+    "result": "Nothing"
+  },
+  {
+    "label": "16 00 eid=0x01",
+    "packet": "16 00 01 00 00 00 00 00",
+    "result": "Nothing"
+  },
+  {
+    "label": "16 00 eid=0x02",
+    "packet": "16 00 02 00 00 00 00 00",
+    "result": "Nothing"
+  },
+  {
+    "label": "16 00 eid=0x03",
+    "packet": "16 00 03 00 00 00 00 00",
+    "result": "Nothing"
+  },
+  {
+    "label": "16 00 eid=0x04",
+    "packet": "16 00 04 00 00 00 00 00",
+    "result": "Nothiing"
+  },
+  {
+    "label": "16 00 eid=0x05",
+    "packet": "16 00 05 00 00 00 00 00",
+    "result": "Nothing"
+  },
+  {
+    "label": "16 00 eid=0x06",
+    "packet": "16 00 06 00 00 00 00 00",
+    "result": "Nothing"
+  },
+  {
+    "label": "16 00 eid=0x07",
+    "packet": "16 00 07 00 00 00 00 00",
+    "result": "Nohting"
+  },
+  {
+    "label": "16 00 eid=0x08",
+    "packet": "16 00 08 00 00 00 00 00",
+    "result": "Nothing"
+  },
+  {
+    "label": "16 00 eid=0x09",
+    "packet": "16 00 09 00 00 00 00 00",
+    "result": "Nothing"
+  },
+  {
+    "label": "16 00 eid=0x0A",
+    "packet": "16 00 0A 00 00 00 00 00",
+    "result": "NNothing"
+  },
+  {
+    "label": "16 00 eid=0x0B",
+    "packet": "16 00 0B 00 00 00 00 00",
+    "result": "Nothing"
+  },
+  {
+    "label": "16 00 eid=0x0C",
+    "packet": "16 00 0C 00 00 00 00 00",
+    "result": "Nothing"
+  },
+  {
+    "label": "16 00 eid=0x0D",
+    "packet": "16 00 0D 00 00 00 00 00",
+    "result": "Nothing"
+  },
+  {
+    "label": "16 00 eid=0x0E",
+    "packet": "16 00 0E 00 00 00 00 00",
+    "result": "Nothing"
+  },
+  {
+    "label": "16 00 eid=0x0F",
+    "packet": "16 00 0F 00 00 00 00 00",
+    "result": "Nothing"
+  },
+  {
+    "label": "14 00 slot=1 blue (no commit)",
+    "packet": "14 00 01 00 00 FF 00 00",
+    "result": "Nothing"
+  },
+  {
+    "label": "08 02 eid=0x02 after palette slot write",
+    "packet": "08 02 02 05 19 01 01 00",
+    "result": "Nothing"
+  }
+]

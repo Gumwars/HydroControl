@@ -1,0 +1,24 @@
+[Unit]
+Description=HydroControl — LPP cooling dock (Bluetooth LE)
+Documentation=file:@INSTALL_DIR@/DESIGN.md
+# The dock forgets its fan and pump settings when it loses power, the same way
+# the EC forgets its power limits. This daemon holds the BLE link and re-sends
+# saved intent every time the dock comes back.
+After=bluetooth.target
+Wants=bluetooth.target
+
+[Service]
+Type=simple
+WorkingDirectory=@INSTALL_DIR@
+ExecStart=/usr/bin/python3 -m hydroc.lppd
+Environment=PYTHONPATH=@INSTALL_DIR@
+# The dock is optional hardware: absent or out of range is not a failure worth
+# restart-looping over, but a crash should still come back.
+Restart=on-failure
+RestartSec=10
+RuntimeDirectory=hydroc
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

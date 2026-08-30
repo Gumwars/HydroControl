@@ -1,0 +1,122 @@
+[
+  {
+    "name": "triples_bare",
+    "payload": "ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 00",
+    "write_status": "ok (65 bytes)",
+    "result": "Color cycle"
+  },
+  {
+    "name": "triples_hdr00",
+    "payload": "00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 00 00 00",
+    "write_status": "ok (65 bytes)",
+    "result": "Color cycle"
+  },
+  {
+    "name": "triples_hdr_0902",
+    "payload": "09 02 32 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 00",
+    "write_status": "ok (65 bytes)",
+    "result": "Color cycle"
+  },
+  {
+    "name": "triples_hdr_14",
+    "payload": "14 00 01 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 00",
+    "write_status": "ok (65 bytes)",
+    "result": "Color cycle"
+  },
+  {
+    "name": "triples_hdr_08",
+    "payload": "08 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 00 00",
+    "write_status": "ok (65 bytes)",
+    "result": "Color cycle"
+  },
+  {
+    "name": "planes_bare",
+    "payload": "ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00",
+    "write_status": "ok (65 bytes)",
+    "result": "Color cycle"
+  },
+  {
+    "name": "planes_hdr00",
+    "payload": "00 ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00",
+    "write_status": "ok (65 bytes)",
+    "result": "Color cycle"
+  },
+  {
+    "name": "planes_hdr_14",
+    "payload": "14 00 01 ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00",
+    "write_status": "ok (65 bytes)",
+    "result": "Color cycle"
+  },
+  {
+    "name": "single_triple",
+    "payload": "ff 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00",
+    "write_status": "ok (65 bytes)",
+    "result": "Color cycle"
+  },
+  {
+    "name": "all_ff",
+    "payload": "ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff",
+    "write_status": "ok (65 bytes)",
+    "result": "Color cycle"
+  },
+  {
+    "name": "triples_bare",
+    "payload": "ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 00",
+    "write_status": "ok (65 bytes)",
+    "result": "no change"
+  },
+  {
+    "name": "triples_hdr00",
+    "payload": "00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 00 00 00",
+    "write_status": "ok (65 bytes)",
+    "result": "no change"
+  },
+  {
+    "name": "triples_hdr_0902",
+    "payload": "09 02 32 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 00",
+    "write_status": "ok (65 bytes)",
+    "result": "no change"
+  },
+  {
+    "name": "triples_hdr_14",
+    "payload": "14 00 01 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 00",
+    "write_status": "ok (65 bytes)",
+    "result": "no change"
+  },
+  {
+    "name": "triples_hdr_08",
+    "payload": "08 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 ff 00 00 00 00",
+    "write_status": "ok (65 bytes)",
+    "result": "no change"
+  },
+  {
+    "name": "planes_bare",
+    "payload": "ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00",
+    "write_status": "ok (65 bytes)",
+    "result": "no change"
+  },
+  {
+    "name": "planes_hdr00",
+    "payload": "00 ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00",
+    "write_status": "ok (65 bytes)",
+    "result": "no change"
+  },
+  {
+    "name": "planes_hdr_14",
+    "payload": "14 00 01 ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00",
+    "write_status": "ok (65 bytes)",
+    "result": "no change"
+  },
+  {
+    "name": "single_triple",
+    "payload": "ff 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00",
+    "write_status": "ok (65 bytes)",
+    "result": "no change"
+  },
+  {
+    "name": "all_ff",
+    "payload": "ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff",
+    "write_status": "ok (65 bytes)",
+    "result": "no change"
+  }
+]

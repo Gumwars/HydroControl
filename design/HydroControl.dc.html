@@ -1,0 +1,1031 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet data-dc-atomics>
+<meta name="design_doc_mode" content="canvas">
+<link rel="stylesheet" href="ds/nocturne.css">
+<link rel="stylesheet" href="ds/matugen.css">
+<link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css">
+<style>
+body{margin:0;background:oklch(0.148 0.008 141);font-family:var(--font-body);color:var(--color-text)}
+a{color:var(--color-accent);text-decoration:none}a:hover{color:var(--color-accent-300)}
+.dv-turn{padding:40px 44px 32px;border-bottom:1px solid var(--color-divider);scroll-margin-top:16px}
+.dv-thd{display:flex;align-items:baseline;gap:10px;margin:0 0 20px}
+.dv-tid{font:600 10px var(--font-mono);padding:3px 7px;background:var(--color-accent);color:oklch(0.2 0.01 141);border-radius:4px;text-decoration:none}
+.dv-tname{font:500 13px/1.2 var(--font-body);color:var(--color-text)}
+.dv-opts{display:flex;flex-wrap:wrap;gap:36px;align-items:flex-start}
+.dv-opt{flex:none;display:flex;flex-direction:column;gap:9px;scroll-margin-top:16px}
+.dv-oid{font:500 10.5px var(--font-mono);padding:3px 7px;background:var(--color-neutral-900);color:var(--color-text);border-radius:5px;text-decoration:none}
+.dv-olabel{display:flex;align-items:baseline;gap:8px;font:400 11.5px/1.3 var(--font-body);color:var(--color-neutral-500)}
+.dv-opt:target .dv-oid{background:var(--color-accent);color:oklch(0.2 0.01 141)}
+.dv-next{margin:24px 0 0;font:12px/1.6 var(--font-body);color:var(--color-neutral-500)}
+.kv{font-family:var(--font-mono);font-variant-numeric:tabular-nums}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+</style>
+</helmet>
+
+<header style="padding:44px 44px 30px;max-width:900px">
+  <div style="font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--color-accent);margin-bottom:10px">HydroControl &middot; frontend prototype</div>
+  <h2 style="margin:0 0 14px">A control panel that shows the hardware, not the preference file</h2>
+  <p style="font-size:13.5px;line-height:1.6;color:var(--color-neutral-400);text-wrap:pretty">Built on <strong style="color:var(--color-text);font-weight:500">Nocturne</strong> &mdash; its compact 0.7&times; spacing, Inter at 500, 8px radii and outlined actions &mdash; with the accent ramp re-seeded from your Matugen wallpaper colour <span class="kv" style="color:var(--color-accent)">#8CBF73</span>, the way DankMaterialShell re-tints itself. Neutrals carry a faint green cast so the app frame reads as part of the shell. Numeric readouts are JetBrains Mono; status colour is reserved for status only.</p>
+  <p style="font-size:13.5px;line-height:1.6;color:var(--color-neutral-400);text-wrap:pretty">Assumptions I made: one user, no onboarding, 2560&times;1600 panel shown here at a floating-window size on Hyprland; sidebar nav over five sections; live telemetry ticks once a second; radial gauges for the two temperatures, a rolling 60&nbsp;s line for package power. Drift is shown as <em>subtle inline marks</em> as you asked &mdash; a warn dot on the live value plus an inline re-apply, never a modal. Out-of-scope surfaces (fan curves, performance presets) are named as unavailable rather than mocked up as dead controls.</p>
+</header>
+
+<section class="dv-turn" id="t1">
+  <div class="dv-thd"><a class="dv-tid" href="#t1">1</a><span class="dv-tname">Full app, shell popout, two unhealthy states, and two takes on the per-key editor</span></div>
+  <div class="dv-opts">
+
+    <div class="dv-opt" id="1a">
+      <div class="dv-olabel"><a class="dv-oid" href="#1a">1a</a>Full app on the Hyprland desktop &mdash; sidebar nav, all five sections live. Click through it.</div>
+      <div class="dv-card" style="width:1480px;height:952px;border-radius:8px;overflow:hidden;position:relative;background:radial-gradient(120% 90% at 12% 0%,oklch(0.30 0.045 148) 0%,transparent 55%),radial-gradient(90% 80% at 96% 100%,oklch(0.26 0.035 200) 0%,transparent 60%),oklch(0.155 0.012 145)">
+
+        <div style="position:absolute;left:10px;right:10px;top:10px;height:34px;display:flex;align-items:center;gap:14px;padding:0 12px;border-radius:12px;background:color-mix(in oklab,var(--color-surface) 82%,transparent);box-shadow:0 0 0 1px var(--color-neutral-800),0 4px 14px rgba(0,0,0,.4);backdrop-filter:blur(12px)">
+          <div style="display:flex;gap:5px">
+            <div style="width:22px;height:16px;border-radius:8px;background:var(--color-accent);opacity:.9"></div>
+            <div style="width:16px;height:16px;border-radius:8px;background:var(--color-neutral-800)"></div>
+            <div style="width:16px;height:16px;border-radius:8px;background:var(--color-neutral-800)"></div>
+            <div style="width:16px;height:16px;border-radius:8px;background:var(--color-neutral-900)"></div>
+          </div>
+          <span style="font-size:11.5px;color:var(--color-neutral-500)">hydrocontrol</span>
+          <span class="kv" style="margin:0 auto;font-size:11.5px;color:var(--color-text)">{{clock}}</span>
+          <div style="display:flex;align-items:center;gap:11px;font-size:13px;color:var(--color-neutral-400)">
+            <i class="ph ph-lightbulb" style="color:var(--color-accent)"></i>
+            <i class="ph ph-thermometer-simple"></i><span class="kv" style="font-size:11px">{{cpuT}}&deg;</span>
+            <i class="ph ph-wifi-high"></i><i class="ph ph-bluetooth"></i><i class="ph ph-speaker-high"></i>
+            <i class="ph ph-plug-charging" style="color:var(--color-accent)"></i><span class="kv" style="font-size:11px">86%</span>
+          </div>
+        </div>
+
+        <div style="position:absolute;left:24px;top:60px;width:1432px;height:868px;border-radius:14px;overflow:hidden;background:var(--color-bg);box-shadow:0 0 0 1.5px color-mix(in oklab,var(--color-accent) 50%,transparent),0 24px 60px rgba(0,0,0,.6);display:flex;flex-direction:column">
+
+          <div style="height:40px;flex:none;display:flex;align-items:center;gap:10px;padding:0 14px;background:var(--color-surface);box-shadow:inset 0 -1px 0 var(--color-neutral-900)">
+            <i class="ph ph-circuitry" style="font-size:15px;color:var(--color-accent)"></i>
+            <span style="font-size:12.5px;font-weight:500">hydrocontrol</span>
+            <span class="kv" style="font-size:10.5px;color:var(--color-neutral-600)">HYDROC-16 G1 &middot; EC 117.ELUK &middot; 7.1.8-1-cachyos-bore</span>
+            <div style="margin-left:auto;display:flex;gap:7px">
+              <div style="width:11px;height:11px;border-radius:50%;background:var(--color-neutral-700)"></div>
+              <div style="width:11px;height:11px;border-radius:50%;background:var(--color-neutral-700)"></div>
+              <div style="width:11px;height:11px;border-radius:50%;background:var(--color-neutral-600)"></div>
+            </div>
+          </div>
+
+          <div style="flex:1;display:flex;min-height:0">
+            <div style="width:212px;flex:none;display:flex;flex-direction:column;padding:14px 10px;gap:2px;background:color-mix(in oklab,var(--color-surface) 55%,var(--color-bg))">
+              <sc-for list="{{nav}}" as="n" hint-placeholder-count="5">
+                <div data-k="section" data-v="{{n.id}}" onClick="{{onPick}}" style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:var(--radius-md);cursor:pointer;background:{{n.bg}};color:{{n.fg}};position:relative">
+                  <div style="position:absolute;left:0;top:9px;bottom:9px;width:2px;border-radius:1px;background:{{n.mark}}"></div>
+                  <i class="{{n.icon}}" style="font-size:16px"></i>
+                  <span style="font-size:13px;font-weight:500">{{n.name}}</span>
+                </div>
+              </sc-for>
+
+              <div style="margin-top:auto;display:flex;flex-direction:column;gap:7px">
+                <div style="padding:9px 10px;border-radius:var(--radius-md);background:var(--color-surface);box-shadow:var(--shadow-sm)">
+                  <div style="display:flex;align-items:center;gap:7px;margin-bottom:5px">
+                    <div style="width:6px;height:6px;border-radius:50%;background:var(--color-accent);animation:pulse 2.4s infinite"></div>
+                    <span class="kv" style="font-size:11px">hydrocd</span>
+                    <span style="margin-left:auto;font-size:10.5px;color:var(--color-accent)">running</span>
+                  </div>
+                  <div class="kv" style="font-size:10px;color:var(--color-neutral-500);line-height:1.5">uptime 4h 12m<br>last apply 12:04:31<br>uniwill-laptop loaded</div>
+                </div>
+                <div class="kv" style="font-size:9.5px;color:var(--color-neutral-700);padding-left:10px">/run/hydroc/hydroc.sock</div>
+              </div>
+            </div>
+
+            <div style="flex:1;min-width:0;overflow:hidden;display:flex;flex-direction:column">
+              <div style="flex:none;display:flex;align-items:center;gap:12px;padding:16px 22px 12px">
+                <h4 style="margin:0">{{sectionName}}</h4>
+                <span style="font-size:11.5px;color:var(--color-neutral-500);align-self:flex-end;padding-bottom:2px">{{sectionSub}}</span>
+                <div style="margin-left:auto;display:flex;align-items:center;gap:8px">
+                  <span class="tag tag-outline">custom profile armed</span>
+                  <span class="tag tag-neutral kv">PL1 {{pl1}} W</span>
+                  <span class="tag tag-neutral kv">{{chargeName}}</span>
+                  <button class="btn btn-secondary btn-icon" title="Re-read hardware state"><i class="ph ph-arrows-clockwise"></i></button>
+                </div>
+              </div>
+
+              <div style="flex:1;overflow:auto;padding:0 22px 22px">
+
+                <sc-if value="{{isOverview}}" hint-placeholder-val="{{true}}">
+                  <div style="display:flex;flex-direction:column;gap:14px">
+                    <div style="display:grid;grid-template-columns:186px 186px 1fr;gap:14px">
+                      <div class="card elev-sm" style="align-items:center;gap:6px;padding:14px">
+                        <div style="position:relative;width:126px;height:126px;border-radius:50%;background:conic-gradient(from 225deg,{{cpuColor}} 0 {{cpuArc}},var(--color-neutral-900) {{cpuArc}} 75%,transparent 75%)">
+                          <div style="position:absolute;inset:11px;border-radius:50%;background:var(--color-surface);display:grid;place-items:center">
+                            <div style="text-align:center">
+                              <div class="kv" style="font-size:29px;line-height:1;color:{{cpuColor}}">{{cpuT}}</div>
+                              <div style="font-size:10.5px;color:var(--color-neutral-500);margin-top:3px">&deg;C</div>
+                            </div>
+                          </div>
+                        </div>
+                        <div style="font-size:12px;font-weight:500">CPU package</div>
+                        <div class="kv" style="font-size:10px;color:var(--color-neutral-600)">hwmon temp1_input</div>
+                      </div>
+
+                      <div class="card elev-sm" style="align-items:center;gap:6px;padding:14px">
+                        <div style="position:relative;width:126px;height:126px;border-radius:50%;background:conic-gradient(from 225deg,{{gpuColor}} 0 {{gpuArc}},var(--color-neutral-900) {{gpuArc}} 75%,transparent 75%)">
+                          <div style="position:absolute;inset:11px;border-radius:50%;background:var(--color-surface);display:grid;place-items:center">
+                            <div style="text-align:center">
+                              <div class="kv" style="font-size:29px;line-height:1;color:{{gpuColor}}">{{gpuT}}</div>
+                              <div style="font-size:10.5px;color:var(--color-neutral-500);margin-top:3px">&deg;C</div>
+                            </div>
+                          </div>
+                        </div>
+                        <div style="font-size:12px;font-weight:500">GPU</div>
+                        <div class="kv" style="font-size:10px;color:var(--color-neutral-600)">hwmon temp2_input</div>
+                      </div>
+
+                      <div class="card elev-sm" style="padding:14px;gap:8px">
+                        <div style="display:flex;align-items:baseline;gap:10px">
+                          <span class="card-kicker">Package power &middot; 60 s</span>
+                          <span class="kv" style="margin-left:auto;font-size:23px;line-height:1">{{pkgW}}</span>
+                          <span style="font-size:11px;color:var(--color-neutral-500)">W of {{pl1}} limit</span>
+                        </div>
+                        <svg viewBox="0 0 600 128" preserveAspectRatio="none" style="width:100%;height:128px;display:block">
+                          <line x1="0" y1="32" x2="600" y2="32" stroke="var(--color-neutral-900)" stroke-width="1"></line>
+                          <line x1="0" y1="64" x2="600" y2="64" stroke="var(--color-neutral-900)" stroke-width="1"></line>
+                          <line x1="0" y1="96" x2="600" y2="96" stroke="var(--color-neutral-900)" stroke-width="1"></line>
+                          <line x1="0" y1="{{limitY}}" x2="600" y2="{{limitY}}" stroke="var(--color-warn)" stroke-width="1" stroke-dasharray="4 4" opacity="0.6"></line>
+                          <polygon points="{{pwrArea}}" fill="color-mix(in oklab,var(--color-accent) 16%,transparent)"></polygon>
+                          <polyline points="{{pwrLine}}" fill="none" stroke="var(--color-accent)" stroke-width="1.6"></polyline>
+                        </svg>
+                        <div style="display:flex;gap:16px;font-size:10.5px;color:var(--color-neutral-600)">
+                          <span class="kv">PL1 readback 0x046A = {{pl1}}</span>
+                          <span class="kv">PL2 0x046B = {{pl2}}</span>
+                          <span class="kv">PL4 0x046F = 125</span>
+                          <span style="margin-left:auto">RAPL reports 205 W &mdash; not the truth</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px">
+                      <div class="card elev-sm" style="padding:13px;gap:9px">
+                        <span class="card-kicker">Cooling</span>
+                        <div style="display:flex;flex-direction:column;gap:8px">
+                          <div>
+                            <div style="display:flex;justify-content:space-between;font-size:11.5px"><span style="color:var(--color-neutral-400)">Fan 1 main</span><span class="kv">{{f1}} rpm</span></div>
+                            <div style="height:4px;margin-top:4px;border-radius:2px;background:var(--color-neutral-900)"><div style="height:100%;width:{{f1Pct}};border-radius:2px;background:var(--color-accent-500)"></div></div>
+                          </div>
+                          <div>
+                            <div style="display:flex;justify-content:space-between;font-size:11.5px"><span style="color:var(--color-neutral-400)">Fan 2 secondary</span><span class="kv">{{f2}} rpm</span></div>
+                            <div style="height:4px;margin-top:4px;border-radius:2px;background:var(--color-neutral-900)"><div style="height:100%;width:{{f2Pct}};border-radius:2px;background:var(--color-accent-500)"></div></div>
+                          </div>
+                        </div>
+                        <div class="kv" style="font-size:10px;color:var(--color-neutral-600)">pwm1 {{d1}}/255 &middot; pwm2 {{d2}}/255 &middot; read-only</div>
+                      </div>
+
+                      <div class="card elev-sm" style="padding:13px;gap:9px">
+                        <span class="card-kicker">Battery</span>
+                        <div style="display:flex;align-items:baseline;gap:6px">
+                          <span class="kv" style="font-size:26px;line-height:1">86</span><span style="font-size:12px;color:var(--color-neutral-500)">%</span>
+                          <span class="tag tag-accent" style="margin-left:auto">AC</span>
+                        </div>
+                        <div style="display:flex;flex-direction:column;gap:3px;font-size:11.5px">
+                          <div style="display:flex;justify-content:space-between"><span style="color:var(--color-neutral-400)">current_now</span><span class="kv">0 mA</span></div>
+                          <div style="display:flex;justify-content:space-between"><span style="color:var(--color-neutral-400)">voltage</span><span class="kv">16.42 V</span></div>
+                          <div style="display:flex;justify-content:space-between"><span style="color:var(--color-neutral-400)">per cell</span><span class="kv">4.105 V</span></div>
+                        </div>
+                      </div>
+
+                      <div class="card elev-sm" style="padding:13px;gap:9px">
+                        <span class="card-kicker">Mode summary</span>
+                        <div style="display:flex;flex-direction:column;gap:4px;font-size:11.5px">
+                          <div style="display:flex;justify-content:space-between"><span style="color:var(--color-neutral-400)">custom latch</span><span class="kv" style="color:var(--color-accent)">armed</span></div>
+                          <div style="display:flex;justify-content:space-between"><span style="color:var(--color-neutral-400)">CPU limit</span><span class="kv">{{pl1}} W</span></div>
+                          <div style="display:flex;justify-content:space-between"><span style="color:var(--color-neutral-400)">GPU cTGP</span><span class="kv">+{{ctgp}} W</span></div>
+                          <div style="display:flex;justify-content:space-between"><span style="color:var(--color-neutral-400)">charging</span><span class="kv">{{chargeName}}</span></div>
+                          <div style="display:flex;justify-content:space-between"><span style="color:var(--color-neutral-400)">keyboard</span><span class="kv">per-key</span></div>
+                          <div style="display:flex;justify-content:space-between"><span style="color:var(--color-neutral-400)">chin bar</span><span class="kv">static</span></div>
+                        </div>
+                      </div>
+
+                      <div class="card elev-sm" style="padding:13px;gap:9px">
+                        <span class="card-kicker">Daemon health</span>
+                        <div style="display:flex;flex-direction:column;gap:6px;font-size:11.5px">
+                          <div style="display:flex;align-items:center;gap:7px"><i class="ph ph-check-circle" style="color:var(--color-accent)"></i><span>socket responding</span></div>
+                          <div style="display:flex;align-items:center;gap:7px"><i class="ph ph-check-circle" style="color:var(--color-accent)"></i><span>uniwill-laptop loaded</span></div>
+                          <div style="display:flex;align-items:center;gap:7px"><i class="ph ph-check-circle" style="color:var(--color-accent)"></i><span>acpi_call available</span></div>
+                          <div style="display:flex;align-items:center;gap:7px"><i class="ph ph-check-circle" style="color:var(--color-accent)"></i><span>2 hidraw nodes resolved</span></div>
+                        </div>
+                        <div class="kv" style="font-size:10px;color:var(--color-neutral-600)">restored 6 settings at boot</div>
+                      </div>
+                    </div>
+
+                    <div class="card elev-sm" style="padding:13px 15px;gap:6px">
+                      <div style="display:flex;align-items:baseline">
+                        <span class="card-kicker">Intent vs hardware</span>
+                        <span style="margin-left:auto;font-size:10.5px;color:var(--color-neutral-600)">profile file is intent &middot; EC readback is state</span>
+                      </div>
+                      <table class="table" style="font-size:12.5px">
+                        <thead><tr><th style="width:34%">Setting</th><th style="width:22%">Saved profile</th><th style="width:22%">Hardware now</th><th>Volatility</th></tr></thead>
+                        <tbody>
+                          <tr><td>Custom profile latch</td><td class="kv">on</td><td class="kv" style="color:var(--color-accent)">on</td><td style="color:var(--color-neutral-500)">EC RAM &mdash; clears on power cycle</td></tr>
+                          <tr><td>CPU power limit PL1</td><td class="kv">{{pl1}} W</td><td class="kv" style="color:var(--color-accent)">{{pl1}} W</td><td style="color:var(--color-neutral-500)">EC RAM</td></tr>
+                          <tr><td>Charging profile</td><td class="kv">{{chargeName}}</td><td class="kv" style="color:var(--color-accent)">{{chargeName}}</td><td style="color:var(--color-neutral-500)">EC RAM &mdash; reverts to High Capacity</td></tr>
+                          <tr><td>Keyboard per-key map</td><td class="kv">saved</td><td class="kv" style="color:var(--color-accent)">saved</td><td style="color:var(--color-neutral-500)">8291 flash &mdash; persists</td></tr>
+                          <tr><td>Chin bar</td><td class="kv">static #8CBF73</td><td class="kv" style="color:var(--color-accent)">static #8CBF73</td><td style="color:var(--color-neutral-500)">8233 RAM</td></tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </sc-if>
+
+                <sc-if value="{{isPerf}}" hint-placeholder-val="{{false}}">
+                  <div style="display:flex;flex-direction:column;gap:14px">
+                    <div class="card elev-sm" style="padding:15px;gap:12px">
+                      <div style="display:flex;align-items:center;gap:12px">
+                        <div data-k="armed" onClick="{{onToggle}}" style="flex:none;width:38px;height:21px;border-radius:11px;padding:2px;cursor:pointer;background:{{armedTrack}};transition:background .15s">
+                          <div style="width:17px;height:17px;border-radius:50%;background:var(--color-bg);transform:{{armedKnob}};transition:transform .15s"></div>
+                        </div>
+                        <div>
+                          <div style="font-size:14px;font-weight:500">Custom profile mode</div>
+                          <div style="font-size:11.5px;color:var(--color-neutral-500)">EC 0x0727 bit 6 &middot; the profile LED beside the power button turns white</div>
+                        </div>
+                        <span class="tag tag-outline" style="margin-left:auto">{{armedLabel}}</span>
+                      </div>
+                      <p style="margin:0;font-size:12px;color:var(--color-neutral-500);max-width:70ch">Power limits below only take effect while this is armed. It lives in volatile EC memory &mdash; hydrocd re-arms it at boot and after resume.</p>
+                    </div>
+
+                    <div class="card elev-sm" style="padding:15px;gap:16px;opacity:{{perfOpacity}}">
+                      <div>
+                        <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:7px">
+                          <span style="font-size:13px;font-weight:500">CPU power limit PL1</span>
+                          <span class="kv" style="margin-left:auto;font-size:19px">{{pl1}}</span>
+                          <span style="font-size:11px;color:var(--color-neutral-500)">W</span>
+                          <button class="btn btn-ghost" data-k="pl1" data-v="0" onClick="{{onPick}}" style="font-size:11.5px">firmware default</button>
+                        </div>
+                        <div data-k="pl1" data-min="15" data-max="125" onPointerDown="{{onSlide}}" style="height:24px;display:flex;align-items:center;cursor:pointer">
+                          <div style="position:relative;height:6px;width:100%;border-radius:3px;background:var(--color-neutral-900)">
+                            <div style="position:absolute;inset:0;width:{{pl1Pct}};border-radius:3px;background:var(--color-accent)"></div>
+                            <div style="position:absolute;top:50%;left:{{pl1Pct}};width:14px;height:14px;margin:-7px 0 0 -7px;border-radius:50%;background:var(--color-accent-200);box-shadow:0 0 0 1px var(--color-bg)"></div>
+                          </div>
+                        </div>
+                        <div class="kv" style="display:flex;justify-content:space-between;font-size:10px;color:var(--color-neutral-600)"><span>15</span><span>45</span><span>75 stock</span><span>125</span></div>
+                        <div style="display:flex;align-items:center;gap:7px;margin-top:8px;padding:7px 10px;border-radius:var(--radius-sm);background:{{pl1WarnBg}};font-size:11.5px;color:{{pl1WarnFg}}">
+                          <i class="ph ph-warning"></i><span>{{pl1Warn}}</span>
+                        </div>
+                      </div>
+
+                      <div>
+                        <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:7px">
+                          <span style="font-size:13px;font-weight:500">CPU power limit PL2 &mdash; short boost</span>
+                          <span class="kv" style="margin-left:auto;font-size:19px">{{pl2}}</span>
+                          <span style="font-size:11px;color:var(--color-neutral-500)">W</span>
+                        </div>
+                        <div data-k="pl2" data-min="15" data-max="125" onPointerDown="{{onSlide}}" style="height:24px;display:flex;align-items:center;cursor:pointer">
+                          <div style="position:relative;height:6px;width:100%;border-radius:3px;background:var(--color-neutral-900)">
+                            <div style="position:absolute;inset:0;width:{{pl2Pct}};border-radius:3px;background:var(--color-accent)"></div>
+                            <div style="position:absolute;top:50%;left:{{pl2Pct}};width:14px;height:14px;margin:-7px 0 0 -7px;border-radius:50%;background:var(--color-accent-200);box-shadow:0 0 0 1px var(--color-bg)"></div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div>
+                        <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:7px">
+                          <span style="font-size:13px;font-weight:500">GPU configurable TGP offset</span>
+                          <span class="kv" style="margin-left:auto;font-size:19px">+{{ctgp}}</span>
+                          <span style="font-size:11px;color:var(--color-neutral-500)">W</span>
+                        </div>
+                        <div data-k="ctgp" data-min="0" data-max="25" onPointerDown="{{onSlide}}" style="height:24px;display:flex;align-items:center;cursor:pointer">
+                          <div style="position:relative;height:6px;width:100%;border-radius:3px;background:var(--color-neutral-900)">
+                            <div style="position:absolute;inset:0;width:{{ctgpPct}};border-radius:3px;background:var(--color-accent)"></div>
+                            <div style="position:absolute;top:50%;left:{{ctgpPct}};width:14px;height:14px;margin:-7px 0 0 -7px;border-radius:50%;background:var(--color-accent-200);box-shadow:0 0 0 1px var(--color-bg)"></div>
+                          </div>
+                        </div>
+                        <div style="font-size:11.5px;color:var(--color-neutral-500);margin-top:5px">{{ctgpNote}}</div>
+                      </div>
+                    </div>
+
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+                      <div class="card elev-sm" style="padding:14px;gap:9px">
+                        <span class="card-kicker">Package power &middot; 60 s</span>
+                        <svg viewBox="0 0 600 120" preserveAspectRatio="none" style="width:100%;height:120px;display:block">
+                          <line x1="0" y1="{{limitY2}}" x2="600" y2="{{limitY2}}" stroke="var(--color-warn)" stroke-width="1" stroke-dasharray="4 4" opacity="0.6"></line>
+                          <polygon points="{{pwrArea2}}" fill="color-mix(in oklab,var(--color-accent) 16%,transparent)"></polygon>
+                          <polyline points="{{pwrLine2}}" fill="none" stroke="var(--color-accent)" stroke-width="1.6"></polyline>
+                        </svg>
+                        <div class="kv" style="font-size:10.5px;color:var(--color-neutral-600)">dashed line = configured PL1 &middot; sampled from the RAPL energy counter</div>
+                      </div>
+
+                      <div class="card elev-sm" style="padding:14px;gap:10px">
+                        <span class="card-kicker">Fans &mdash; read-only</span>
+                        <div style="display:flex;gap:20px">
+                          <div style="flex:1">
+                            <div style="display:flex;justify-content:space-between;font-size:11.5px"><span style="color:var(--color-neutral-400)">Fan 1</span><span class="kv">{{f1}} rpm</span></div>
+                            <div style="height:5px;margin-top:5px;border-radius:3px;background:var(--color-neutral-900)"><div style="height:100%;width:{{f1Pct}};border-radius:3px;background:var(--color-accent-500)"></div></div>
+                            <div class="kv" style="font-size:10px;color:var(--color-neutral-600);margin-top:4px">duty {{d1p}}%</div>
+                          </div>
+                          <div style="flex:1">
+                            <div style="display:flex;justify-content:space-between;font-size:11.5px"><span style="color:var(--color-neutral-400)">Fan 2</span><span class="kv">{{f2}} rpm</span></div>
+                            <div style="height:5px;margin-top:5px;border-radius:3px;background:var(--color-neutral-900)"><div style="height:100%;width:{{f2Pct}};border-radius:3px;background:var(--color-accent-500)"></div></div>
+                            <div class="kv" style="font-size:10px;color:var(--color-neutral-600);margin-top:4px">duty {{d2p}}%</div>
+                          </div>
+                        </div>
+                        <p style="margin:0;font-size:11.5px;color:var(--color-neutral-500)">Manual fan control is not exposed yet &mdash; <span class="kv">pwm1</span>/<span class="kv">pwm2</span> are registered read-only. A curve editor belongs here once <span class="kv">uw_set_fan</span> is ported; nothing is drawn for it until it works.</p>
+                      </div>
+                    </div>
+                  </div>
+                </sc-if>
+
+                <sc-if value="{{isBatt}}" hint-placeholder-val="{{false}}">
+                  <div style="display:flex;flex-direction:column;gap:14px">
+                    <div class="card elev-sm" style="padding:15px;gap:11px">
+                      <div style="display:flex;align-items:baseline"><span class="card-kicker">Charging mode</span>
+                        <span style="margin-left:auto;font-size:11px;color:var(--color-neutral-600)">EC 0x07A6 bits 5:4 via <span class="kv">charge_types</span></span></div>
+                      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px">
+                        <sc-for list="{{chargeModes}}" as="c" hint-placeholder-count="3">
+                          <div data-k="charge" data-v="{{c.id}}" onClick="{{onPick}}" style="padding:12px;border-radius:var(--radius-md);cursor:pointer;background:{{c.bg}};box-shadow:{{c.ring}}">
+                            <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+                              <div style="width:14px;height:14px;border-radius:50%;box-shadow:{{c.dot}}"></div>
+                              <span style="font-size:13.5px;font-weight:500;color:{{c.fg}}">{{c.name}}</span>
+                            </div>
+                            <div style="font-size:11.5px;color:var(--color-neutral-400);line-height:1.45">{{c.desc}}</div>
+                            <div class="kv" style="font-size:10px;color:var(--color-neutral-600);margin-top:7px">{{c.token}}</div>
+                          </div>
+                        </sc-for>
+                      </div>
+                      <div style="display:flex;gap:8px;align-items:flex-start;padding:9px 11px;border-radius:var(--radius-sm);background:var(--color-neutral-900)">
+                        <i class="ph ph-info" style="color:var(--color-info);font-size:14px;margin-top:1px"></i>
+                        <p style="margin:0;font-size:11.5px;color:var(--color-neutral-400);line-height:1.5">These are usage patterns, not charge caps. On firmware 117.ELUK none of the three observably limits charging &mdash; the pack reached 6400&nbsp;mAh at 4.21&nbsp;V/cell in every mode, with a coulomb ratio of 1.00&ndash;1.07. The register write matches tuxedo-drivers, so any policy here is longer-horizon than one cycle.</p>
+                      </div>
+                    </div>
+
+                    <div style="display:grid;grid-template-columns:1.1fr 1fr;gap:14px">
+                      <div class="card elev-sm" style="padding:15px;gap:9px">
+                        <div style="display:flex;align-items:baseline;gap:10px">
+                          <span style="font-size:13px;font-weight:500">Charge threshold</span>
+                          <span class="kv" style="margin-left:auto;font-size:19px">{{thr}}</span><span style="font-size:11px;color:var(--color-neutral-500)">%</span>
+                        </div>
+                        <div data-k="thr" data-min="1" data-max="100" onPointerDown="{{onSlide}}" style="height:24px;display:flex;align-items:center;cursor:pointer">
+                          <div style="position:relative;height:6px;width:100%;border-radius:3px;background:var(--color-neutral-900)">
+                            <div style="position:absolute;inset:0;width:{{thrPct}};border-radius:3px;background:var(--color-accent)"></div>
+                            <div style="position:absolute;top:50%;left:{{thrPct}};width:14px;height:14px;margin:-7px 0 0 -7px;border-radius:50%;background:var(--color-accent-200);box-shadow:0 0 0 1px var(--color-bg)"></div>
+                          </div>
+                        </div>
+                        <div class="kv" style="font-size:10.5px;color:var(--color-neutral-600)">charge_control_end_threshold &middot; EC 0x07B9 bits 0&ndash;6 &middot; volatile</div>
+                        <div style="height:1px;background:var(--color-divider);margin:4px 0"></div>
+                        <div style="display:flex;align-items:baseline;gap:8px">
+                          <span class="kv" style="font-size:26px;line-height:1">86</span><span style="font-size:12px;color:var(--color-neutral-500)">% now</span>
+                          <span class="tag tag-accent" style="margin-left:auto">AC connected</span>
+                        </div>
+                        <div class="kv" style="font-size:11px;color:var(--color-neutral-500)">current_now 0 mA &mdash; a zero here is the honest signal, not a percentage</div>
+                      </div>
+
+                      <div class="card elev-sm" style="padding:15px;gap:8px">
+                        <span class="card-kicker">Health</span>
+                        <table class="table" style="font-size:12.5px">
+                          <tbody>
+                            <tr><td>Charge cycles</td><td class="kv" style="text-align:right">65</td></tr>
+                            <tr><td>Design capacity</td><td class="kv" style="text-align:right">6400 mAh</td></tr>
+                            <tr><td>Current full capacity</td><td class="kv" style="text-align:right">6400 mAh</td></tr>
+                            <tr><td>Charge now</td><td class="kv" style="text-align:right">5504 mAh</td></tr>
+                            <tr><td>Pack voltage</td><td class="kv" style="text-align:right">16.42 V</td></tr>
+                            <tr><td>Per cell</td><td class="kv" style="text-align:right">4.105 V</td></tr>
+                          </tbody>
+                        </table>
+                        <div style="display:flex;gap:7px;align-items:flex-start;font-size:11px;color:var(--color-neutral-500);line-height:1.5">
+                          <i class="ph ph-warning-circle" style="color:var(--color-warn);margin-top:2px"></i>
+                          <span>Cycle count read from EC 0x04A6/0x04A7. The kernel's <span class="kv">cycle_count</span> reports 0 on this machine and is not shown.</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </sc-if>
+
+                <sc-if value="{{isLight}}" hint-placeholder-val="{{false}}">
+                  <div style="display:flex;flex-direction:column;gap:14px">
+                    <div class="card elev-sm" style="padding:15px;gap:13px">
+                      <div style="display:flex;align-items:center;gap:12px">
+                        <span class="card-kicker">Keyboard &middot; 048d:600b</span>
+                        <div class="seg" style="margin-left:auto">
+                          <div data-k="kbMode" data-v="effect" onClick="{{onPick}}" class="seg-opt" style="cursor:pointer;color:{{effTabFg}};box-shadow:{{effTabRing}}">Effect</div>
+                          <div data-k="kbMode" data-v="perkey" onClick="{{onPick}}" class="seg-opt" style="cursor:pointer;color:{{pkTabFg}};box-shadow:{{pkTabRing}}">Per-key</div>
+                        </div>
+                      </div>
+
+                      <sc-if value="{{isEffect}}" hint-placeholder-val="{{true}}">
+                        <div style="display:flex;flex-direction:column;gap:13px">
+                          <div>
+                            <div style="font-size:12px;color:var(--color-neutral-400);margin-bottom:6px">Firmware effect</div>
+                            <div style="display:flex;flex-wrap:wrap;gap:6px">
+                              <sc-for list="{{effects}}" as="e" hint-placeholder-count="9">
+                                <div data-k="effect" data-v="{{e.id}}" onClick="{{onPick}}" style="padding:5px 11px;border-radius:var(--radius-md);cursor:pointer;font-size:12.5px;background:{{e.bg}};color:{{e.fg}};box-shadow:{{e.ring}}">{{e.name}}</div>
+                              </sc-for>
+                            </div>
+                          </div>
+                          <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+                            <div>
+                              <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:6px">
+                                <span style="font-size:12px;color:var(--color-neutral-400)">Effect colour</span>
+                                <span style="font-size:10.5px;color:var(--color-neutral-600)">palette index only &mdash; firmware takes no arbitrary RGB here</span>
+                              </div>
+                              <div style="display:flex;flex-wrap:wrap;gap:6px">
+                                <sc-for list="{{kbPalette}}" as="p" hint-placeholder-count="9">
+                                  <div data-k="kbColor" data-v="{{p.name}}" onClick="{{onPick}}" title="{{p.name}}" style="width:28px;height:28px;border-radius:6px;cursor:pointer;background:{{p.bg}};outline:{{p.ring}};outline-offset:2px;box-shadow:inset 0 0 0 1px rgba(0,0,0,.4);display:grid;place-items:center;font-size:11px;color:{{p.fg}}">{{p.glyph}}</div>
+                                </sc-for>
+                              </div>
+                            </div>
+                            <div style="display:flex;flex-direction:column;gap:11px">
+                              <div>
+                                <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--color-neutral-400);margin-bottom:5px"><span>Speed</span><span class="kv" style="color:var(--color-text)">{{spd}} / 10</span></div>
+                                <div data-k="spd" data-min="1" data-max="10" onPointerDown="{{onSlide}}" style="height:20px;display:flex;align-items:center;cursor:pointer">
+                                  <div style="position:relative;height:6px;width:100%;border-radius:3px;background:var(--color-neutral-900)">
+                                    <div style="position:absolute;inset:0;width:{{spdPct}};border-radius:3px;background:var(--color-accent)"></div>
+                                    <div style="position:absolute;top:50%;left:{{spdPct}};width:13px;height:13px;margin:-6.5px 0 0 -6.5px;border-radius:50%;background:var(--color-accent-200);box-shadow:0 0 0 1px var(--color-bg)"></div>
+                                  </div>
+                                </div>
+                              </div>
+                              <div>
+                                <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--color-neutral-400);margin-bottom:5px"><span>Brightness</span><span class="kv" style="color:var(--color-text)">{{kbBri}} / 50</span></div>
+                                <div data-k="kbBri" data-min="0" data-max="50" onPointerDown="{{onSlide}}" style="height:20px;display:flex;align-items:center;cursor:pointer">
+                                  <div style="position:relative;height:6px;width:100%;border-radius:3px;background:var(--color-neutral-900)">
+                                    <div style="position:absolute;inset:0;width:{{kbBriPct}};border-radius:3px;background:var(--color-accent)"></div>
+                                    <div style="position:absolute;top:50%;left:{{kbBriPct}};width:13px;height:13px;margin:-6.5px 0 0 -6.5px;border-radius:50%;background:var(--color-accent-200);box-shadow:0 0 0 1px var(--color-bg)"></div>
+                                  </div>
+                                </div>
+                              </div>
+                              <div>
+                                <div style="font-size:12px;color:var(--color-neutral-400);margin-bottom:5px">Direction <span style="color:var(--color-neutral-600);font-size:10.5px">&mdash; {{dirNote}}</span></div>
+                                <div style="display:flex;gap:6px">
+                                  <sc-for list="{{dirs}}" as="d" hint-placeholder-count="4">
+                                    <div data-k="dir" data-v="{{d.id}}" onClick="{{onPick}}" style="width:32px;height:28px;display:grid;place-items:center;border-radius:var(--radius-sm);cursor:{{d.cursor}};opacity:{{d.op}};background:{{d.bg}};color:{{d.fg}};box-shadow:{{d.ring}}"><i class="{{d.icon}}"></i></div>
+                                  </sc-for>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </sc-if>
+
+                      <sc-if value="{{isPerkey}}" hint-placeholder-val="{{false}}">
+                        <dc-import name="KeyMatrix" variant="compact" hint-size="100%,300px"></dc-import>
+                      </sc-if>
+                    </div>
+
+                    <div class="card elev-sm" style="padding:15px;gap:12px">
+                      <div style="display:flex;align-items:baseline;gap:10px">
+                        <span class="card-kicker">Chin bar &middot; ITE 8233 hidraw</span>
+                        <span style="margin-left:auto;font-size:10.5px;color:var(--color-neutral-600)">single zone &middot; no per-pixel &middot; state lives in 8233 RAM</span>
+                      </div>
+                      <div style="display:grid;grid-template-columns:1.15fr 1fr;gap:18px">
+                        <div style="display:flex;flex-direction:column;gap:10px">
+                          <div style="display:flex;flex-wrap:wrap;gap:6px">
+                            <sc-for list="{{chinModes}}" as="m" hint-placeholder-count="7">
+                              <div data-k="chin" data-v="{{m.id}}" onClick="{{onPick}}" style="display:flex;align-items:center;gap:6px;padding:5px 10px;border-radius:var(--radius-md);cursor:{{m.cursor}};font-size:12.5px;opacity:{{m.op}};background:{{m.bg}};color:{{m.fg}};box-shadow:{{m.ring}}">
+                                <span>{{m.name}}</span><span style="font-size:9.5px;color:var(--color-neutral-500)">{{m.tag}}</span>
+                              </div>
+                            </sc-for>
+                          </div>
+                          <div style="height:34px;border-radius:0 0 12px 12px;background:linear-gradient(to bottom,color-mix(in oklab,{{chinHex}} 30%,transparent),{{chinHex}});box-shadow:inset 0 1px 0 rgba(255,255,255,.15);opacity:{{chinOp}}"></div>
+                          <div class="kv" style="font-size:10.5px;color:var(--color-neutral-600)">{{chinPacket}}</div>
+                        </div>
+                        <div style="display:flex;flex-direction:column;gap:11px">
+                          <div>
+                            <div style="font-size:12px;color:var(--color-neutral-400);margin-bottom:6px">Colour <span class="kv" style="color:var(--color-text)">{{chinHex}}</span></div>
+                            <div data-k="chinHue" onPointerDown="{{onHue}}" style="height:22px;border-radius:11px;cursor:pointer;position:relative;background:linear-gradient(to right,oklch(0.7 0.19 25),oklch(0.8 0.17 80),oklch(0.85 0.2 140),oklch(0.8 0.13 195),oklch(0.65 0.2 265),oklch(0.7 0.22 330),oklch(0.7 0.19 25))">
+                              <div style="position:absolute;top:-2px;left:{{chinHuePct}};width:26px;height:26px;margin-left:-13px;border-radius:50%;background:{{chinHex}};box-shadow:0 0 0 2px var(--color-surface),0 0 0 3px var(--color-neutral-500)"></div>
+                            </div>
+                          </div>
+                          <div>
+                            <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--color-neutral-400);margin-bottom:5px"><span>Brightness</span><span class="kv" style="color:var(--color-text)">{{chinBri}} / 100</span></div>
+                            <div data-k="chinBri" data-min="0" data-max="100" onPointerDown="{{onSlide}}" style="height:20px;display:flex;align-items:center;cursor:pointer">
+                              <div style="position:relative;height:6px;width:100%;border-radius:3px;background:var(--color-neutral-900)">
+                                <div style="position:absolute;inset:0;width:{{chinBriPct}};border-radius:3px;background:var(--color-accent)"></div>
+                                <div style="position:absolute;top:50%;left:{{chinBriPct}};width:13px;height:13px;margin:-6.5px 0 0 -6.5px;border-radius:50%;background:var(--color-accent-200);box-shadow:0 0 0 1px var(--color-bg)"></div>
+                              </div>
+                            </div>
+                          </div>
+                          <div style="opacity:{{chinSpdOp}}">
+                            <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--color-neutral-400);margin-bottom:5px"><span>Speed <span style="font-size:10.5px;color:var(--color-neutral-600)">breathing only</span></span><span class="kv" style="color:var(--color-text)">{{chinSpd}} / 10</span></div>
+                            <div data-k="chinSpd" data-min="1" data-max="10" onPointerDown="{{onSlide}}" style="height:20px;display:flex;align-items:center;cursor:pointer">
+                              <div style="position:relative;height:6px;width:100%;border-radius:3px;background:var(--color-neutral-900)">
+                                <div style="position:absolute;inset:0;width:{{chinSpdPct}};border-radius:3px;background:var(--color-accent)"></div>
+                                <div style="position:absolute;top:50%;left:{{chinSpdPct}};width:13px;height:13px;margin:-6.5px 0 0 -6.5px;border-radius:50%;background:var(--color-accent-200);box-shadow:0 0 0 1px var(--color-bg)"></div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </sc-if>
+
+                <sc-if value="{{isSys}}" hint-placeholder-val="{{false}}">
+                  <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:start">
+                    <div class="card elev-sm" style="padding:15px;gap:4px">
+                      <span class="card-kicker">Keyboard &amp; input</span>
+                      <sc-for list="{{toggles}}" as="t" hint-placeholder-count="3">
+                        <div style="display:flex;align-items:center;gap:11px;padding:9px 0">
+                          <div data-k="{{t.id}}" onClick="{{onToggle}}" style="flex:none;width:38px;height:21px;border-radius:11px;padding:2px;cursor:pointer;background:{{t.track}};transition:background .15s">
+                            <div style="width:17px;height:17px;border-radius:50%;background:var(--color-bg);transform:{{t.knob}};transition:transform .15s"></div>
+                          </div>
+                          <div>
+                            <div style="font-size:13px">{{t.name}}</div>
+                            <div class="kv" style="font-size:10.5px;color:var(--color-neutral-600)">{{t.path}}</div>
+                          </div>
+                        </div>
+                      </sc-for>
+                    </div>
+
+                    <div class="card elev-sm" style="padding:15px;gap:10px">
+                      <span class="card-kicker">Power behaviour when off</span>
+                      <p style="margin:0;font-size:11.5px;color:var(--color-neutral-500)">The driver rejects both at once, so this is one choice with three positions rather than two switches.</p>
+                      <div style="display:flex;flex-direction:column;gap:3px">
+                        <sc-for list="{{powerModes}}" as="p" hint-placeholder-count="3">
+                          <div data-k="powerMode" data-v="{{p.id}}" onClick="{{onPick}}" style="display:flex;align-items:flex-start;gap:10px;padding:9px 10px;border-radius:var(--radius-md);cursor:pointer;background:{{p.bg}}">
+                            <div style="flex:none;width:15px;height:15px;margin-top:2px;border-radius:50%;box-shadow:{{p.dot}}"></div>
+                            <div>
+                              <div style="font-size:13px;color:{{p.fg}}">{{p.name}}</div>
+                              <div style="font-size:11px;color:var(--color-neutral-500)">{{p.desc}}</div>
+                            </div>
+                          </div>
+                        </sc-for>
+                      </div>
+                    </div>
+
+                    <div class="card elev-sm" style="padding:15px;gap:8px;grid-column:1 / -1">
+                      <span class="card-kicker">Resolved hardware</span>
+                      <table class="table" style="font-size:12.5px">
+                        <thead><tr><th style="width:26%">Surface</th><th style="width:37%">Resolved to</th><th>Resolved by</th></tr></thead>
+                        <tbody>
+                          <tr><td>Chin bar</td><td class="kv">/dev/hidraw4</td><td class="kv" style="color:var(--color-neutral-500)">uevent contains 0000048D:00007001</td></tr>
+                          <tr><td>Keyboard</td><td class="kv">usb 1-6 048d:600b</td><td class="kv" style="color:var(--color-neutral-500)">VID/PID match</td></tr>
+                          <tr><td>Fans &amp; temps</td><td class="kv">/sys/class/hwmon/hwmon6</td><td class="kv" style="color:var(--color-neutral-500)">name == uniwill</td></tr>
+                          <tr><td>Platform toggles</td><td class="kv">INOU0000:00</td><td class="kv" style="color:var(--color-neutral-500)">ACPI-derived, stable</td></tr>
+                          <tr><td>EC window</td><td class="kv">ECRR/ECRW @ 0xFE410000</td><td class="kv" style="color:var(--color-neutral-500)">acpi_call, serialised on UWOL</td></tr>
+                        </tbody>
+                      </table>
+                      <div style="font-size:11px;color:var(--color-neutral-600)">Indices are re-resolved on every daemon start &mdash; never cached across reboots.</div>
+                    </div>
+                  </div>
+                </sc-if>
+
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="dv-opt" id="1b">
+      <div class="dv-olabel"><a class="dv-oid" href="#1b">1b</a>DankMaterialShell popout &mdash; quick controls from the bar</div>
+      <div class="dv-card" style="width:430px;height:560px;border-radius:8px;overflow:hidden;position:relative;background:radial-gradient(110% 80% at 20% 0%,oklch(0.30 0.045 148) 0%,transparent 60%),oklch(0.155 0.012 145)">
+        <div style="position:absolute;left:10px;right:10px;top:10px;height:32px;display:flex;align-items:center;gap:10px;padding:0 11px;border-radius:12px;background:color-mix(in oklab,var(--color-surface) 82%,transparent);box-shadow:0 0 0 1px var(--color-neutral-800)">
+          <div style="width:20px;height:15px;border-radius:8px;background:var(--color-accent);opacity:.9"></div>
+          <span class="kv" style="margin:0 auto;font-size:11px">14:02</span>
+          <i class="ph ph-circuitry" style="color:var(--color-accent);font-size:14px;box-shadow:0 0 0 4px color-mix(in oklab,var(--color-accent) 18%,transparent);border-radius:4px"></i>
+        </div>
+        <div style="position:absolute;left:22px;right:22px;top:54px;border-radius:20px;padding:16px;background:var(--color-surface);box-shadow:0 0 0 1px var(--color-neutral-800),0 18px 44px rgba(0,0,0,.55);display:flex;flex-direction:column;gap:14px">
+          <div style="display:flex;align-items:center;gap:9px">
+            <i class="ph ph-circuitry" style="color:var(--color-accent)"></i>
+            <span style="font-size:13.5px;font-weight:500">hydrocontrol</span>
+            <span style="margin-left:auto;display:flex;align-items:center;gap:6px;font-size:11px;color:var(--color-accent)"><span style="width:6px;height:6px;border-radius:50%;background:currentColor"></span>hydrocd</span>
+          </div>
+          <div style="display:flex;gap:10px">
+            <div style="flex:1;padding:11px;border-radius:14px;background:var(--color-bg);text-align:center">
+              <div class="kv" style="font-size:22px;line-height:1;color:{{cpuColor}}">{{cpuT}}<span style="font-size:11px;color:var(--color-neutral-500)">&deg;C</span></div>
+              <div style="font-size:10.5px;color:var(--color-neutral-500);margin-top:4px">CPU</div>
+            </div>
+            <div style="flex:1;padding:11px;border-radius:14px;background:var(--color-bg);text-align:center">
+              <div class="kv" style="font-size:22px;line-height:1;color:{{gpuColor}}">{{gpuT}}<span style="font-size:11px;color:var(--color-neutral-500)">&deg;C</span></div>
+              <div style="font-size:10.5px;color:var(--color-neutral-500);margin-top:4px">GPU</div>
+            </div>
+            <div style="flex:1;padding:11px;border-radius:14px;background:var(--color-bg);text-align:center">
+              <div class="kv" style="font-size:22px;line-height:1">{{pkgW}}<span style="font-size:11px;color:var(--color-neutral-500)">W</span></div>
+              <div style="font-size:10.5px;color:var(--color-neutral-500);margin-top:4px">package</div>
+            </div>
+          </div>
+          <div>
+            <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--color-neutral-400);margin-bottom:6px"><span>CPU power limit</span><span class="kv" style="color:var(--color-text)">{{pl1}} W</span></div>
+            <div data-k="pl1" data-min="15" data-max="125" onPointerDown="{{onSlide}}" style="height:22px;display:flex;align-items:center;cursor:pointer">
+              <div style="position:relative;height:8px;width:100%;border-radius:4px;background:var(--color-neutral-900)">
+                <div style="position:absolute;inset:0;width:{{pl1Pct}};border-radius:4px;background:var(--color-accent)"></div>
+                <div style="position:absolute;top:50%;left:{{pl1Pct}};width:15px;height:15px;margin:-7.5px 0 0 -7.5px;border-radius:50%;background:var(--color-accent-200);box-shadow:0 0 0 1px var(--color-surface)"></div>
+              </div>
+            </div>
+          </div>
+          <div style="display:flex;gap:9px">
+            <div style="flex:1;padding:10px 11px;border-radius:14px;background:var(--color-bg)">
+              <div style="font-size:10.5px;color:var(--color-neutral-500)">Fan 1</div>
+              <div class="kv" style="font-size:15px">{{f1}} <span style="font-size:10px;color:var(--color-neutral-500)">rpm</span></div>
+            </div>
+            <div style="flex:1;padding:10px 11px;border-radius:14px;background:var(--color-bg)">
+              <div style="font-size:10.5px;color:var(--color-neutral-500)">Fan 2</div>
+              <div class="kv" style="font-size:15px">{{f2}} <span style="font-size:10px;color:var(--color-neutral-500)">rpm</span></div>
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:14px;background:var(--color-bg)">
+            <div style="width:22px;height:22px;border-radius:7px;background:{{chinHex}}"></div>
+            <span style="font-size:12.5px">Chin bar</span>
+            <span class="kv" style="font-size:11px;color:var(--color-neutral-500)">static</span>
+            <div data-k="chinOn" onClick="{{onToggle}}" style="margin-left:auto;width:38px;height:21px;border-radius:11px;padding:2px;cursor:pointer;background:{{chinTrack}}">
+              <div style="width:17px;height:17px;border-radius:50%;background:var(--color-surface);transform:{{chinKnob}};transition:transform .15s"></div>
+            </div>
+          </div>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-primary" style="flex:1;font-size:12px">Open hydrocontrol</button>
+            <button class="btn btn-secondary btn-icon" title="Re-apply saved profile"><i class="ph ph-arrows-clockwise"></i></button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="dv-opt" id="1c">
+      <div class="dv-olabel"><a class="dv-oid" href="#1c">1c</a>Daemon not running &mdash; telemetry gone, controls inert, one action offered</div>
+      <div class="dv-card" style="width:1000px;height:540px;border-radius:14px;overflow:hidden;background:var(--color-bg);box-shadow:0 0 0 1.5px var(--color-neutral-800),0 20px 50px rgba(0,0,0,.5);display:flex;flex-direction:column">
+        <div style="height:38px;flex:none;display:flex;align-items:center;gap:10px;padding:0 14px;background:var(--color-surface);box-shadow:inset 0 -1px 0 var(--color-neutral-900)">
+          <i class="ph ph-circuitry" style="font-size:15px;color:var(--color-neutral-500)"></i>
+          <span style="font-size:12.5px;font-weight:500">hydrocontrol</span>
+          <span class="kv" style="font-size:10.5px;color:var(--color-neutral-600)">no connection to /run/hydroc/hydroc.sock</span>
+        </div>
+        <div style="flex:1;display:flex;min-height:0">
+          <div style="width:200px;flex:none;padding:13px 10px;background:color-mix(in oklab,var(--color-surface) 55%,var(--color-bg));display:flex;flex-direction:column;gap:2px;opacity:.45">
+            <div style="display:flex;align-items:center;gap:10px;padding:8px 10px;font-size:13px"><i class="ph ph-gauge"></i>Overview</div>
+            <div style="display:flex;align-items:center;gap:10px;padding:8px 10px;font-size:13px"><i class="ph ph-lightning"></i>Performance</div>
+            <div style="display:flex;align-items:center;gap:10px;padding:8px 10px;font-size:13px"><i class="ph ph-battery-charging"></i>Battery</div>
+            <div style="display:flex;align-items:center;gap:10px;padding:8px 10px;font-size:13px"><i class="ph ph-lightbulb"></i>Lighting</div>
+            <div style="display:flex;align-items:center;gap:10px;padding:8px 10px;font-size:13px"><i class="ph ph-gear-six"></i>System</div>
+            <div style="margin-top:auto;padding:9px 10px;border-radius:var(--radius-md);background:var(--color-surface)">
+              <div style="display:flex;align-items:center;gap:7px"><div style="width:6px;height:6px;border-radius:50%;background:var(--color-danger)"></div><span class="kv" style="font-size:11px">hydrocd</span><span style="margin-left:auto;font-size:10.5px;color:var(--color-danger)">stopped</span></div>
+            </div>
+          </div>
+          <div style="flex:1;padding:16px 22px;display:flex;flex-direction:column;gap:14px">
+            <div style="display:flex;align-items:flex-start;gap:12px;padding:14px 15px;border-radius:var(--radius-md);background:var(--color-danger-tint);box-shadow:inset 0 0 0 1px color-mix(in oklab,var(--color-danger) 45%,transparent)">
+              <i class="ph ph-plugs" style="font-size:19px;color:var(--color-danger);margin-top:1px"></i>
+              <div style="flex:1">
+                <div style="font-size:14px;font-weight:500;margin-bottom:4px">hydrocd is not running. Nothing is being applied to the hardware.</div>
+                <div style="font-size:12.5px;color:var(--color-neutral-400);line-height:1.5">Your saved profile is intact. Until the daemon starts, the embedded controller keeps whatever it reverted to at last power-on &mdash; typically 75&nbsp;W unlatched and High&nbsp;Capacity charging. The kernel module is loaded, so this is the daemon alone.</div>
+                <div class="kv" style="font-size:11px;color:var(--color-neutral-500);margin-top:7px">systemctl status hydrocd &rarr; inactive (dead) since 11:58:04</div>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:7px;flex:none">
+                <button class="btn btn-primary" style="font-size:12.5px"><i class="ph ph-play"></i>Start daemon</button>
+                <button class="btn btn-secondary" style="font-size:12.5px">Enable at boot</button>
+              </div>
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px">
+              <div class="card elev-sm" style="padding:13px;gap:6px;align-items:center"><span class="card-kicker" style="color:var(--color-neutral-600)">CPU</span><div class="kv" style="font-size:27px;color:var(--color-neutral-700)">&mdash;&mdash;</div><span style="font-size:10.5px;color:var(--color-neutral-600)">no telemetry</span></div>
+              <div class="card elev-sm" style="padding:13px;gap:6px;align-items:center"><span class="card-kicker" style="color:var(--color-neutral-600)">GPU</span><div class="kv" style="font-size:27px;color:var(--color-neutral-700)">&mdash;&mdash;</div><span style="font-size:10.5px;color:var(--color-neutral-600)">no telemetry</span></div>
+              <div class="card elev-sm" style="padding:13px;gap:6px;align-items:center"><span class="card-kicker" style="color:var(--color-neutral-600)">Package</span><div class="kv" style="font-size:27px;color:var(--color-neutral-700)">&mdash;&mdash;</div><span style="font-size:10.5px;color:var(--color-neutral-600)">no telemetry</span></div>
+              <div class="card elev-sm" style="padding:13px;gap:6px;align-items:center"><span class="card-kicker" style="color:var(--color-neutral-600)">Fans</span><div class="kv" style="font-size:27px;color:var(--color-neutral-700)">&mdash;&mdash;</div><span style="font-size:10.5px;color:var(--color-neutral-600)">no telemetry</span></div>
+            </div>
+            <div class="card elev-sm" style="padding:14px;gap:9px;opacity:.5">
+              <span class="card-kicker" style="color:var(--color-neutral-600)">Last known profile &mdash; read from disk, not from hardware</span>
+              <table class="table" style="font-size:12.5px">
+                <tbody>
+                  <tr><td>Custom latch</td><td class="kv" style="text-align:right">on</td></tr>
+                  <tr><td>PL1 / PL2</td><td class="kv" style="text-align:right">95 W / 110 W</td></tr>
+                  <tr><td>Charging</td><td class="kv" style="text-align:right">Long Haul</td></tr>
+                  <tr><td>Chin bar</td><td class="kv" style="text-align:right">static #8CBF73</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="dv-opt" id="1d">
+      <div class="dv-olabel"><a class="dv-oid" href="#1d">1d</a>Settings drifted &mdash; subtle inline marks, live value first, re-apply in place</div>
+      <div class="dv-card" style="width:1000px;height:540px;border-radius:14px;overflow:hidden;background:var(--color-bg);box-shadow:0 0 0 1.5px var(--color-neutral-800),0 20px 50px rgba(0,0,0,.5);display:flex;flex-direction:column">
+        <div style="height:38px;flex:none;display:flex;align-items:center;gap:10px;padding:0 14px;background:var(--color-surface);box-shadow:inset 0 -1px 0 var(--color-neutral-900)">
+          <i class="ph ph-circuitry" style="font-size:15px;color:var(--color-accent)"></i>
+          <span style="font-size:12.5px;font-weight:500">hydrocontrol</span>
+          <span class="kv" style="font-size:10.5px;color:var(--color-neutral-600)">resumed 00:12 ago &middot; hardware re-read</span>
+        </div>
+        <div style="flex:1;display:flex;min-height:0">
+          <div style="width:200px;flex:none;padding:13px 10px;background:color-mix(in oklab,var(--color-surface) 55%,var(--color-bg));display:flex;flex-direction:column;gap:2px">
+            <div style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:var(--radius-md);background:var(--color-accent-900);color:var(--color-accent);font-size:13px;font-weight:500;position:relative"><div style="position:absolute;left:0;top:9px;bottom:9px;width:2px;background:var(--color-accent)"></div><i class="ph ph-gauge"></i>Overview</div>
+            <div style="display:flex;align-items:center;gap:10px;padding:8px 10px;font-size:13px;color:var(--color-neutral-400)"><i class="ph ph-lightning"></i>Performance<span style="margin-left:auto;width:6px;height:6px;border-radius:50%;background:var(--color-warn)"></span></div>
+            <div style="display:flex;align-items:center;gap:10px;padding:8px 10px;font-size:13px;color:var(--color-neutral-400)"><i class="ph ph-battery-charging"></i>Battery<span style="margin-left:auto;width:6px;height:6px;border-radius:50%;background:var(--color-warn)"></span></div>
+            <div style="display:flex;align-items:center;gap:10px;padding:8px 10px;font-size:13px;color:var(--color-neutral-400)"><i class="ph ph-lightbulb"></i>Lighting</div>
+            <div style="display:flex;align-items:center;gap:10px;padding:8px 10px;font-size:13px;color:var(--color-neutral-400)"><i class="ph ph-gear-six"></i>System</div>
+            <div style="margin-top:auto;padding:9px 10px;border-radius:var(--radius-md);background:var(--color-surface)">
+              <div style="display:flex;align-items:center;gap:7px"><div style="width:6px;height:6px;border-radius:50%;background:var(--color-accent)"></div><span class="kv" style="font-size:11px">hydrocd</span><span style="margin-left:auto;font-size:10.5px;color:var(--color-accent)">running</span></div>
+              <div class="kv" style="font-size:10px;color:var(--color-warn);margin-top:5px">3 settings drifted</div>
+            </div>
+          </div>
+          <div style="flex:1;padding:16px 22px;display:flex;flex-direction:column;gap:13px;min-width:0">
+            <div style="display:flex;align-items:center;gap:12px">
+              <h4 style="margin:0">Overview</h4>
+              <div style="margin-left:auto;display:flex;align-items:center;gap:8px">
+                <span style="display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--color-warn)"><span style="width:7px;height:7px;border-radius:50%;background:currentColor"></span>3 differ from saved profile</span>
+                <button class="btn btn-primary" style="font-size:12px;border-color:var(--color-warn);color:var(--color-warn)"><i class="ph ph-arrows-clockwise"></i>Re-apply profile</button>
+              </div>
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px">
+              <div class="card elev-sm" style="padding:13px;gap:5px">
+                <span class="card-kicker">CPU limit &middot; live</span>
+                <div style="display:flex;align-items:baseline;gap:7px">
+                  <span style="width:7px;height:7px;border-radius:50%;background:var(--color-warn);align-self:center"></span>
+                  <span class="kv" style="font-size:25px;line-height:1">75</span><span style="font-size:11px;color:var(--color-neutral-500)">W</span>
+                  <span class="kv" style="margin-left:auto;font-size:11px;color:var(--color-neutral-600)">saved 95 W</span>
+                </div>
+                <span style="font-size:10.5px;color:var(--color-neutral-600)">EC reverted at power-on</span>
+              </div>
+              <div class="card elev-sm" style="padding:13px;gap:5px">
+                <span class="card-kicker">Custom latch &middot; live</span>
+                <div style="display:flex;align-items:baseline;gap:7px">
+                  <span style="width:7px;height:7px;border-radius:50%;background:var(--color-warn);align-self:center"></span>
+                  <span class="kv" style="font-size:25px;line-height:1">off</span>
+                  <span class="kv" style="margin-left:auto;font-size:11px;color:var(--color-neutral-600)">saved on</span>
+                </div>
+                <span style="font-size:10.5px;color:var(--color-neutral-600)">0x0727 bit 6 clear &mdash; limits inert</span>
+              </div>
+              <div class="card elev-sm" style="padding:13px;gap:5px">
+                <span class="card-kicker">Charging &middot; live</span>
+                <div style="display:flex;align-items:center;gap:7px">
+                  <span style="flex:none;width:7px;height:7px;border-radius:50%;background:var(--color-warn)"></span>
+                  <span class="kv" style="font-size:17px;line-height:1.15;white-space:nowrap">High Capacity</span>
+                </div>
+                <span class="kv" style="font-size:11px;color:var(--color-neutral-600)">saved Long Haul</span>
+                <span style="font-size:10.5px;color:var(--color-neutral-600);margin-top:-2px">0x07A6 = 0</span>
+              </div>
+            </div>
+            <div class="card elev-sm" style="padding:13px 15px;gap:6px">
+              <div style="display:flex;align-items:baseline"><span class="card-kicker">Intent vs hardware</span><span style="margin-left:auto;font-size:10.5px;color:var(--color-neutral-600)">each row re-appliable on its own</span></div>
+              <table class="table" style="font-size:12.5px">
+                <thead><tr><th style="width:32%">Setting</th><th style="width:20%">Saved</th><th style="width:26%">Hardware now</th><th></th></tr></thead>
+                <tbody>
+                  <tr><td>Custom profile latch</td><td class="kv" style="color:var(--color-neutral-500)">on</td><td class="kv" style="color:var(--color-warn)">&bull; off</td><td style="text-align:right"><button class="btn btn-ghost" style="font-size:11.5px">re-apply</button></td></tr>
+                  <tr><td>CPU power limit PL1</td><td class="kv" style="color:var(--color-neutral-500)">95 W</td><td class="kv" style="color:var(--color-warn)">&bull; 75 W</td><td style="text-align:right"><button class="btn btn-ghost" style="font-size:11.5px">re-apply</button></td></tr>
+                  <tr><td>Charging profile</td><td class="kv" style="color:var(--color-neutral-500)">Long Haul</td><td class="kv" style="color:var(--color-warn)">&bull; High Capacity</td><td style="text-align:right"><button class="btn btn-ghost" style="font-size:11.5px">re-apply</button></td></tr>
+                  <tr><td>Charge threshold</td><td class="kv" style="color:var(--color-neutral-500)">80 %</td><td class="kv" style="color:var(--color-accent)">80 %</td><td style="text-align:right"><span style="font-size:11px;color:var(--color-neutral-700)">in sync</span></td></tr>
+                  <tr><td>Keyboard per-key map</td><td class="kv" style="color:var(--color-neutral-500)">saved</td><td class="kv" style="color:var(--color-accent)">saved</td><td style="text-align:right"><span style="font-size:11px;color:var(--color-neutral-700)">8291 flash</span></td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="dv-opt" id="1e">
+      <div class="dv-olabel"><a class="dv-oid" href="#1e">1e</a>Per-key editor A &mdash; region rail: paint by named group, palette-led</div>
+      <div class="dv-card" style="width:720px;padding:16px;background:var(--color-surface);box-shadow:var(--shadow-sm)">
+        <dc-import name="KeyMatrix" variant="painter" hint-size="100%,420px"></dc-import>
+      </div>
+    </div>
+
+    <div class="dv-opt" id="1f">
+      <div class="dv-olabel"><a class="dv-oid" href="#1f">1f</a>Per-key editor B &mdash; channel inspector: exact RGB per selection</div>
+      <div class="dv-card" style="width:1000px;padding:16px;background:var(--color-surface);box-shadow:var(--shadow-sm)">
+        <dc-import name="KeyMatrix" variant="inspector" hint-size="100%,320px"></dc-import>
+      </div>
+    </div>
+
+  </div>
+  <p class="dv-next">Try next: &ldquo;merge <a class="dv-oid" href="#1e">1e</a>&rsquo;s region rail into <a class="dv-oid" href="#1f">1f</a>&rdquo; &middot; &ldquo;make drift louder than <a class="dv-oid" href="#1d">1d</a>&rdquo; &middot; &ldquo;add the kernel-module-missing state&rdquo; &middot; &ldquo;light theme pass on <a class="dv-oid" href="#1a">1a</a>&rdquo;</p>
+</section>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{}">
+const NAV = [
+  { id: 'overview', name: 'Overview', icon: 'ph ph-gauge', sub: 'live telemetry \u00b7 1 Hz' },
+  { id: 'perf', name: 'Performance', icon: 'ph ph-lightning', sub: 'EC power limits \u00b7 volatile' },
+  { id: 'batt', name: 'Battery', icon: 'ph ph-battery-charging', sub: 'charging policy \u00b7 health' },
+  { id: 'light', name: 'Lighting', icon: 'ph ph-lightbulb', sub: 'keyboard \u00b7 chin bar' },
+  { id: 'sys', name: 'System', icon: 'ph ph-gear-six', sub: 'platform toggles' }
+];
+
+const CHARGE = [
+  { id: 'stationary', name: 'Stationary', token: 'charge_types = Trickle', desc: 'Mostly plugged in at a desk.' },
+  { id: 'balanced', name: 'Balanced', token: 'charge_types = Long_Life', desc: 'Mixed use \u2014 desk and away.' },
+  { id: 'longhaul', name: 'Long Haul', token: 'charge_types = Standard', desc: 'Maximise runtime away from power.' }
+];
+
+const EFFECTS = ['breathing','wave','random','rainbow','ripple','marquee','raindrop','aurora','fireworks'];
+
+const KBPAL = [
+  { name: 'white', bg: '#FFFFFF', fg: 'rgba(0,0,0,.6)' }, { name: 'red', bg: '#FF3B30', fg: '#fff' },
+  { name: 'orange', bg: '#FF9500', fg: 'rgba(0,0,0,.6)' }, { name: 'yellow', bg: '#FFE000', fg: 'rgba(0,0,0,.6)' },
+  { name: 'green', bg: '#8CBF73', fg: 'rgba(0,0,0,.6)' }, { name: 'cyan', bg: '#37D6D6', fg: 'rgba(0,0,0,.6)' },
+  { name: 'blue', bg: '#3E7BFA', fg: '#fff' }, { name: 'purple', bg: '#9C6BFF', fg: '#fff' },
+  { name: 'random', bg: 'conic-gradient(#FF3B30,#FFE000,#8CBF73,#37D6D6,#3E7BFA,#9C6BFF,#FF3B30)', fg: 'rgba(0,0,0,.7)', glyph: '?' }
+];
+
+const DIRS = [
+  { id: 'right', icon: 'ph ph-arrow-right' }, { id: 'left', icon: 'ph ph-arrow-left' },
+  { id: 'up', icon: 'ph ph-arrow-up' }, { id: 'down', icon: 'ph ph-arrow-down' }
+];
+
+const CHIN = [
+  { id: 'static', name: 'Static', tag: '' },
+  { id: 'breathing', name: 'Breathing', tag: '' },
+  { id: 'off', name: 'Off', tag: '' },
+  { id: 'wave', name: 'Wave', tag: 'unverified' },
+  { id: 'clash', name: 'Clash', tag: 'unverified' },
+  { id: 'catchup', name: 'Catchup', tag: 'unverified' },
+  { id: 'flash', name: 'Flash', tag: 'unverified' }
+];
+
+const TOGGLES = [
+  { id: 'fnLock', name: 'Fn lock', path: 'INOU0000:00/fn_lock' },
+  { id: 'superKey', name: 'Super key enabled', path: 'INOU0000:00/super_key_enable' },
+  { id: 'tpToggle', name: 'Touchpad toggle hotkey', path: 'INOU0000:00/touchpad_toggle_enable' }
+];
+
+const POWERMODES = [
+  { id: 'none', name: 'Neither', desc: 'Both attributes cleared.' },
+  { id: 'ac', name: 'AC auto-boot', desc: 'Powers on when AC is connected \u2014 ac_auto_boot = 1.' },
+  { id: 'usb', name: 'USB powershare', desc: 'USB stays powered while off or hibernating \u2014 usb_powershare_high = 1.' }
+];
+
+const DIR_EFFECTS = ['wave','marquee','raindrop','ripple'];
+
+function sel(on, onStyle, offStyle) { return on ? onStyle : offStyle; }
+
+class Component extends DCLogic {
+  constructor(p) {
+    super(p);
+    const hist = [];
+    for (let i = 0; i < 60; i++) hist.push({ w: 26 + Math.random() * 4, c: 48 + Math.random() * 3, g: 34 + Math.random() * 3 });
+    this.state = {
+      section: 'overview', hist, t: 0,
+      pl1: 75, pl2: 75, ctgp: 0, armed: true, thr: 80,
+      charge: 'longhaul', kbMode: 'perkey', effect: 'wave', kbColor: 'green', spd: 6, kbBri: 34, dir: 'right',
+      chin: 'static', chinHue: 139, chinBri: 70, chinSpd: 4, chinOn: true,
+      fnLock: false, superKey: true, tpToggle: true, powerMode: 'ac'
+    };
+  }
+  componentDidMount() {
+    this.iv = setInterval(() => {
+      this.setState(s => {
+        const t = s.t + 1;
+        const load = 0.5 + 0.5 * Math.sin(t / 22);
+        const cap = s.armed ? s.pl1 : 75;
+        const w = 24 + load * (cap - 24) + (Math.random() - 0.5) * 3;
+        const c = 46 + load * 42 + (Math.random() - 0.5) * 2;
+        const g = 33 + load * 26 + (Math.random() - 0.5) * 2;
+        const hist = s.hist.slice(1).concat([{ w, c, g }]);
+        return { t, hist };
+      });
+    }, 1000);
+  }
+  componentWillUnmount() { clearInterval(this.iv); }
+
+  chart(key, max, h) {
+    const hist = this.state.hist;
+    const pts = hist.map((p, i) => (i / (hist.length - 1) * 600).toFixed(1) + ',' + (h - Math.min(1, p[key] / max) * h).toFixed(1));
+    return { line: pts.join(' '), area: '0,' + h + ' ' + pts.join(' ') + ' 600,' + h };
+  }
+
+  renderVals() {
+    const s = this.state;
+    const last = s.hist[s.hist.length - 1];
+    const cpuT = Math.round(last.c), gpuT = Math.round(last.g);
+    const nav = NAV.find(n => n.id === s.section);
+    const A = 'var(--color-accent)', N4 = 'var(--color-neutral-400)';
+    const c1 = this.chart('w', 140, 128), c2 = this.chart('w', 140, 120);
+    const chinHex = 'oklch(0.72 0.16 ' + s.chinHue + ')';
+    const dirActive = DIR_EFFECTS.indexOf(s.effect) >= 0;
+    const chargeName = (CHARGE.find(c => c.id === s.charge) || CHARGE[0]).name;
+
+    const set = (k, v) => this.setState({ [k]: v });
+
+    return {
+      clock: '14:02  \u00b7  Wed 19 Aug',
+      nav: NAV.map(n => ({
+        id: n.id, name: n.name, icon: n.icon,
+        bg: n.id === s.section ? 'var(--color-accent-900)' : 'transparent',
+        fg: n.id === s.section ? A : N4,
+        mark: n.id === s.section ? A : 'transparent'
+      })),
+      sectionName: nav.name, sectionSub: nav.sub,
+      isOverview: s.section === 'overview', isPerf: s.section === 'perf',
+      isBatt: s.section === 'batt', isLight: s.section === 'light', isSys: s.section === 'sys',
+
+      cpuT, gpuT, pkgW: last.w.toFixed(1),
+      cpuColor: cpuT > 88 ? 'var(--color-danger)' : cpuT > 78 ? 'var(--color-warn)' : A,
+      gpuColor: gpuT > 80 ? 'var(--color-warn)' : A,
+      cpuArc: (cpuT / 100 * 75).toFixed(1) + '%',
+      gpuArc: (gpuT / 100 * 75).toFixed(1) + '%',
+      pwrLine: c1.line, pwrArea: c1.area, pwrLine2: c2.line, pwrArea2: c2.area,
+      limitY: (128 - Math.min(1, s.pl1 / 140) * 128).toFixed(1),
+      limitY2: (120 - Math.min(1, s.pl1 / 140) * 120).toFixed(1),
+      f1: 1480 + Math.round((last.c - 46) * 52), f2: 1510 + Math.round((last.c - 46) * 52),
+      f1Pct: Math.min(100, (1480 + (last.c - 46) * 52) / 6000 * 100).toFixed(1) + '%',
+      f2Pct: Math.min(100, (1510 + (last.c - 46) * 52) / 6000 * 100).toFixed(1) + '%',
+      d1: Math.round(Math.min(255, (last.c - 30) * 4.2)), d2: Math.round(Math.min(255, (last.c - 29) * 4.2)),
+      d1p: Math.round(Math.min(100, (last.c - 30) * 1.65)), d2p: Math.round(Math.min(100, (last.c - 29) * 1.65)),
+
+      pl1: s.pl1, pl2: s.pl2, ctgp: s.ctgp, thr: s.thr,
+      pl1Pct: ((s.pl1 - 15) / 110 * 100).toFixed(1) + '%',
+      pl2Pct: ((s.pl2 - 15) / 110 * 100).toFixed(1) + '%',
+      ctgpPct: (s.ctgp / 25 * 100).toFixed(1) + '%',
+      thrPct: ((s.thr - 1) / 99 * 100).toFixed(1) + '%',
+      pl1Warn: s.pl1 < 25
+        ? 'Below 25 W the machine is noticeably sluggish. Allowed, not recommended.'
+        : 'Written to 0x0783 and verified against the 0x046A readback. Value is lost on power cycle; hydrocd re-applies it.',
+      pl1WarnBg: s.pl1 < 25 ? 'var(--color-warn-tint)' : 'var(--color-neutral-900)',
+      pl1WarnFg: s.pl1 < 25 ? 'var(--color-warn)' : 'var(--color-neutral-500)',
+      ctgpNote: s.ctgp >= 25
+        ? 'At maximum offset NVIDIA Dynamic Boost is disabled \u2014 the GPU holds a fixed budget instead of trading with the CPU.'
+        : 'Watts added on top of base GPU power. Reads 0 from the driver on this machine.',
+      perfOpacity: s.armed ? '1' : '0.45',
+      armedTrack: s.armed ? A : 'var(--color-neutral-800)',
+      armedKnob: s.armed ? 'translateX(17px)' : 'translateX(0)',
+      armedLabel: s.armed ? 'LED white' : 'limits inert',
+
+      chargeName,
+      chargeModes: CHARGE.map(c => ({
+        id: c.id, name: c.name, desc: c.desc, token: c.token,
+        bg: c.id === s.charge ? 'var(--color-accent-900)' : 'var(--color-neutral-900)',
+        ring: c.id === s.charge ? 'inset 0 0 0 1px var(--color-accent)' : 'none',
+        fg: c.id === s.charge ? A : 'var(--color-text)',
+        dot: c.id === s.charge ? 'inset 0 0 0 4px ' + A + ', inset 0 0 0 5px var(--color-accent-900)' : 'inset 0 0 0 1.5px var(--color-neutral-600)'
+      })),
+
+      isEffect: s.kbMode === 'effect', isPerkey: s.kbMode === 'perkey',
+      effTabFg: s.kbMode === 'effect' ? A : 'inherit',
+      effTabRing: s.kbMode === 'effect' ? 'inset 0 0 0 1px var(--color-accent)' : 'none',
+      pkTabFg: s.kbMode === 'perkey' ? A : 'inherit',
+      pkTabRing: s.kbMode === 'perkey' ? 'inset 0 0 0 1px var(--color-accent)' : 'none',
+      effects: EFFECTS.map(e => ({
+        id: e, name: e,
+        bg: e === s.effect ? 'var(--color-accent-900)' : 'var(--color-neutral-900)',
+        fg: e === s.effect ? A : N4,
+        ring: e === s.effect ? 'inset 0 0 0 1px var(--color-accent)' : 'none'
+      })),
+      kbPalette: KBPAL.map(p => ({
+        name: p.name, bg: p.bg, fg: p.fg, glyph: p.glyph || '',
+        ring: p.name === s.kbColor ? '2px solid var(--color-accent)' : '0 solid transparent'
+      })),
+      spd: s.spd, spdPct: ((s.spd - 1) / 9 * 100).toFixed(1) + '%',
+      kbBri: s.kbBri, kbBriPct: (s.kbBri / 50 * 100).toFixed(1) + '%',
+      dirNote: dirActive ? s.effect + ' takes a direction' : s.effect + ' ignores direction',
+      dirs: DIRS.map(d => ({
+        id: d.id, icon: d.icon,
+        op: dirActive ? '1' : '0.4',
+        cursor: dirActive ? 'pointer' : 'not-allowed',
+        bg: dirActive && d.id === s.dir ? 'var(--color-accent-900)' : 'var(--color-neutral-900)',
+        fg: dirActive && d.id === s.dir ? A : N4,
+        ring: dirActive && d.id === s.dir ? 'inset 0 0 0 1px var(--color-accent)' : 'none'
+      })),
+
+      chinModes: CHIN.map(m => ({
+        id: m.id, name: m.name, tag: m.tag,
+        op: m.tag ? '0.5' : '1',
+        cursor: m.tag ? 'not-allowed' : 'pointer',
+        bg: m.id === s.chin ? 'var(--color-accent-900)' : 'var(--color-neutral-900)',
+        fg: m.id === s.chin ? A : N4,
+        ring: m.id === s.chin ? 'inset 0 0 0 1px var(--color-accent)' : 'none'
+      })),
+      chinHex, chinHuePct: (s.chinHue / 360 * 100).toFixed(1) + '%',
+      chinBri: s.chinBri, chinBriPct: s.chinBri + '%',
+      chinSpd: s.chinSpd, chinSpdPct: ((s.chinSpd - 1) / 9 * 100).toFixed(1) + '%',
+      chinSpdOp: s.chin === 'breathing' ? '1' : '0.4',
+      chinOp: s.chin === 'off' ? '0.12' : (0.35 + s.chinBri / 100 * 0.65).toFixed(2),
+      chinPacket: s.chin === 'off' ? '12 00 03 \u2192 08 05 \u2192 08 01 \u2192 1A 01'
+        : s.chin === 'breathing' ? '08 22 02 0' + s.chinSpd + ' ' + s.chinBri + ' 08 00 00'
+        : '14 00 01 R G B 00 00  then  08 22 01 01 ' + s.chinBri + ' 01 00 00',
+      chinTrack: s.chinOn ? A : 'var(--color-neutral-800)',
+      chinKnob: s.chinOn ? 'translateX(17px)' : 'translateX(0)',
+
+      toggles: TOGGLES.map(t => ({
+        id: t.id, name: t.name, path: t.path,
+        track: s[t.id] ? A : 'var(--color-neutral-800)',
+        knob: s[t.id] ? 'translateX(17px)' : 'translateX(0)'
+      })),
+      powerModes: POWERMODES.map(p => ({
+        id: p.id, name: p.name, desc: p.desc,
+        bg: p.id === s.powerMode ? 'var(--color-accent-900)' : 'transparent',
+        fg: p.id === s.powerMode ? A : 'var(--color-text)',
+        dot: p.id === s.powerMode ? 'inset 0 0 0 4px ' + A + ', inset 0 0 0 5px var(--color-accent-900)' : 'inset 0 0 0 1.5px var(--color-neutral-600)'
+      })),
+
+      onPick: e => {
+        const d = e.currentTarget.dataset;
+        if (d.k === 'dir' && !dirActive) return;
+        if (d.k === 'chin' && (CHIN.find(m => m.id === d.v) || {}).tag) return;
+        set(d.k, d.k === 'pl1' ? parseInt(d.v, 10) : d.v);
+      },
+      onToggle: e => { const k = e.currentTarget.dataset.k; set(k, !s[k]); },
+      onSlide: e => {
+        const el = e.currentTarget;
+        const min = parseFloat(el.dataset.min), max = parseFloat(el.dataset.max), k = el.dataset.k;
+        const r = el.getBoundingClientRect();
+        const move = ev => set(k, Math.round(min + Math.max(0, Math.min(1, (ev.clientX - r.left) / r.width)) * (max - min)));
+        move(e);
+        const up = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); };
+        window.addEventListener('pointermove', move); window.addEventListener('pointerup', up);
+      },
+      onHue: e => {
+        const el = e.currentTarget, r = el.getBoundingClientRect();
+        const move = ev => set('chinHue', Math.round(Math.max(0, Math.min(1, (ev.clientX - r.left) / r.width)) * 360));
+        move(e);
+        const up = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); };
+        window.addEventListener('pointermove', move); window.addEventListener('pointerup', up);
+      }
+    };
+  }
+}
+
+</script>
+</body>
+</html>

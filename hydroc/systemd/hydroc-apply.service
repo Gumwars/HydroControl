@@ -1,0 +1,23 @@
+[Unit]
+Description=HydroControl — apply persistent hardware settings
+Documentation=file:@INSTALL_DIR@/DESIGN.md
+# The EC keeps the charging profile, the custom-profile latch and the CPU
+# power limits in volatile state that reverts to factory defaults on every
+# power cycle. Windows solves this with a background service; this is the
+# equivalent. Without it, nothing configured survives a reboot.
+After=multi-user.target
+Wants=multi-user.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+# acpi_call is how we reach the EC; harmless if already loaded.
+ExecStartPre=-/usr/bin/modprobe acpi_call
+WorkingDirectory=@INSTALL_DIR@
+ExecStart=/usr/bin/python3 -m hydroc.cli apply
+Environment=PYTHONPATH=@INSTALL_DIR@
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

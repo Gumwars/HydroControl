@@ -1,0 +1,517 @@
+<title>HYDROC Capture Runbook</title>
+<style>
+  :root {
+    --ground: #F5F7F9;
+    --surface: #FFFFFF;
+    --surface-2: #EEF2F6;
+    --ink: #131C26;
+    --ink-muted: #5B6875;
+    --line: #DCE3EA;
+    --accent: #A8500B;
+    --accent-soft: #FBF0E3;
+    --ok: #0E6A5E;
+    --ok-soft: #E4F2EF;
+    --warn: #8F3111;
+    --warn-soft: #FBEAE3;
+
+    --font-ui: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+
+    --step: clamp(0.5rem, 1.2vw, 0.9rem);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #0D131A;
+      --surface: #141C24;
+      --surface-2: #1B242D;
+      --ink: #E3EAF1;
+      --ink-muted: #93A1AF;
+      --line: #26313C;
+      --accent: #E5924A;
+      --accent-soft: #2A1C10;
+      --ok: #46B5A4;
+      --ok-soft: #102623;
+      --warn: #EE9068;
+      --warn-soft: #2B160E;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --ground: #0D131A;
+    --surface: #141C24;
+    --surface-2: #1B242D;
+    --ink: #E3EAF1;
+    --ink-muted: #93A1AF;
+    --line: #26313C;
+    --accent: #E5924A;
+    --accent-soft: #2A1C10;
+    --ok: #46B5A4;
+    --ok-soft: #102623;
+    --warn: #EE9068;
+    --warn-soft: #2B160E;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--font-ui);
+    font-size: 16px;
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap {
+    max-width: 50rem;
+    margin: 0 auto;
+    padding: clamp(2rem, 5vw, 4rem) clamp(1rem, 4vw, 2rem) 6rem;
+    display: flex;
+    flex-direction: column;
+    gap: 2.5rem;
+  }
+
+  /* ---------- masthead ---------- */
+  .masthead {
+    display: flex;
+    flex-direction: column;
+    gap: 0.9rem;
+    padding-bottom: 2rem;
+    border-bottom: 2px solid var(--ink);
+  }
+
+  .eyebrow {
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin: 0;
+  }
+
+  h1 {
+    font-size: clamp(1.9rem, 5vw, 2.7rem);
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+    margin: 0;
+    text-wrap: balance;
+  }
+
+  .standfirst {
+    font-size: 1.06rem;
+    color: var(--ink-muted);
+    margin: 0;
+    max-width: 42rem;
+  }
+
+  /* ---------- generic blocks ---------- */
+  h2 {
+    font-size: 1.3rem;
+    letter-spacing: -0.01em;
+    margin: 0 0 0.4rem;
+    text-wrap: balance;
+  }
+
+  h3 {
+    font-size: 1rem;
+    margin: 0 0 0.3rem;
+    letter-spacing: -0.005em;
+  }
+
+  p { margin: 0 0 0.9rem; }
+  p:last-child { margin-bottom: 0; }
+
+  a { color: var(--accent); }
+
+  code {
+    font-family: var(--font-mono);
+    font-size: 0.855em;
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    padding: 0.08em 0.34em;
+  }
+
+  pre {
+    font-family: var(--font-mono);
+    font-size: 0.82rem;
+    line-height: 1.55;
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    border-left: 3px solid var(--accent);
+    border-radius: 4px;
+    padding: 0.85rem 1rem;
+    margin: 0 0 0.9rem;
+    overflow-x: auto;
+  }
+
+  pre code {
+    background: none;
+    border: none;
+    padding: 0;
+    font-size: inherit;
+  }
+
+  /* ---------- deliverables panel ---------- */
+  .goal {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-top: 3px solid var(--accent);
+    border-radius: 5px;
+    padding: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .goal ul {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 0.7rem;
+  }
+
+  .goal li {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 0.7rem;
+    align-items: start;
+  }
+
+  .file {
+    font-family: var(--font-mono);
+    font-size: 0.76rem;
+    background: var(--accent-soft);
+    color: var(--accent);
+    border-radius: 3px;
+    padding: 0.15rem 0.45rem;
+    white-space: nowrap;
+  }
+
+  /* ---------- numbered phases ---------- */
+  .phase {
+    display: grid;
+    grid-template-columns: 2.6rem 1fr;
+    gap: 1.2rem;
+    align-items: start;
+  }
+
+  .idx {
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--accent);
+    background: var(--accent-soft);
+    border-radius: 4px;
+    padding: 0.35rem 0;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .phase-body {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  ol.steps, ul.plain {
+    margin: 0;
+    padding-left: 1.15rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+  }
+
+  /* ---------- callouts ---------- */
+  .note {
+    border-radius: 4px;
+    padding: 0.85rem 1rem;
+    font-size: 0.93rem;
+    border: 1px solid var(--line);
+    background: var(--surface);
+  }
+
+  .note.warn {
+    background: var(--warn-soft);
+    border-color: var(--warn);
+    color: var(--ink);
+  }
+
+  .note.ok {
+    background: var(--ok-soft);
+    border-color: var(--ok);
+  }
+
+  .note .tag {
+    font-family: var(--font-mono);
+    font-size: 0.68rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    display: block;
+    margin-bottom: 0.3rem;
+  }
+
+  .note.warn .tag { color: var(--warn); }
+  .note.ok .tag { color: var(--ok); }
+
+  /* ---------- action table ---------- */
+  .tablewrap { overflow-x: auto; }
+
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    font-size: 0.88rem;
+    min-width: 30rem;
+  }
+
+  th, td {
+    text-align: left;
+    padding: 0.5rem 0.7rem;
+    border-bottom: 1px solid var(--line);
+    vertical-align: top;
+  }
+
+  th {
+    font-family: var(--font-mono);
+    font-size: 0.68rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ink-muted);
+    border-bottom: 1px solid var(--ink-muted);
+  }
+
+  td.t { font-family: var(--font-mono); font-variant-numeric: tabular-nums; white-space: nowrap; color: var(--accent); }
+
+  hr {
+    border: none;
+    border-top: 1px solid var(--line);
+    margin: 0;
+  }
+
+  .foot {
+    font-size: 0.88rem;
+    color: var(--ink-muted);
+    border-top: 1px solid var(--line);
+    padding-top: 1.2rem;
+  }
+</style>
+
+<div class="wrap">
+
+  <header class="masthead">
+    <p class="eyebrow">Eluktronics HYDROC-16 G1 &middot; Linux port</p>
+    <h1>Windows capture runbook</h1>
+    <p class="standfirst">
+      One session on a scratch Windows drive to observe what five rounds of Linux-side
+      probing could not infer: the ITE 8233 chin bar wire format, and the values
+      Control Center writes behind its performance modes.
+    </p>
+  </header>
+
+  <section class="goal">
+    <div>
+      <h2>What you're bringing back</h2>
+      <p style="color:var(--ink-muted);margin:0">
+        The Windows drive is a capture rig, not a workshop. Everything gets
+        implemented and tested back on Linux, so the trip succeeds if these
+        files come home. Copy them to a USB stick, not the Windows partition.
+      </p>
+    </div>
+    <ul>
+      <li><span class="file">chinbar.pcapng</span><span>ITE 8233 traffic while changing chin bar colour, brightness, and effect.</span></li>
+      <li><span class="file">keyboard.pcapng</span><span>ITE 8291 traffic for per-key colour and effects — closes the kbctrl parity gaps.</span></li>
+      <li><span class="file">actions.txt</span><span>Your handwritten log of what you did and when. Without it the pcaps are far harder to read.</span></li>
+      <li><span class="file">ec-*.txt</span><span>EC memory-window reads, one per performance mode. Captured in Windows with no reboots — see phase 05.</span></li>
+      <li><span class="file">battery-map.txt</span><span>Which Control Center battery label sits on which EC value — see phase 06.</span></li>
+    </ul>
+  </section>
+
+  <div class="phase">
+    <div class="idx">01</div>
+    <div class="phase-body">
+      <h2>Make room, then build the drive</h2>
+      <p>Both M.2 slots are already populated: <code>nvme0n1</code> holds your ESP and the LUKS root, <code>nvme1n1</code> is the ext4 games partition. The spare has to displace one, and the games drive is the obvious candidate — that content is re-downloadable.</p>
+      <ol class="steps">
+        <li>Back up anything from <code>/mnt/games</code> you actually care about.</li>
+        <li>Remove <code>nvme1n1</code>, fit the spare SSD in that slot.</li>
+        <li><strong>Also remove <code>nvme0n1</code></strong>, then install Windows 11. With no other disk present, Windows is forced to create its own ESP on the spare.</li>
+        <li>Refit <code>nvme0n1</code>. From here on, choose the OS from the firmware boot menu.</li>
+      </ol>
+      <div class="note warn">
+        <span class="tag">Why remove the Linux drive</span>
+        Windows will happily adopt an ESP it finds rather than making one. Yours sits on <code>nvme0n1p1</code> beside a LUKS volume. Physically removing the disk during install is the only guarantee, and it takes one panel-off session — far cheaper than repairing a clobbered boot chain against an encrypted root.
+      </div>
+      <p>Then install the Eluktronics Control Center from your existing <code>Eluktronics Control Center.zip</code>, and confirm the chin bar actually responds to it before capturing anything.</p>
+    </div>
+  </div>
+
+  <div class="phase">
+    <div class="idx">02</div>
+    <div class="phase-body">
+      <h2>Install the tooling</h2>
+      <ul class="plain">
+        <li><strong>Wireshark</strong> — during setup, tick the <strong>USBPcap</strong> component. That checkbox is the whole point; it's easy to miss.</li>
+        <li><strong>RWEverything</strong> — for the EC reads in phase 05. You'll use its <em>memory</em> viewer, not its EC tab.</li>
+        <li>Reboot after installing USBPcap. It's a kernel driver and won't enumerate until you do.</li>
+      </ul>
+      <p>Find the chin bar's capture interface — you want the root hub that <code>048d:7001</code> sits under:</p>
+      <pre><code>Device Manager → View → Devices by connection
+  → locate "ITE Device(8233)" → note its parent USB root hub</code></pre>
+      <p>In Wireshark, that root hub appears as <code>USBPcap1</code>, <code>USBPcap2</code>, and so on. Capture on the one holding the 8233.</p>
+    </div>
+  </div>
+
+  <div class="phase">
+    <div class="idx">03</div>
+    <div class="phase-body">
+      <h2>Capture the chin bar</h2>
+      <p>This is the blocker, so it goes first while you're freshest. Discipline matters more than volume: <strong>one action per five-second window</strong>, with the wall-clock time written down. A dense pcap with no log is close to useless; a sparse one with a good log decodes quickly.</p>
+
+      <p>Start the capture, then walk this sequence, pausing five seconds between each and noting the time:</p>
+
+      <div class="tablewrap">
+        <table>
+          <thead>
+            <tr><th>#</th><th>Action in Control Center</th><th>What it isolates</th></tr>
+          </thead>
+          <tbody>
+            <tr><td class="t">1</td><td>Chin bar → static / solid colour mode</td><td>The mode switch that stops the cycle</td></tr>
+            <tr><td class="t">2</td><td>Set solid <strong>red</strong> (255,0,0)</td><td>Colour payload, known value</td></tr>
+            <tr><td class="t">3</td><td>Set solid <strong>green</strong> (0,255,0)</td><td>Byte position of G</td></tr>
+            <tr><td class="t">4</td><td>Set solid <strong>blue</strong> (0,0,255)</td><td>Byte position of B</td></tr>
+            <tr><td class="t">5</td><td>Set block 0 red, all others black</td><td>Per-block addressing</td></tr>
+            <tr><td class="t">6</td><td>Set block 6 red, all others black</td><td>Block ordering and stride</td></tr>
+            <tr><td class="t">7</td><td>Brightness to minimum, then maximum</td><td>Brightness field</td></tr>
+            <tr><td class="t">8</td><td>Switch back to the cycle effect</td><td>Effect selector</td></tr>
+            <tr><td class="t">9</td><td>Change effect speed</td><td>Speed field</td></tr>
+            <tr><td class="t">10</td><td>Toggle the chin bar off, then on</td><td>Power / enable command</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="note ok">
+        <span class="tag">Why these values</span>
+        Pure red, green, and blue at full scale produce <code>FF</code> bytes in exactly one position each. Three captures triangulate the channel order without any guesswork — and steps 5 and 6 pin down how the seven blocks are laid out, which is the part we could never infer from Linux.
+      </div>
+
+      <h3>Then: the EC cross-check</h3>
+      <p>This settles a question five separate Linux experiments could not. With the chin bar left on <strong>solid red</strong> in Control Center, reboot straight into Linux — the EC holds its state across a warm reboot — and dump the lightbar registers:</p>
+      <pre><code>sudo python3 ec_poke.py show</code></pre>
+      <div class="note ok">
+        <span class="tag">How to read it</span>
+        If <code>0749 RED</code> comes back <code>FF</code> with <code>APP_EXISTS</code> set, then Windows drives colour through the EC and the ITE 8233 only gates power — the <code>LIGHTBAR</code> feature belongs back in the device descriptor. If those registers are still <code>00</code> while the bar was red, the EC path is genuinely unused on this model and the whole protocol lives in the USB capture.
+      </div>
+    </div>
+  </div>
+
+  <div class="phase">
+    <div class="idx">04</div>
+    <div class="phase-body">
+      <h2>Capture the keyboard</h2>
+      <p>Same method against the ITE 8291 root hub. This is the bonus round — it closes the two known kbctrl gaps, and you're already set up.</p>
+      <ul class="plain">
+        <li>Set one single key (say <kbd>A</kbd>) to red, everything else off — reveals the per-key frame format.</li>
+        <li>Set a second key far away (say <kbd>Enter</kbd>) — confirms the key-index ordering.</li>
+        <li>Pick an effect with a <strong>custom colour</strong> Control Center offers but kbctrl's palette lacks. This is the direct answer to "colour selections missing".</li>
+        <li>Set a per-key layout, then reboot into Windows without reopening Control Center. If the layout survives, the controller stored it — capture the write that did it, because that's your persistence fix.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="phase">
+    <div class="idx">05</div>
+    <div class="phase-body">
+      <h2>Read the EC per performance mode</h2>
+      <div class="note ok">
+        <span class="tag">No reboots needed</span>
+        The EC is memory-mapped at <code>0xFE410000</code> — that is all <code>\_SB.INOU.ECRR</code> does under the hood. RWEverything's <strong>physical memory viewer</strong> reads that window directly from inside Windows, so you never leave the OS that is setting the modes.
+      </div>
+      <div class="note warn">
+        <span class="tag">Use the memory viewer, not the EC tab</span>
+        RWEverything's dedicated EC tab only reaches the legacy 256-byte port space and will not show these registers. That limitation is what made an earlier draft of this runbook call for a reboot per mode; it was wrong about the tool, not about the addresses.
+      </div>
+      <p>In RWEverything: <code>Access &rarr; Memory</code>, jump to <code>0xFE410700</code>, read through <code>0xFE4107FF</code>. That is byte-for-byte the same window <code>ec_dump.py</code> prints on Linux, so the two are directly comparable.</p>
+      <p>Set each of these in Control Center, then capture the memory window (screenshot or <em>Save</em>):</p>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>File</th><th>Control Center state</th></tr></thead>
+          <tbody>
+            <tr><td class="t">ec-quiet</td><td>Quiet / Office mode</td></tr>
+            <tr><td class="t">ec-balanced</td><td>Balanced</td></tr>
+            <tr><td class="t">ec-performance</td><td>Performance / Turbo</td></tr>
+            <tr><td class="t">ec-pl-NN</td><td>Manual CPU power limit at a known wattage &mdash; <strong>write the wattage down</strong></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <h3>Registers to watch</h3>
+      <ul class="plain">
+        <li><code>0x0783</code> / <code>0x0784</code> &mdash; PL1 / PL2, both <code>00</code> on this machine today.</li>
+        <li><code>0x07A5</code> &mdash; <code>FAN_QUIET</code> (bit 2), <code>OVERBOOST</code> (bit 4), <code>HIGH_POWER</code> (bit 7). Currently <code>00</code>.</li>
+        <li><code>0x078E</code> &mdash; <code>FAN_CTRL</code>, currently <code>FC</code>. Bit 6 (<code>UNIVERSAL_FAN_CTRL</code>) is already set, which is the gate for manual fan control.</li>
+      </ul>
+      <div class="note">
+        <span class="tag">Why the wattage matters</span>
+        PL1 and PL2 both read <code>00</code> today, which almost certainly means "firmware default" rather than zero watts. A single reading at a known wattage tells us the units &mdash; whether the byte holds watts directly, half-watts, or an index into a table. That one observation is worth more than the other three dumps combined.
+      </div>
+      <p><strong>Fallback.</strong> If the memory viewer is blocked, the EC keeps its state across a warm reboot: set the mode, reboot into Linux, and run <code>sudo python3 ec_dump.py -o ec-quiet.txt</code>. Slower, but equivalent.</p>
+    </div>
+  </div>
+
+  <div class="phase">
+    <div class="idx">06</div>
+    <div class="phase-body">
+      <h2>Map the battery modes to their labels</h2>
+      <p>The three charging modes already work on Linux — <code>charge_types</code> reports <code>Trickle</code>, <code>Standard</code>, and <code>Long_Life</code>, and the threshold is writable. What nobody has established is which <em>Control Center label</em> corresponds to which EC value. Getting that backwards means a UI that caps the battery when the user asked to fill it.</p>
+      <p>Same memory viewer, no reboots. For each of the three modes, set it in Control Center and read two bytes:</p>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>Address</th><th>Meaning</th></tr></thead>
+          <tbody>
+            <tr><td class="t">0x07A6</td><td>Bits 5:4 = charging profile. <code>00</code> = HIGH_CAPACITY, <code>01</code> = BALANCED, <code>10</code> = STATIONARY</td></tr>
+            <tr><td class="t">0x07B9</td><td>Bits 6:0 = charge threshold percent. Currently <code>0x64</code> = 100</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>Record it plainly — Control Center's label, then both bytes:</p>
+      <pre><code>Stationary   0x07A6 = __   (bits 5:4 = __)   0x07B9 = __ (__%)
+Balanced     0x07A6 = __   (bits 5:4 = __)   0x07B9 = __ (__%)
+Long Haul    0x07A6 = __   (bits 5:4 = __)   0x07B9 = __ (__%)</code></pre>
+      <div class="note ok">
+        <span class="tag">What this also answers</span>
+        If the threshold at <code>0x07B9</code> moves on its own as you switch modes, the EC drives the cap from the profile and the Linux UI should present modes as primary with the threshold read-only. If it stays at <code>0x64</code> for all three, the modes govern charge <em>current</em> rather than the cap, and they only differ while actually charging on AC.
+      </div>
+      <div class="note">
+        <span class="tag">Known anchor point</span>
+        Right now on Linux <code>0x07A6</code> reads <code>00</code> (profile HIGH_CAPACITY) while <code>charge_types</code> shows <code>[Standard]</code>. So EC <code>00</code> ↔ Linux <code>Standard</code> is already established — the only missing link is which Control Center name sits on it.
+      </div>
+    </div>
+  </div>
+
+  <div class="phase">
+    <div class="idx">07</div>
+    <div class="phase-body">
+      <h2>Come home</h2>
+      <ul class="plain">
+        <li>Copy the pcaps, <code>actions.txt</code>, and the EC dumps to a USB stick.</li>
+        <li>Also grab <code>HKLM\SOFTWARE\OEM\GamingCenter2\RGBKeyboard</code> after you've changed settings — the live values will show which of those seven <code>MEZone_Lighbar*</code> template variants your machine actually uses.</li>
+        <li>Leave the Windows drive intact. Firmware and EC updates ship as Windows executables, so it stays useful.</li>
+      </ul>
+      <p>Back on Linux, the pcaps decode straight to packet bytes and we implement against them — no more guessing at framings.</p>
+    </div>
+  </div>
+
+  <hr>
+
+  <p class="foot">
+    Working state as of this session: driver binds and exposes fans, temps, battery
+    modes, charge threshold, and GPU cTGP. Chin bar confirmed ITE 8233-owned;
+    EC lightbar path removed from the device descriptor as inert on this model.
+    Outstanding: chin bar static colour, keyboard parity, CPU PL1/PL2, fan curves.
+  </p>
+
+</div>

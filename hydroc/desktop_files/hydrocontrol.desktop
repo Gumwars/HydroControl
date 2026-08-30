@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=HydroControl
+GenericName=Laptop Control Centre
+Comment=Fans, power limits, battery policy and RGB for the Eluktronics HYDROC-16
+Exec=hydrocontrol
+Icon=applications-system
+Terminal=false
+Categories=Settings;HardwareSettings;
+Keywords=fan;rgb;battery;power;keyboard;tdp;
+StartupNotify=true
+StartupWMClass=com.eluktronics.HydroControl

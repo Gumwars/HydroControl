@@ -1,0 +1,22 @@
+[Unit]
+Description=HydroControl — local UI daemon
+Documentation=file:@INSTALL_DIR@/DESIGN.md
+# Deliberately NOT enabled at boot. It exists so the desktop app can start the
+# daemon through pkexec and get journal logging and a clean shutdown, instead of
+# spawning a detached root Python it then has to babysit.
+After=multi-user.target
+Wants=multi-user.target
+
+[Service]
+Type=simple
+WorkingDirectory=@INSTALL_DIR@
+ExecStartPre=-/usr/bin/modprobe acpi_call
+ExecStart=/usr/bin/python3 -m hydroc.server
+Environment=PYTHONPATH=@INSTALL_DIR@
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

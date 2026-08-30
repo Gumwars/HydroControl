@@ -314,6 +314,10 @@ def diagnose(hw) -> list[dict]:
 
 def doctor(hw) -> int:
     """Preflight: check every prerequisite and say what to do about each."""
+    # First line names the code that produced everything below it, so a pasted
+    # report is self-identifying.
+    from .version import build_id
+    print(f"  HydroControl {build_id()}\n")
     checks = diagnose(hw)
     width = max(len(c["name"]) for c in checks)
     bad = skipped = 0

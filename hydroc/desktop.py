@@ -33,7 +33,21 @@ import gi
 gi.require_version("Gtk", "4.0")
 gi.require_version("WebKit", "6.0")
 
-from gi.repository import GLib, Gtk, WebKit      # noqa: E402
+from gi.repository import Gio, GLib, Gtk, WebKit      # noqa: E402
+
+def palette_path() -> str:
+    """Where matugen writes the generated token sheet.
+
+    Resolving this from $HOME is correct *here* and nowhere else in the project:
+    the desktop app runs as the user, unprivileged -- it only escalates via
+    pkexec to start the daemon. The daemon must never read this path, because it
+    runs as root under systemd where HOME=/root and the user's config is
+    invisible. That is DESIGN.md §4.4, and it is why the palette is a desktop-app
+    feature rather than something served over /api.
+    """
+    base = os.environ.get("XDG_CONFIG_HOME") or os.path.expanduser("~/.config")
+    return os.path.join(base, "hydroc", "palette.css")
+
 
 APP_ID = "com.eluktronics.HydroControl"
 HOST, PORT = "127.0.0.1", 8781
@@ -245,7 +259,14 @@ class Window(Gtk.ApplicationWindow):
         self.stack = Gtk.Stack()
         self.set_child(self.stack)
 
-        self.view = WebKit.WebView()
+        # Optional matugen palette. Absent, the built-in Nocturne tokens stand
+        # and nothing degrades -- most testers will never have this file.
+        self.content = WebKit.UserContentManager()
+        self._palette_sheet = None
+        self._load_palette()
+        self._watch_palette()
+
+        self.view = WebKit.WebView(user_content_manager=self.content)
         self.stack.add_named(self.view, "app")
         self.stack.add_named(self._status_page(), "status")
 
@@ -254,6 +275,50 @@ class Window(Gtk.ApplicationWindow):
         self._action: str | None = "start"
         self._poll = GLib.timeout_add(POLL_MS, self._tick)
         self._tick()
+
+    # -- matugen palette --------------------------------------------------
+
+    def _load_palette(self) -> None:
+        """(Re-)inject the generated token sheet, if there is one."""
+        try:
+            with open(palette_path(), encoding="utf-8") as fh:
+                css = fh.read().strip()
+        except OSError:
+            css = ""
+
+        if self._palette_sheet is not None:
+            self.content.remove_style_sheet(self._palette_sheet)
+            self._palette_sheet = None
+        if not css:
+            return
+
+        # USER origin, and the generated file carries !important. For normal
+        # declarations the author sheet would win, so importance is what makes
+        # this deterministic rather than dependent on injection order.
+        self._palette_sheet = WebKit.UserStyleSheet(
+            css, WebKit.UserContentInjectedFrames.ALL_FRAMES,
+            WebKit.UserStyleLevel.USER, None, None)
+        self.content.add_style_sheet(self._palette_sheet)
+
+    def _watch_palette(self) -> None:
+        """Re-inject when matugen rewrites the file, i.e. on wallpaper change.
+
+        Monitoring a path that does not exist yet is fine -- Gio reports CREATED
+        if it later appears, so installing matugen afterwards needs no restart.
+        """
+        try:
+            gfile = Gio.File.new_for_path(palette_path())
+            self._palette_monitor = gfile.monitor_file(
+                Gio.FileMonitorFlags.NONE, None)
+            self._palette_monitor.connect("changed", self._on_palette_changed)
+        except GLib.Error:
+            self._palette_monitor = None     # watching is a nicety, not a need
+
+    def _on_palette_changed(self, _monitor, _file, _other, event) -> None:
+        if event in (Gio.FileMonitorEvent.CHANGES_DONE_HINT,
+                     Gio.FileMonitorEvent.CREATED,
+                     Gio.FileMonitorEvent.DELETED):
+            self._load_palette()
 
     # -- the "something is wrong" page ------------------------------------
 

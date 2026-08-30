@@ -422,7 +422,7 @@ different mechanism rather than a missing parameter.
 
 ---
 
-### 3.6 Fans ✅ mechanism found, ⚠️ writes unverified
+### 3.6 Fans ✅ verified — a userspace fan curve works
 
 Pressing the profile button while the BIOS has it set to **fan profiles** moved seven
 registers. Every one of them is already named in `uniwill-acpi.c` — the answer was in
@@ -504,12 +504,55 @@ userspace controller: a duty *floor* applied unconditionally would spin the fans
 band where the firmware deliberately does not, making the machine louder than stock for
 no thermal benefit. One point is not a curve, but it is the first measured one.
 
-**Unverified:** nothing here has been *written* yet. `FAN_MODE_USER` (bit 7) is the
-presumed latch for manual duty, by analogy with the `0x0727` bit 6 TDP latch, but that
-is a guess. The driver also defines `EC_ADDR_PWM_1_WRITEABLE = 0x1804` and `0x1809` with
-an explicit warning that they are "unstable on some models and likely not meant to be
-used by applications". Probe before shipping, and remember the safety asymmetry: setting
-a fan **too low** is the dangerous direction, and a power cycle clears it.
+**VERIFIED 2026-08-30: the universal-fan-control path works, and it is
+reversible.** The previous null result was void — it ran while `0x0741` bit 0 was
+clear (§4.1), so the EC was ignoring everything. Repeated with that bit confirmed
+set, in four bounded steps:
+
+1. **Read the tables first.** `0x0F00`–`0x0F5F` came back as 96 bytes of `0x00`.
+   That is *mapped and empty*, not absent: `0x0F60` reads `0x84` and `0x0F80`
+   reads `0x02`, while genuinely unmapped space on this EC reads `0xFF`
+   (`0x0980`, `0x1000`, `0x1804`). Checking the neighbourhood is what
+   distinguishes the two, and §4 records what happens when you skip that.
+2. **Establish the region is writable** with six single-byte writes, one per
+   table, each restored (`fan_table_write_probe.py`). All six held.
+3. **Populate a full curve while `0x07C6` bit 2 is still clear.** All 96 bytes
+   verified on readback, and **the fans did not change** — confirming the tables
+   are inert until the feature is enabled.
+4. **Then enable it** (`fan_universal_enable_probe.py`).
+
+The result was exact rather than merely suggestive. `pwm1` moved from 76 to
+**102**, which is EC raw 80 — hwmon rescales `0`–`200` to `0`–`255` — and raw 80
+is **40%**, our curve's point 2 (`UpT 50 / DownT 45 / Duty 40`). The CPU touched
+50 °C, crossed `UpT 50`, and the EC selected that point. Temperature then fell to
+48 °C and the duty **held at 40%**, because point 2's `DownT` is 45 and it had
+not been crossed. The EC honoured both the duty and the hysteresis we wrote.
+
+The 76 → 85 → 94 → 102 climb over ~6 s is the EC's own slew between duty steps,
+not our table.
+
+**`0x07C6` bit 2 is reversible**, unlike `FAN_MODE_USER`. Clearing it returned
+firmware control cleanly and the machine went back to 30% / 1600 rpm.
+
+**Order matters, and the intuitive order is the dangerous one.** The tables ship
+empty and the enable bit ships clear. Setting the bit *first* hands the fans a
+curve that reads zero at every temperature. Always populate, then enable. This is
+only obvious once you have seen that the tables are empty — which is another
+argument for reading before writing.
+
+**Write an aggressive curve, not a quiet one.** `fan-curve-hydroc16.json` is ours
+— derived from measurements here, not from the vendor `UserFanTables` (those are
+for lower-power chassis, and copying them would not make them MIT). It ramps from
+40 °C where the firmware is silent to 55 °C, and never commands below 30%. That
+was chosen before reversibility was known: if the enable bit had turned out to be
+one-way, the machine would have been stuck **loud rather than hot**. The safety
+asymmetry in §3.6 runs in one direction, and a sensible-sounding quiet curve is
+the genuinely risky choice.
+
+**Dead ends, recorded.** `0x1804`/`0x1809` (`PWM_*_WRITEABLE`) read `0xFF`
+through `ECRR` — unmapped, so upstream's "WMI interface only" is confirmed and
+they are not a neglected fallback. The April tree's LED-PWM addresses
+(`0x1102`, `0x1700`) read `0xFF` too.
 
 ---
 
@@ -852,12 +895,11 @@ which is another argument for keeping EC access daemon-side.
    Discriminator: cell voltage at cutoff (~3.6 V/cell = a real reserve; ~3.0–3.2 =
    genuinely empty and the gauge reads high). `battery_watch.py` flushes per sample.
 
-4. **Fan duty control** (§3.6). Registers are identified and `FAN_MODE_BOOST` works, but
-   setting a duty does not. The universal-control path (`0x07C6` b2 + `0x07C5` b7 +
-   tables) accepted writes with no observed effect — **that test ran while `0x0741` bit 0
-   was clear (§4.1), so it is void and must be repeated.** Manual duty is most likely a
-   WMI method, not a register write: the driver marks `0x1804`/`0x1809` "only accessible
-   when using the WMI interface".
+4. **Answered: fan duty control works** (§3.6). The universal-control path
+   (`0x07C6` bit 2 + the `0x0F00`–`0x0F5F` tables) drives the fans from a
+   userspace-written curve, honouring both duty and hysteresis, and the enable
+   bit is reversible. What remains is turning that into a supervised daemon
+   feature rather than a probe.
 
 5. **LPP dock readback.** The RX characteristic carries ASCII and framed replies on the
    same channel, notifications can arrive fragmented, and `FE 31 05 02 EF` (opcode `0x31`,
@@ -884,8 +926,10 @@ which is another argument for keeping EC access daemon-side.
 
 ## 8. Next steps
 
-1. **Re-run the universal fan control experiment** with `0x0741` bit 0 confirmed set.
-   Everything concluded from the previous run is void.
+1. **Done — universal fan control works** (§3.6). Next is making it a feature:
+   read temp, select a point, write the tables, with a duty floor, a temperature
+   abort, and the enable bit cleared on exit so a crash cannot leave the machine
+   on a stale curve.
 
 2. **Fan curves.** If universal control works, a userspace controller — read temp,
    interpolate, write `0x0F20`/`0x0F50` — with a duty floor and a temperature abort.

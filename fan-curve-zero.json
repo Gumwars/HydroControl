@@ -1,0 +1,199 @@
+{
+  "_note": "Restores the as-found state: all 96 table bytes zero. Only meaningful while ENABLE_UNIVERSAL_FAN_CTRL is clear -- an all-zero curve with the feature ON commands the fans off at every temperature.",
+  "CPU": [
+    {
+      "ID": 0,
+      "UpT": 0,
+      "DownT": 0,
+      "Duty": 0
+    },
+    {
+      "ID": 1,
+      "UpT": 0,
+      "DownT": 0,
+      "Duty": 0
+    },
+    {
+      "ID": 2,
+      "UpT": 0,
+      "DownT": 0,
+      "Duty": 0
+    },
+    {
+      "ID": 3,
+      "UpT": 0,
+      "DownT": 0,
+      "Duty": 0
+    },
+    {
+      "ID": 4,
+      "UpT": 0,
+      "DownT": 0,
+      "Duty": 0
+    },
+    {
+      "ID": 5,
+      "UpT": 0,
+      "DownT": 0,
+      "Duty": 0
+    },
+    {
+      "ID": 6,
+      "UpT": 0,
+      "DownT": 0,
+      "Duty": 0
+    },
+    {
+      "ID": 7,
+      "UpT": 0,
+      "DownT": 0,
+      "Duty": 0
+    },
+    {
+      "ID": 8,
+      "UpT": 0,
+      "DownT": 0,
+      "Duty": 0
+    },
+    {
+      "ID": 9,
+      "UpT": 0,
+      "DownT": 0,
+      "Duty": 0
+    },
+    {
+      "ID": 10,
+      "UpT": 0,
+      "DownT": 0,
+      "Duty": 0
+    },
+    {
+      "ID": 11,
+      "UpT": 0,
+      "DownT": 0,
+      "Duty": 0
+    },
+    {
+      "ID": 12,
+      "UpT": 0,
+      "DownT": 0,
+      "Duty": 0
+    },
+    {
+      "ID": 13,
+      "UpT": 0,
+      "DownT": 0,
+      "Duty": 0
+    },
+    {
+      "ID": 14,
+      "UpT": 0,
+      "DownT": 0,
+      "Duty": 0
+    },
+    {
+      "ID": 15,
+      "UpT": 0,
+      "DownT": 0,
+      "Duty": 0
+    }
+  ],
+  "GPU": [
+    {
+      "ID": 0,
+      "UpT": 0,
+      "DownT": 0,
+      "Duty": 0
+    },
+    {
+      "ID": 1,
+      "UpT": 0,
+      "DownT": 0,
+      "Duty": 0
+    },
+    {
+      "ID": 2,
+      "UpT": 0,
+      "DownT": 0,
+      "Duty": 0
+    },
+    {
+      "ID": 3,
+      "UpT": 0,
+      "DownT": 0,
+      "Duty": 0
+    },
+    {
+      "ID": 4,
+      "UpT": 0,
+      "DownT": 0,
+      "Duty": 0
+    },
+    {
+      "ID": 5,
+      "UpT": 0,
+      "DownT": 0,
+      "Duty": 0
+    },
+    {
+      "ID": 6,
+      "UpT": 0,
+      "DownT": 0,
+      "Duty": 0
+    },
+    {
+      "ID": 7,
+      "UpT": 0,
+      "DownT": 0,
+      "Duty": 0
+    },
+    {
+      "ID": 8,
+      "UpT": 0,
+      "DownT": 0,
+      "Duty": 0
+    },
+    {
+      "ID": 9,
+      "UpT": 0,
+      "DownT": 0,
+      "Duty": 0
+    },
+    {
+      "ID": 10,
+      "UpT": 0,
+      "DownT": 0,
+      "Duty": 0
+    },
+    {
+      "ID": 11,
+      "UpT": 0,
+      "DownT": 0,
+      "Duty": 0
+    },
+    {
+      "ID": 12,
+      "UpT": 0,
+      "DownT": 0,
+      "Duty": 0
+    },
+    {
+      "ID": 13,
+      "UpT": 0,
+      "DownT": 0,
+      "Duty": 0
+    },
+    {
+      "ID": 14,
+      "UpT": 0,
+      "DownT": 0,
+      "Duty": 0
+    },
+    {
+      "ID": 15,
+      "UpT": 0,
+      "DownT": 0,
+      "Duty": 0
+    }
+  ]
+}

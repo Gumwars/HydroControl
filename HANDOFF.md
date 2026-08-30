@@ -283,7 +283,7 @@ existing D-Bus object instead.
 
 ## Open questions
 
-**Fan control — the biggest open item.** Registers are identified and confirmed:
+**Fan control — answered. A userspace fan curve works.** Registers:
 
 ```
 0x0751  MANUAL_FAN_CTRL   b2:0 level, b4 TURBO, b5 HIGH, b6 BOOST, b7 USER
@@ -292,14 +292,29 @@ existing D-Bus object instead.
 0x07C6  AP_OEM_6            b2 ENABLE_UNIVERSAL_FAN_CTRL
 0x0F00/10/20  CPU DownT / UpT / Duty   16 points each
 0x0F30/40/50  GPU DownT / UpT / Duty
-0x1804/0x1809  PWM_*_WRITEABLE — driver says "unstable, WMI interface only"
 ```
 
-`FAN_MODE_BOOST` works (forces 200). Setting duty directly does not. The
-universal-control path (`0x07C6` b2 + tables) accepts writes with no observed
-effect — **but that experiment ran while `0x0741` bit 0 was clear, so it must be
-repeated before anything is concluded from it.** Manual duty is most likely a
-WMI method, not a register write.
+Verified 2026-08-30 with `0x0741` bit 0 confirmed set — the earlier null ran with
+it clear and was void. `pwm1` moved 76 → 102, which is EC raw 80 = **40%**,
+exactly our curve's point 2 (`UpT 50 / DownT 45 / Duty 40`), selected when the CPU
+touched 50 °C and **held at 40% as it fell to 48 °C** because `DownT` 45 had not
+been crossed. Both the duty and the hysteresis we wrote were honoured.
+**`0x07C6` bit 2 is reversible** — unlike `FAN_MODE_USER`.
+
+Three things to know before touching it:
+
+* **Populate the tables BEFORE setting the enable bit.** They ship empty
+  (96 bytes of `0x00`) and the bit ships clear. Enabling first hands the fans a
+  curve that reads zero at every temperature.
+* **Write an aggressive curve, not a quiet one.** If an enable bit ever turns out
+  to be one-way, stuck-loud is recoverable and stuck-hot is not.
+* **`0x1804`/`0x1809` read `0xFF` through `ECRR`** — unmapped. Upstream's "WMI
+  interface only" is confirmed; they are not a fallback anyone is neglecting.
+
+Tools: `fan_table_write_probe.py` (is the region writable — bounded, restores),
+`fan_universal_enable_probe.py` (enable, observe, restore, and measure
+reversibility), `fan_curve.py --read/--write`, `fan-curve-hydroc16.json` (ours,
+not vendor data).
 
 **Performance modes: answered — they are not in the firmware.** The button
 raises WMI `0xB0`, `uniwill-laptop` maps it to `KEY_F14`, and nothing else
@@ -345,12 +360,15 @@ a wrong MUX write leaves no display, making it the highest-stakes write here.
 
 ## Next
 
-1. **Re-run the universal fan control experiment** with `0x0741` bit 0 confirmed
-   set. The previous null result is void.
-2. **Fan curves**: if universal control works, a userspace controller
-   (read temp → interpolate → write `0x0F20`/`0x0F50`) with a duty floor and a
-   temperature abort. Derive curves from `fan_characterise*.py` measurements,
-   not from vendor JSON.
+1. **Done — universal fan control works, and it is in the app.** See the fan
+   entry above. Curves live in `hydroc/fancurve.py`, one pair per preset, with
+   "populate then enable" enforced in code rather than remembered.
+2. **Answer the emergency-override question.** With universal control on, the EC
+   is running *our* table, and §4.2 established the firmware's own ramp lives on
+   the same loop we are overriding. Nobody has tested whether it still saves you
+   at Tjmax. That answer decides whether `MIN_DUTY` (currently 25%) can come
+   down and the stock silent-below-55 °C band can come back — right now we give
+   it up on purpose, and the UI says so.
 3. **Charge threshold — done, and the answer was no.** Measured, not enforced,
    feature bit dropped. If it is ever revisited, the open part is whether any
    gate exists that switches EC enforcement on; `0x0497` bit 5 and `0x0984`

@@ -1,0 +1,199 @@
+{
+  "_note": "HydroControl fan curve for the HYDROC-16 G1. OURS, not vendor data: derived from measurements on this machine (fans engage near 55 C, PWM scale is 0-200 with the register holding Duty*2) and from the safety reasoning below. The vendor UserFanTables in hydroc-driver/ were NOT used -- they are for lower-power chassis (PL1 40-60 W against our measured 75 W default, PROJECT_ID 0x19 is past the end of that table) and copying them would not make them MIT. DELIBERATELY MORE AGGRESSIVE THAN STOCK: it ramps from 40 C where the firmware is silent to 55 C, and never commands less than 30%. If ENABLE_UNIVERSAL_FAN_CTRL turns out to be a one-way door like FAN_MODE_USER, the machine is then stuck loud rather than stuck hot. There is no temperature at which this curve turns the fans off.",
+  "CPU": [
+    {
+      "ID": 0,
+      "UpT": 40,
+      "DownT": 35,
+      "Duty": 30
+    },
+    {
+      "ID": 1,
+      "UpT": 45,
+      "DownT": 40,
+      "Duty": 35
+    },
+    {
+      "ID": 2,
+      "UpT": 50,
+      "DownT": 45,
+      "Duty": 40
+    },
+    {
+      "ID": 3,
+      "UpT": 55,
+      "DownT": 50,
+      "Duty": 45
+    },
+    {
+      "ID": 4,
+      "UpT": 60,
+      "DownT": 55,
+      "Duty": 52
+    },
+    {
+      "ID": 5,
+      "UpT": 65,
+      "DownT": 60,
+      "Duty": 60
+    },
+    {
+      "ID": 6,
+      "UpT": 70,
+      "DownT": 65,
+      "Duty": 68
+    },
+    {
+      "ID": 7,
+      "UpT": 74,
+      "DownT": 69,
+      "Duty": 76
+    },
+    {
+      "ID": 8,
+      "UpT": 78,
+      "DownT": 73,
+      "Duty": 84
+    },
+    {
+      "ID": 9,
+      "UpT": 82,
+      "DownT": 77,
+      "Duty": 92
+    },
+    {
+      "ID": 10,
+      "UpT": 86,
+      "DownT": 81,
+      "Duty": 97
+    },
+    {
+      "ID": 11,
+      "UpT": 90,
+      "DownT": 85,
+      "Duty": 100
+    },
+    {
+      "ID": 12,
+      "UpT": 93,
+      "DownT": 88,
+      "Duty": 100
+    },
+    {
+      "ID": 13,
+      "UpT": 95,
+      "DownT": 90,
+      "Duty": 100
+    },
+    {
+      "ID": 14,
+      "UpT": 97,
+      "DownT": 92,
+      "Duty": 100
+    },
+    {
+      "ID": 15,
+      "UpT": 99,
+      "DownT": 94,
+      "Duty": 100
+    }
+  ],
+  "GPU": [
+    {
+      "ID": 0,
+      "UpT": 40,
+      "DownT": 35,
+      "Duty": 30
+    },
+    {
+      "ID": 1,
+      "UpT": 45,
+      "DownT": 40,
+      "Duty": 35
+    },
+    {
+      "ID": 2,
+      "UpT": 50,
+      "DownT": 45,
+      "Duty": 40
+    },
+    {
+      "ID": 3,
+      "UpT": 55,
+      "DownT": 50,
+      "Duty": 45
+    },
+    {
+      "ID": 4,
+      "UpT": 60,
+      "DownT": 55,
+      "Duty": 52
+    },
+    {
+      "ID": 5,
+      "UpT": 65,
+      "DownT": 60,
+      "Duty": 60
+    },
+    {
+      "ID": 6,
+      "UpT": 70,
+      "DownT": 65,
+      "Duty": 68
+    },
+    {
+      "ID": 7,
+      "UpT": 74,
+      "DownT": 69,
+      "Duty": 76
+    },
+    {
+      "ID": 8,
+      "UpT": 78,
+      "DownT": 73,
+      "Duty": 84
+    },
+    {
+      "ID": 9,
+      "UpT": 82,
+      "DownT": 77,
+      "Duty": 92
+    },
+    {
+      "ID": 10,
+      "UpT": 85,
+      "DownT": 80,
+      "Duty": 97
+    },
+    {
+      "ID": 11,
+      "UpT": 87,
+      "DownT": 82,
+      "Duty": 100
+    },
+    {
+      "ID": 12,
+      "UpT": 89,
+      "DownT": 84,
+      "Duty": 100
+    },
+    {
+      "ID": 13,
+      "UpT": 91,
+      "DownT": 86,
+      "Duty": 100
+    },
+    {
+      "ID": 14,
+      "UpT": 93,
+      "DownT": 88,
+      "Duty": 100
+    },
+    {
+      "ID": 15,
+      "UpT": 95,
+      "DownT": 90,
+      "Duty": 100
+    }
+  ]
+}

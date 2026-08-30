@@ -2674,7 +2674,6 @@ static struct uniwill_device_descriptor hydroc16g1_descriptor __initdata = {
 	.features = UNIWILL_FEATURE_FN_LOCK |
 		    UNIWILL_FEATURE_SUPER_KEY |
 		    UNIWILL_FEATURE_TOUCHPAD_TOGGLE |
-		    UNIWILL_FEATURE_BATTERY_CHARGE_LIMIT |
 		    UNIWILL_FEATURE_BATTERY_CHARGE_MODES |
 		    UNIWILL_FEATURE_CPU_TEMP |
 		    UNIWILL_FEATURE_GPU_TEMP |
@@ -2688,6 +2687,23 @@ static struct uniwill_device_descriptor hydroc16g1_descriptor __initdata = {
 	 * controller (048d:7001), not by the EC. Writes to the EC lightbar
 	 * registers are accepted but have no visible effect, so the LIGHTBAR
 	 * feature is deliberately not claimed here.
+	 *
+	 * BATTERY_CHARGE_LIMIT is not claimed either, for the same reason and on
+	 * the same evidence. EC_ADDR_CHARGE_CTRL (0x07B9) accepts a threshold,
+	 * reads it back and holds it indefinitely -- and the EC never acts on it.
+	 * Measured over a full cycle on 2026-08-30: with the register holding 80%
+	 * throughout, the pack charged 76% -> 100% without pausing, and
+	 * CHARGE_CTRL_REACHED (bit 7) never armed at any point, including at
+	 * 100%. The EC is not failing to hold the threshold; it never evaluates
+	 * it. Nothing in the EC advertises the feature either -- 0x078E bit 3 is
+	 * CHARGING_PROFILE, not a charge-limit capability -- so this bit was only
+	 * ever an assumption carried over from sibling chassis.
+	 *
+	 * Claiming it exposes charge_control_end_threshold, which is a standard
+	 * interface: GNOME, TLP and anything else reading it would report a
+	 * battery limit that does not exist. A missing feature is discoverable; a
+	 * limit that silently does nothing is worse than none, because it is why
+	 * someone leaves a machine plugged in permanently.
 	 */
 };
 

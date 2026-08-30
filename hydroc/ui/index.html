@@ -603,10 +603,18 @@ function vBatt(){
     <div class="lbl">These are usage patterns, not percentage caps — no mode was observed to limit
       charging on this firmware.</div>
   </div>
+  ${S.state.charge_threshold==null?`
+  <div class="card" style="margin-top:var(--space-4)">
+    <div class="row"><div class="kick">Charge threshold</div><span class="kv">not available</span></div>
+    <div class="lbl">This firmware stores a charge threshold and never acts on it. Measured over a
+      full cycle: the register held 80% while the pack charged straight through to 100%, and the
+      EC's own "threshold reached" bit never armed. The driver no longer claims the feature, so
+      nothing on this system — here, GNOME or TLP — reports a limit that is not real.</div>
+  </div>` : `
   <div class="card" style="margin-top:var(--space-4)">
     <div class="row"><div class="kick">Charge threshold</div><span class="kv">${num(S.state.charge_threshold)} %</span></div>
     <input type="range" id="thr" min="1" max="100" value="${S.state.charge_threshold||100}">
-  </div>
+  </div>`}
   <div class="grid g3" style="margin-top:var(--space-4)">
     <div class="card"><div class="kick">Health</div>
       <div class="row"><span class="lbl">Cycles</span><span class="kv">${num(S.state.charge_cycles)}</span></div>

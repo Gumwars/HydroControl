@@ -328,7 +328,16 @@ class Hardware:
                     ch.ok, ch.error = False, err
             changes.append(ch)
 
-        if differs("charge_threshold"):
+        # The driver only exposes this when the descriptor claims
+        # BATTERY_CHARGE_LIMIT, and on this chassis it deliberately does not:
+        # the EC stores a threshold and never enforces it (DESIGN.md §3.2). A
+        # profile written before that change still carries the key, so skip it
+        # rather than reporting a failed write on every boot. Absent hardware
+        # is not an error.
+        if differs("charge_threshold") and not os.path.exists(
+                os.path.join(BAT, "charge_control_end_threshold")):
+            pass
+        elif differs("charge_threshold"):
             ch = Change("charge_threshold", actual.get("charge_threshold"),
                         desired["charge_threshold"])
             if not dry_run:

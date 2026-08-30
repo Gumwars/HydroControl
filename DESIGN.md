@@ -121,52 +121,60 @@ charged to 6400 mAh at 4.21 V/cell with an honest coulomb count (delivered/repor
 correct; the behaviour differs. Working hypothesis is a long-horizon hold-low policy
 invisible to a single charge cycle. **Do not present these as percentage caps in the UI.**
 
-**The threshold has a shadow set the app never writes.** `charge_path_probe.py`
-(2026-08-27) A/B-tested the two write paths live:
+**The threshold's "shadow set" is mostly unwritable — there is nothing to write.**
+`charge_path_probe.py` A/B-tested the two write paths live. The **2026-08-27 13:27**
+run is the authoritative one: it writes a *different* value on each path (ECRW 85,
+WKBC 75), so the two are distinguishable, and it saves a JSON artifact. An earlier run
+wrote the same value on both paths and therefore could not tell them apart.
 
-| Register | Role | Baseline | After ECRW | After WKBC |
-|---|---|---|---|---|
-| `0x07B9` | threshold + reached bit | 0x55 (85%) | **0x50 (80%)** | 0x50 |
-| `0x07A6` [5:4] | charging profile | 0x20 (stationary) | **0x10 (balanced)** | 0x10 |
-| `0x0497` bit 5 | charge-limit-mode flag | 0x45 | 0x45 | **0x24** (EC modified) |
-| `0x087F` | shadow limit | 0xFF | 0xFF | 0xFF |
-| `0x04AB` | SoC gate | 0x64 (100%) | 0x64 | 0x64 (EC-managed) |
-| `0x07CD` | threshold shadow (GCHG readback) | **0x5A (90%)** | 0x5A | **0x50 (80%)** |
+| Register | Window | Baseline | After ECRW 85 | After WKBC 75 | Verdict |
+|---|---|---|---|---|---|
+| `0x07B9` | `0x07xx` settings | 0x50 | **0x55** | **0x4B** | both paths write it |
+| `0x07CD` | `0x07xx` settings | 0x5A | 0x5A | **0x4B** | WKBC writes it |
+| `0x07A6` [5:4] | `0x07xx` settings | 0x20 | **0x10** | 0x10 | ECRW writes it; the WKBC step was non-discriminating |
+| `0x0497` | **`0x04xx` live** | 0x45 | 0x45 | 0x45 *(wanted 0x65)* | **write rejected** |
+| `0x04AB` | **`0x04xx` live** | 0x64 | 0x64 | 0xFF → **0x64** after 5 s | **EC overwrote it** |
+| `0x087F` | outside both | 0xFF | 0xFF | 0xFF *(wanted 0x4B)* | **write rejected** |
 
 Findings:
 
-1. **The ECRW path is NOT dead.** `0x07B9` and `0x07A6` both take plain ECRW writes
-   and hold. The FIXCGLM overlay's premise ("ECRW→MMRW writes to CGLM are silently
-   ignored") is **disproven on this EC** — see the §4 corrections table.
-2. **The shadow set was out of sync at baseline:** `0x07CD` held 90% while the real
-   threshold was 85%. The app writes only `0x07B9` via sysfs; the SCHG shadow set
-   (`0x07CD`, `0x0497`, `0x087F`, `0x04AB`) is never touched. Windows writes the whole
-   set via SCHG. "Stops at 80 briefly, then resumes" is exactly what a two-register
-   check (0x07B9 stops, 0x07CD=90 resumes) or a clobber-from-shadow would do.
-3. **WKBC lands on some shadow registers, not all.** `0x07CD` and `0x0497` took the
-   WKBC writes cleanly; `0x04AB` is live SoC (the 0xFF trigger is consumed and
-   rewritten). **`0x087F` never moved** — a WKBC write of 80 left it at 0xFF, and
-   "uninitialized state per GCHG" was a rationalisation, not a finding. And the
-   WKBC→`0x07B9` evidence is inconclusive: Test B's write was indistinguishable from
-   Test A's ECRW result, and the restore readback was immediate. On current evidence
-   ECRW writes `0x07B9` and WKBC does not — the inverse of the overlay's premise —
-   but the WKBC→`0x07B9` question needs a clean re-test to close.
+1. **The ECRW path is NOT dead.** `0x07B9` takes plain ECRW writes and holds them for
+   hours across a working day. The FIXCGLM overlay's premise is **disproven** — §4.
+2. **WKBC writes `0x07B9` as well.** An earlier reading of this probe concluded the
+   opposite, inferred from a restore that appeared not to take. That inference came
+   from a test whose two paths wrote the *same* value and so could not distinguish
+   them. With distinct values the answer is unambiguous: **both paths work.** Two
+   samples were not a pattern — §4.2 records the same lesson about `0x07A5`.
+3. **The "shadow set" maps onto the two-window model of §2, and most of it cannot be
+   written at all.** `0x0497` and `0x04AB` are in the `0x04xx` live-readback window,
+   which accepts writes and discards them: `0x0497` never moved, and `0x04AB` took
+   `0xFF` and was restored to `0x64` by the EC within five seconds — visible only
+   because the probe re-reads after settling, not at the immediate readback.
+   `0x087F` sits outside both windows and rejects writes. Only `0x07CD` is writable.
+4. **`0x07CD` is not a shadow of the threshold.** The overlay's own comment calls it
+   "threshold register written by SCHG *for GCHG readback*", and its `SCHG` body says
+   "Store requested limit in `0x07CD`". It is the overlay author's bookkeeping slot, so
+   their getter could return their setter's argument; `GCHG` treats 0/0xFF as
+   uninitialised. No upstream driver names it. The overlay has never run on this
+   machine, so nothing has ever written it, and its value is unexplained EC data rather
+   than a stale threshold. Reading "0x07CD=90 vs 0x07B9=85" as the set being *out of
+   sync* compared two quantities never shown to be the same quantity.
 
-**Timeline resolved (no unattended drift).** The probe's 85% baseline is explained
-by the boot apply log: `hydroc-apply` at 06:16:40 logged `charge_threshold: 100 -> 85`
-(the 06:20:48 run logged no threshold change because it was already 85). The register
-reading 80 now is the user's own change after the probe — profile mtime 12:16:30,
-content `charge_threshold: 80` — written via sysfs→ECRW, and it has held since. Neither
-the audit's "drift caught in the act" nor its "WKBC restore failed" reading survives
-the logs; both were confounded by the boot apply and the user's later change.
+**Consequence: "write the full SCHG set together" is retired as a fix direction.** It
+would write two registers that cannot be written, one that sits outside both windows,
+and one the overlay invented for its own readback. There is no shadow set to
+synchronise.
 
-**Open:** whether the EC clobbers `0x07B9`'s threshold bits when it sets bit 7 at the
-stop point is still unproven — that needs a charge cycle with `charge_ctrl_watch.py`
-running. The register-level evidence already points to the fix: write the full SCHG
-set together. `charge_path_probe.py` is the tool; it restores every register to its
-baseline on exit. **Process gap:** the probe run had no saved artifact — the table
-above is transcribed scrollback. Re-run with output saved (`--out`) before drawing
-further conclusions.
+**Still open — and now the only open part:** whether the threshold actually holds
+across a charge cycle. That has never been measured. The one piece of negative evidence
+("stops at 80%, then resumes") predates this codebase, was never instrumented, and is
+*also exactly what a working threshold looks like*: the driver exposes only an end
+threshold — there is no `charge_control_start_threshold` on this hardware — so whatever
+hysteresis the EC uses is internal and invisible. Stop at 80, self-discharge to 78, top
+up, stop. Watching `status` flip reads as "it does not hold"; it is not. **The
+discriminator nobody recorded is whether capacity ever climbs past the threshold to
+100.** `charge_ctrl_watch.py` answers that in one cycle — fix its missing EC pacing
+(§4.2) before running it for hours.
 
 Bonus: real cycle count lives at `0x04A6`/`0x04A7` (reads 65) while sysfs `cycle_count`
 reports 0.
@@ -461,6 +469,15 @@ chassis. And this is vendor data — if any of it is used verbatim, it does not 
 MIT by being copied into an MIT tree. Deriving our own curves informed by the shape is
 the clean route; `hydroc-driver/` is already excluded from the tester bundle.
 
+**Measured: the stock curve has a real zero-RPM band, and it ends near 55 °C.**
+Observed 2026-08-29 on AC at idle: both fans at 0 rpm with `PWM_1`/`PWM_2` reading 0
+and `0x0751` at `0x00` (automatic, no BOOST, `FAN_MODE_USER` clear) while the CPU sat
+at 50–51 °C; the fans engaged as it reached ~55 °C. So 0 rpm at idle is correct
+behaviour, not a stall — worth knowing before diagnosing one. It also constrains any
+userspace controller: a duty *floor* applied unconditionally would spin the fans in a
+band where the firmware deliberately does not, making the machine louder than stock for
+no thermal benefit. One point is not a curve, but it is the first measured one.
+
 **Unverified:** nothing here has been *written* yet. `FAN_MODE_USER` (bit 7) is the
 presumed latch for manual duty, by analogy with the `0x0727` bit 6 TDP latch, but that
 is a guess. The driver also defines `EC_ADDR_PWM_1_WRITEABLE = 0x1804` and `0x1809` with
@@ -545,7 +562,7 @@ Each of these was investigated and closed. They are recorded so nobody repeats t
 | **`0x16` effect-selector family** | Wrong family — that is the ITE **8291 keyboard's** effect selector. The 8233 uses `08 22`. A 142-candidate sweep of `0x16` found nothing. |
 | **Writing `0x046A`/`0x046B`** to set power limits | Accepted by `ECRW`, silently discarded. That window is the live readback. Write `0x0783`/`0x0784`. |
 | **WMI mailbox as a special latch** | `WKBC`/`RKBC`/`SCMD` are a generic EC read/write channel (`FUNCTION_WRITE=0`, `READ=1`, `FEATURE_TOGGLE=5`). tuxedo-drivers sets the charging profile with a plain `0x07A6` read-modify-write, exactly as we do. There is no magic commit command. |
-| **FIXCGLM overlay premise** ("ECRW→MMRW writes to CGLM are silently ignored") | **Disproven on this EC** (2026-08-27, `charge_path_probe.py`). Plain ECRW writes to `0x07B9` and `0x07A6` land and hold. The overlay's *shadow set* (`0x07CD`, `0x0497`, `0x087F`, `0x04AB`) is real and partially WKBC-writable, but the "ECRW is dead" premise is not. The overlay was never loaded on this machine (stock SSDT12 is 14.8 KB; FIXCGLM is 338 bytes), and **`SCHG` exists in no DSDT on this machine** — the reference driver's SCHG routing is dead without the overlay. |
+| **FIXCGLM overlay premise** ("ECRW→MMRW writes to CGLM are silently ignored") | **Disproven on this EC** (2026-08-27, `charge_path_probe.py`, artifact saved). Plain ECRW writes to `0x07B9` and `0x07A6` land and hold for hours — and a discriminating re-test showed **WKBC writes `0x07B9` too**, so the premise fails in both directions. The overlay was never loaded here (stock SSDT12 is 14.8 KB; FIXCGLM is 338 bytes) and **`SCHG` exists in no DSDT on this machine**, so the reference driver's SCHG routing is dead without it. Its "shadow set" is not a set to write: `0x0497` and `0x04AB` are in the `0x04xx` live window and cannot be written, `0x087F` rejects writes, and `0x07CD` is the overlay's own GCHG scratch slot. See §3.2. |
 | **`WQBA` WMI MOF** | Decodes to Microsoft's stock `AcpiTest_*` sample template (GUIDs `ABBC0F60`–`ABBC0F72`). `GetSetULong` is the generic pipe; no semantics. Command meanings live in `GamingCenter3_Cross.dll`. |
 | **`ec_sys` / `/sys/kernel/debug/ec/ec0/io`** | The true EmbeddedControl region (`ECMP`) holds only `XSEC` at 0x40 and `DEVS` at 0x7B. Everything interesting is in the MMIO windows. |
 
@@ -723,7 +740,7 @@ launcher-dependent until tested under each launcher.
 | Charging profile (`0x07A6`) | EC RAM | **No** — observed reverting to `HIGH_CAPACITY` after reboot |
 | Custom-profile latch (`0x0727` bit 6) | EC RAM | No |
 | CPU power limits (`0x0783`/`0x0784`) | EC RAM | No |
-| Charge threshold (`0x07B9`) | EC RAM | No — plus a shadow set (`0x07CD`, `0x0497`, `0x087F`, `0x04AB`) the app does not write; see §3.2 |
+| Charge threshold (`0x07B9`) | EC RAM | No — written via sysfs→ECRW, which holds; see §3.2 |
 | Platform toggles (`INOU0000:00`) | EC | Believed yes — unverified |
 
 This corrects an earlier assumption that the EC keeps its own persistent copy. It does
@@ -797,10 +814,16 @@ which is another argument for keeping EC access daemon-side.
    4.21 V/cell). Hypothesis: a long-horizon hold-low policy invisible to one cycle.
    **Do not present these as percentage caps.**
 
-2. **The charge threshold does not hold.** 80% stops charging briefly, then it resumes.
-   Predates this codebase, so EC-side. Likely the EC rewrites the whole of `0x07B9` to
-   set `CHARGE_CTRL_REACHED` (bit 7), clobbering the threshold in bits 0–6.
-   `charge_ctrl_watch.py --set 80` samples fast enough to catch it.
+2. **Does the charge threshold hold across a cycle? Never measured.** The write path
+   is settled — both ECRW and WKBC land on `0x07B9` and it holds for hours (§3.2). The
+   only negative evidence is "80% stops charging briefly, then it resumes", which
+   predates this codebase and was never instrumented — and which is *also* what a
+   working threshold looks like, since the driver exposes only an end threshold and any
+   EC-side hysteresis is invisible to us. **The discriminator is whether capacity ever
+   climbs past the threshold to 100**, and nobody recorded it. One charge cycle with
+   `charge_ctrl_watch.py` answers it; fix that script's missing EC pacing (§4.2) first,
+   because at its default 0.5 s interval a multi-hour run is several times the daemon's
+   sustained EC read rate.
 
 3. **The 30% shutdown.** Powers off at ~30% reported charge at idle, so not voltage sag.
    Discriminator: cell voltage at cutoff (~3.6 V/cell = a real reserve; ~3.0–3.2 =

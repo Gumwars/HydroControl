@@ -317,28 +317,20 @@ four modes. `lppd` keeps the last 40 notifications for correlation.
 tuxedo-drivers; neither `Trickle` nor `Long_Life` caps charging over one cycle.
 Do not present them as percentage caps.
 
-**The charge threshold: write path settled, behaviour never measured.**
-`charge_path_probe.py` (2026-08-27, artifact saved) A/B-tested both paths with
-*distinct* values, so they are distinguishable — and **both ECRW and WKBC write
-`0x07B9`**, which holds for hours. An earlier run wrote the same value on both
-paths, could not tell them apart, and produced a "WKBC does not write it"
-reading that the clean re-test disproves.
+**The charge threshold is never enforced — answered, and the feature dropped.**
+A full cycle logged on 2026-08-30 with `charge_ctrl_watch.py`: with `0x07B9`
+holding **80% unchanged**, the pack charged **76% → 100% without pausing**, and
+`CHARGE_CTRL_REACHED` never armed at any sample, including at 100%. Not a
+clobber (the register never moved), not hysteresis (charging never stopped), not
+a lost write (it read back correctly throughout). The EC stores the threshold and
+never evaluates it.
 
-The "SCHG shadow set" turns out to be mostly unwritable, and maps exactly onto
-the two-window model: `0x0497` and `0x04AB` are in the `0x04xx` live window and
-cannot be written (`0x04AB` took `0xFF` and the EC restored it within 5 s),
-`0x087F` sits outside both windows and rejects writes, and `0x07CD` is the
-overlay's own GCHG readback slot — not a shadow of anything, never written on
-this machine, named by no upstream driver. **So there is no shadow set to write,
-and that fix direction is retired.**
-
-What is genuinely open is whether the threshold *holds across a charge cycle*.
-It has never been measured. "Stops at 80, then resumes" was never instrumented
-and is also exactly what a working threshold looks like — the driver exposes
-only an end threshold, so the EC's own hysteresis is invisible. **The
-discriminator is whether capacity ever climbs past the threshold to 100.** One
-cycle with `charge_ctrl_watch.py` settles it; fix its missing EC pacing first.
-See DESIGN.md §3.2.
+`charge_control_end_threshold` existed only because `hydroc16g1_descriptor`
+claimed `UNIWILL_FEATURE_BATTERY_CHARGE_LIMIT` — our own DMI assertion carried
+over from sibling chassis. Nothing in the EC advertises it, and `0x078E` bit 3 is
+`CHARGING_PROFILE`, not a charge-limit capability. The bit is now dropped, as
+`LIGHTBAR` already was in the same struct, because that attribute is a standard
+interface and GNOME and TLP were reading it too. See DESIGN.md §3.2.
 
 **The 30% shutdown.** Machine powers off at ~30% reported charge at idle.
 Discriminator: cell voltage at cutoff (~3.6 V/cell = real reserve; ~3.0–3.2 =
@@ -359,13 +351,10 @@ a wrong MUX write leaves no display, making it the highest-stakes write here.
    (read temp → interpolate → write `0x0F20`/`0x0F50`) with a duty floor and a
    temperature abort. Derive curves from `fan_characterise*.py` measurements,
    not from vendor JSON.
-3. **Charge threshold**: measure one charge cycle. Discharge below the
-   threshold on normal use, plug in with `charge_ctrl_watch.py` running, and
-   record whether capacity plateaus near the threshold or climbs to 100. Add the
-   6 ms EC pacing to that script first — it has none, and a multi-hour run at
-   its default 0.5 s interval is several times the daemon's sustained read rate
-   (DESIGN.md §4.2). Writing the "SCHG shadow set" is **not** the fix and has
-   been retired; see DESIGN.md §3.2.
+3. **Charge threshold — done, and the answer was no.** Measured, not enforced,
+   feature bit dropped. If it is ever revisited, the open part is whether any
+   gate exists that switches EC enforcement on; `0x0497` bit 5 and `0x0984`
+   bit 3 are both dead ends and are recorded as such in DESIGN.md §3.2.
 4. **LPP**: decode the `0x31` reply frame; probe the ASCII console (`?`, `help`)
    carefully — it drives a pump.
 5. **envycontrol integration** by detect-and-delegate, not vendoring.

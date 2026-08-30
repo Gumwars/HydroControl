@@ -103,8 +103,8 @@ Driver path: `/sys/class/power_supply/BAT0/`
 | `current_now` | RO | µA — non-zero means genuinely charging; the hardest value to fake |
 | `charge_now` / `charge_full_design` | RO | µAh; use design as the denominator for a true percentage |
 
-EC registers: profile at `0x07A6` bits 5:4, threshold at `0x07B9` bits 0–6, capability bit
-at `0x078E` bit 3 (set on this machine, `0xFC`).
+EC registers: profile at `0x07A6` bits 5:4, threshold at `0x07B9` bits 0–6, and `0x078E` bit 3 —
+which is `CHARGING_PROFILE`, not a charge-limit capability (set here, `0xFC`).
 
 **Label mapping — confirmed** via the tuxedo-drivers comment (`0 => high capacity,
 1 => balanced, 2 => stationary`), independent RE of the same EC:
@@ -165,16 +165,42 @@ would write two registers that cannot be written, one that sits outside both win
 and one the overlay invented for its own readback. There is no shadow set to
 synchronise.
 
-**Still open — and now the only open part:** whether the threshold actually holds
-across a charge cycle. That has never been measured. The one piece of negative evidence
-("stops at 80%, then resumes") predates this codebase, was never instrumented, and is
-*also exactly what a working threshold looks like*: the driver exposes only an end
-threshold — there is no `charge_control_start_threshold` on this hardware — so whatever
-hysteresis the EC uses is internal and invisible. Stop at 80, self-discharge to 78, top
-up, stop. Watching `status` flip reads as "it does not hold"; it is not. **The
-discriminator nobody recorded is whether capacity ever climbs past the threshold to
-100.** `charge_ctrl_watch.py` answers that in one cycle — fix its missing EC pacing
-(§4.2) before running it for hours.
+**ANSWERED 2026-08-30: the threshold is never enforced.** A full cycle was
+logged with `charge_ctrl_watch.py`. With `0x07B9` holding **80% unchanged
+throughout**, the pack charged **76% → 100% without pausing**, and
+`CHARGE_CTRL_REACHED` (bit 7) **never armed at any sample, including at 100%**.
+
+That closes three hypotheses at once. The EC does not clobber the threshold —
+the register held `0x50` for the entire run. It is not hysteresis — charging
+never stopped. And the value is not being lost — it is read back correctly the
+whole time. The EC stores the threshold and **never evaluates it**: the same
+shape as the inert lightbar registers in §4, where writes are accepted and read
+back correctly while driving nothing.
+
+**Root cause: we claimed the feature ourselves.** `charge_control_end_threshold`
+exists because `hydroc16g1_descriptor` set `UNIWILL_FEATURE_BATTERY_CHARGE_LIMIT`
+— a DMI-table assertion carried over from sibling chassis. Nothing in the EC
+advertises charge-limit support: `UNIWILL_FEATURE_*` is a driver-side mask, not
+an EC read, and **`0x078E` bit 3 is `CHARGING_PROFILE`**, the Trickle/Long_Life
+feature, not a charge-limit capability. An earlier note in this section called it
+a capability bit; that was a mislabel.
+
+The bit has been dropped from the descriptor, exactly as `LIGHTBAR` already was
+in the same struct and for the same reason. `charge_control_end_threshold` is a
+*standard* interface — leaving it exposed meant GNOME, TLP and anything else
+reading it reported a battery limit that did not exist. A missing feature is
+discoverable; a limit that silently does nothing is worse than none, because it
+is why someone leaves a machine plugged in permanently.
+
+**Two dead ends, recorded so they are not re-run.** The overlay's
+"charge-limit-mode flag" at `0x0497` bit 5 reads clear, but `0x0497` is in the
+`0x04xx` live window that discards writes and is named by no upstream driver. And
+the April tree's claimed hardware interlock at `0x0984` bit 3 reads set — but
+`0x0980`–`0x098F` is **sixteen consecutive `0xFF` bytes**, the signature of
+unmapped address space, where every bit reads as 1. That comment predicted bit 7
+would never arm, and it was right, but the register it blamed is not evidence of
+anything. A prediction matching an observation is not confirmation when the
+instrument would produce that reading regardless.
 
 Bonus: real cycle count lives at `0x04A6`/`0x04A7` (reads 65) while sysfs `cycle_count`
 reports 0.
@@ -740,7 +766,7 @@ launcher-dependent until tested under each launcher.
 | Charging profile (`0x07A6`) | EC RAM | **No** — observed reverting to `HIGH_CAPACITY` after reboot |
 | Custom-profile latch (`0x0727` bit 6) | EC RAM | No |
 | CPU power limits (`0x0783`/`0x0784`) | EC RAM | No |
-| Charge threshold (`0x07B9`) | EC RAM | No — written via sysfs→ECRW, which holds; see §3.2 |
+| Charge threshold (`0x07B9`) | EC RAM | Moot — the EC stores it and never enforces it, and the driver no longer exposes it; see §3.2 |
 | Platform toggles (`INOU0000:00`) | EC | Believed yes — unverified |
 
 This corrects an earlier assumption that the EC keeps its own persistent copy. It does
@@ -814,16 +840,13 @@ which is another argument for keeping EC access daemon-side.
    4.21 V/cell). Hypothesis: a long-horizon hold-low policy invisible to one cycle.
    **Do not present these as percentage caps.**
 
-2. **Does the charge threshold hold across a cycle? Never measured.** The write path
-   is settled — both ECRW and WKBC land on `0x07B9` and it holds for hours (§3.2). The
-   only negative evidence is "80% stops charging briefly, then it resumes", which
-   predates this codebase and was never instrumented — and which is *also* what a
-   working threshold looks like, since the driver exposes only an end threshold and any
-   EC-side hysteresis is invisible to us. **The discriminator is whether capacity ever
-   climbs past the threshold to 100**, and nobody recorded it. One charge cycle with
-   `charge_ctrl_watch.py` answers it; fix that script's missing EC pacing (§4.2) first,
-   because at its default 0.5 s interval a multi-hour run is several times the daemon's
-   sustained EC read rate.
+2. **Answered: the charge threshold is never enforced.** Measured over a full
+   cycle (§3.2) — the register held 80% while the pack charged 76% → 100% and
+   `CHARGE_CTRL_REACHED` never armed. Not a clobber, not hysteresis: the EC
+   simply does not evaluate it. `UNIWILL_FEATURE_BATTERY_CHARGE_LIMIT` was our
+   own assumption and has been dropped from the descriptor. What remains genuinely
+   open is whether *any* gate exists that would switch enforcement on; both
+   candidates found so far are dead ends, and neither is worth re-running.
 
 3. **The 30% shutdown.** Powers off at ~30% reported charge at idle, so not voltage sag.
    Discriminator: cell voltage at cutoff (~3.6 V/cell = a real reserve; ~3.0–3.2 =

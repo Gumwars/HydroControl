@@ -25,6 +25,7 @@ import os
 import time
 from dataclasses import dataclass, field
 
+from . import fancurve
 from .ec import EC, ECUnavailable, ECWriteRejected
 
 PLATFORM = "/sys/bus/platform/devices/INOU0000:00"
@@ -226,6 +227,16 @@ class Hardware:
                 state["cpu_pl2_live"] = pl["pl2_live"]
                 state["cpu_pl4_live"] = pl["pl4_live"]
                 state["charge_cycles"] = self.ec.get_charge_cycles()
+                # Read the enable bit rather than trusting what we last wrote.
+                # A power cycle clears it, so stored intent goes stale on every
+                # boot -- and reporting "Manual" while the firmware is actually
+                # in charge is the drift this project keeps re-learning.
+                state["fan_mode"] = ("manual" if fancurve.is_enabled(self.ec)
+                                     else "auto")
+                state["fan_split"] = fancurve.is_split(self.ec)
+                if state["fan_mode"] == "manual":
+                    state["fan_curve_cpu"] = fancurve.read_curve(self.ec, "cpu")
+                    state["fan_curve_gpu"] = fancurve.read_curve(self.ec, "gpu")
             except Exception:
                 # EC is best-effort: a failure here must degrade the reading,
                 # never take down the caller's request thread.
@@ -347,7 +358,32 @@ class Hardware:
                     ch.ok, ch.error = False, err
             changes.append(ch)
 
-        # 4. Platform toggles and GPU offset.
+        # 4. Fans. fancurve.apply_curves populates both tables before it
+        #    touches the enable bit and refuses an invalid curve outright, so
+        #    the "populate, then enable" rule cannot be got wrong from here.
+        if "fan_mode" in desired and desired["fan_mode"] is not None:
+            want = desired["fan_mode"]
+            ch = Change("fan_mode", actual.get("fan_mode"), want)
+            if not dry_run:
+                try:
+                    if want == "manual":
+                        cpu = desired.get("fan_curve_cpu")
+                        gpu = desired.get("fan_curve_gpu")
+                        if not cpu or not gpu:
+                            raise fancurve.CurveError(
+                                "manual fan control needs both a CPU and a GPU "
+                                "curve; with SPLIT_TABLES set an empty GPU "
+                                "table would stop that fan")
+                        fancurve.apply_curves(self.ec, cpu, gpu)
+                    else:
+                        fancurve.disable(self.ec)
+                except (fancurve.CurveError, ECUnavailable,
+                        ECWriteRejected, ValueError) as e:
+                    ch.ok, ch.error = False, str(e)
+            if want != actual.get("fan_mode") or not ch.ok:
+                changes.append(ch)
+
+        # 5. Platform toggles and GPU offset.
         for t in TOGGLES:
             if differs(t):
                 ch = Change(t, actual.get(t), desired[t])

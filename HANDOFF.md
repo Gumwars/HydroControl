@@ -132,6 +132,7 @@ sometimes" bug.
 hydroc/            the application
   ec.py            EC access — 6 ms pacing, verified writes, thread-serialised
   hardware.py      settings surface: read_state / normalize / apply / drift
+  fancurve.py      EC fan-curve tables; populate-then-enable enforced in code
   presets.py       Office / Balanced / Performance, matched against live state
   hotkeys.py       KEY_F14 listener — the physical profile button
   rgb.py           visual key id -> matrix bridge; chin bar modes

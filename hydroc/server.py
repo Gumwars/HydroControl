@@ -28,7 +28,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from .cli import (PROFILE_PATHS, REPAIR_MODPROBE, REPAIR_MODULE, REPAIR_RELOAD,
                   diagnose, load_profile, save_profile)
 from .hardware import Hardware
-from . import presets, rgb
+from . import fancurve, presets, rgb
 from .hotkeys import ProfileButton
 
 # The LPP dock lives behind a sidecar daemon (hydroc.lppd) because BLE is async
@@ -80,6 +80,15 @@ def apply_preset(name: str) -> dict:
     settings = presets.settings_for(name)
     if settings is None:
         return {"ok": False, "error": f"unknown preset {name!r}"}
+    # A preset carries a fan curve too, but only push it if the user is
+    # actually in manual mode -- picking a power preset must not quietly take
+    # the fans off firmware control. In auto, the curve is stored as intent and
+    # lands the moment they switch to manual.
+    fan = presets.fan_for(name)
+    if fan and _hw.read_state().get("fan_mode") == "manual":
+        settings = dict(settings, fan_mode="manual",
+                        fan_curve_cpu=fan["cpu"], fan_curve_gpu=fan["gpu"])
+
     changes = _hw.apply(settings)
     failed = {c.setting for c in changes if not c.ok}
     profile, _ = load_profile()
@@ -181,6 +190,22 @@ class Handler(BaseHTTPRequestHandler):
             return self._json({"presets": presets.describe(),
                                "active": presets.match(state),
                                "button": _button.status()})
+        if route == "/api/fan":
+            state = _hw.read_state()
+            return self._json({
+                "mode": state.get("fan_mode"),
+                "split": state.get("fan_split"),
+                "cpu": state.get("fan_curve_cpu"),
+                "gpu": state.get("fan_curve_gpu"),
+                "presets": {n: presets.fan_for(n) for n in presets.CYCLE},
+                "min_duty": fancurve.MIN_DUTY,
+                "points": fancurve.TABLE_LEN,
+                # Measured, not assumed: the EC ramps toward a new duty at a
+                # fixed rate, so the UI can tell the user why the fans have not
+                # reacted yet instead of letting them think it failed.
+                "slew_pct_per_s": 1.66,
+            })
+
         if route == "/api/rgb/effects":
             return self._json(rgb.effect_params())
         if route == "/api/lpp":
@@ -395,6 +420,17 @@ def main() -> int:
         srv.serve_forever()
     except KeyboardInterrupt:
         print("\nstopped")
+    finally:
+        # A curve outliving the process that set it is the failure mode that
+        # could actually hurt someone: nothing would then be watching
+        # temperatures, and the EC would keep running whatever we last wrote.
+        # Firmware control is the safe resting state, and this is cheap.
+        try:
+            if fancurve.is_enabled(_hw.ec):
+                print("returning fans to firmware control")
+                fancurve.disable(_hw.ec)
+        except Exception:                                  # noqa: BLE001
+            pass
     return 0
 
 

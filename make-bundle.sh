@@ -43,6 +43,16 @@ done
 find "$OUT" -name '__pycache__' -type d -exec rm -rf {} + 2>/dev/null || true
 find "$OUT" -name '*.pyc' -delete 2>/dev/null || true
 
+# Verify before packaging. The manifest above is a hand-maintained list and two
+# of its loops use `[[ -e ]] && copy`, so an unlisted module or a renamed source
+# is skipped in silence -- which is exactly how hydroc/deps.py and hydroc/kmod.py
+# shipped missing and killed `doctor` on a tester's machine. Never tar a tree
+# that has not been checked.
+if ! python3 "$DIR/bundle_smoke.py" "$OUT"; then
+  printf '\nRefusing to package a broken bundle.\n' >&2
+  exit 1
+fi
+
 TAR="$OUT.tar.gz"
 tar -czf "$TAR" -C "$(dirname "$OUT")" "$(basename "$OUT")"
 printf '\nbundle: %s\n  size: %s\n files: %s\n' \

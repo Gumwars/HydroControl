@@ -142,6 +142,25 @@ def check_runs(bundle: str) -> None:
             ok(label, f"exit {r.returncode}, no traceback")
 
 
+def check_stamp(bundle: str) -> None:
+    """An unlabelled bundle makes a tester's report unattributable."""
+    import json
+    path = os.path.join(bundle, "build.json")
+    if not os.path.isfile(path):
+        fail("build stamp", "build.json missing -- the bundle is unidentifiable")
+        return
+    try:
+        with open(path, encoding="utf-8") as fh:
+            data = json.load(fh)
+    except (OSError, ValueError) as e:
+        fail("build stamp", f"build.json unreadable: {e}")
+        return
+    if not data.get("commit") or data["commit"] == "unknown":
+        fail("build stamp", "build.json names no commit")
+        return
+    ok("build stamp", data["commit"] + (" (dirty)" if data.get("dirty") else ""))
+
+
 def check_installer(bundle: str) -> None:
     sh = os.path.join(bundle, "install.sh")
     if not os.path.isfile(sh):
@@ -173,6 +192,7 @@ def main() -> int:
     print(f"smoke-testing {bundle}")
     check_imports(bundle)
     check_compiles(bundle)
+    check_stamp(bundle)
     check_installer(bundle)
     check_runs(bundle)
 

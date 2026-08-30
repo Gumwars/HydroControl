@@ -160,6 +160,22 @@ Only the safe subset ships in the tester bundle (`compat_probe.py`,
 arms a latch that needs a power cycle to undo, and that does not belong in a
 stranger's hands.
 
+**Optional matugen palette.** `matugen/hydrocontrol.css` is a template; matugen
+renders it to `~/.config/hydroc/palette.css` and `hydroc/desktop.py` injects it
+into the WebView, re-injecting when the file changes so a wallpaper switch lands
+without a restart. Absent, the built-in palette stands and nothing degrades.
+
+Three things worth knowing before touching it. It is **desktop-only on purpose**:
+the app runs as the user, so `$HOME` resolves correctly there — the daemon runs
+as root under systemd and must never read that path (§4.4). **Status colours are
+never generated** — `--color-warn`, `--color-danger`, `--color-info` stay fixed,
+because a wallpaper must not decide what "danger" looks like on a panel whose
+controls can overheat a machine. And **Material You's dark-mode roles run
+opposite to the app's naming**: `primary_container` is dark while
+`on_primary_container` is light, so mapping by name rather than by lightness
+inverts the ramp and renders every light accent tint nearly black. Map by
+lightness, and render the template before believing it.
+
 **Superseded — do not run:** `lb_output_probe.py`, `lb_effect_probe.py`,
 `lb_effect_sweep2.py`, `charge_mode_probe.sh`, `chinbar_test.py`.
 

@@ -7,7 +7,7 @@ small privileged daemon.
 
 > **Beta.** This writes to your laptop's embedded controller. Read
 > [Safety](#safety) before you start. It is validated on **one** machine model
-> and the installer refuses to run on anything else.
+> and the installer refuses to run on anything else, by design.
 
 ---
 
@@ -19,7 +19,7 @@ small privileged daemon.
 | **CPU power limits** | PL1 / PL2 / PL4, verified accurate to the watt |
 | **Performance presets** | Office · Balanced · Performance, cycled by the profile button |
 | **GPU cTGP offset** | watts on top of base TGP |
-| **Battery charging modes** | Stationary · Balanced · Long Haul, plus charge threshold |
+| **Battery charging modes** | Stationary · Balanced · Long Haul |
 | **Keyboard RGB** | 9 effects, per-key colour across all 101 keys, save to onboard flash |
 | **Chin bar** | static, breathing, wave, clash, catchup — colour and speed where the effect supports it, restored at boot |
 | **LPP cooling dock** | fan duty and pump mode over Bluetooth LE, re-applied on reconnect — verified |

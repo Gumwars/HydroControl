@@ -23,9 +23,12 @@ small privileged daemon.
 | **Keyboard RGB** | 9 effects, per-key colour across all 101 keys, save to onboard flash |
 | **Chin bar** | static, breathing, wave, clash, catchup — colour and speed where the effect supports it, restored at boot |
 | **LPP cooling dock** | fan duty and pump mode over Bluetooth LE, re-applied on reconnect — verified |
+| **Fan curves** | your own curve driven by the EC's own tables — CPU and GPU independently, with hysteresis |
 | **Platform toggles** | Fn lock, Super key, touchpad hotkey, AC auto-boot, USB powershare |
 
-**Not yet:** fan curves — the registers are identified but writes are unverified.
+**Not yet:** switching GPU mode from the app — the mechanism is understood (see
+below) but it is a firmware write and a reboot, so it is being approached
+carefully.
 
 The profile button beside the power key cycles the presets, but only when the
 BIOS has it set to performance modes rather than fan profiles. It works by
@@ -283,12 +286,56 @@ sudo python3 lb_set_color.py --test          # walk through colours interactivel
 
 ---
 
+## GPU mode — iGPU / dGPU / Dynamic
+
+Set this in the **BIOS**, not in software. Three modes:
+
+| Mode | What actually happens |
+|---|---|
+| **Dynamic** (default) | Both GPUs present. Panel on the Intel iGPU, the RTX renders and hands frames over. External outputs work. Best battery. |
+| **dGPU only** | Panel routed to the RTX. **The Intel GPU disappears from the PCI bus entirely** — no PRIME, no Intel VAAPI, and the RTX drives your desktop at idle. Best latency and performance, worst battery. |
+| **iGPU only** | RTX removed. **External displays stop working** — on this chassis they are wired to the discrete GPU. Longest battery life. |
+
+**This is a real hardware switch, not a software preference.** It is worth being
+clear about the difference, because it is easy to conflate: `envycontrol` and
+similar tools change which GPU the graphics stack *renders* on. They cannot move
+the display mux or remove a GPU from the bus, on this or any laptop. Selecting
+iGPU-only here genuinely powers down the discrete GPU, which is why the battery
+saving should be larger than any software-only approach — though nobody has yet
+put a number on it, and it would be worth measuring rather than assuming.
+
+**Where it lives.** The mode is a single byte, mirrored in two EFI variables, and
+the BIOS applies it at POST:
+
+| Mode | `UniWillVariable[0x62]` | `TpvSetup[0x01]` |
+|---|---|---|
+| iGPU only | `0x01` | `0x01` |
+| dGPU only | `0x02` | `0x02` |
+| Dynamic | `0x04` | `0x04` |
+
+There is no ACPI method and no runtime switch — a reboot is required however you
+set it, including from Windows, where Control Center writes these same variables
+and asks you to restart. See [DESIGN.md](DESIGN.md) §7.7 for how this was
+established (read-only, by diffing every EFI variable across the three modes).
+
+**A caution if you go looking.** Unlike everything else this project touches, EFI
+variables are **not** volatile. The "power cycle restores factory defaults" rule
+that makes EC experimentation safe does not apply to them. The BIOS menu is the
+supported way to change this.
+
+---
+
 ## Safety
 
 **EC settings are volatile.** Everything this writes lives in EC RAM and clears
 on a full power cycle. If you get the machine into a state you don't like,
 **shut down fully and boot again** — the EC returns to factory defaults. That is
 a genuinely good safety property and worth remembering.
+
+**The one exception is firmware variables.** GPU mode lives in EFI variables,
+which are non-volatile — a power cycle will not undo a change there. Nothing in
+this application writes them, and the BIOS menu is the supported way to change
+GPU mode.
 
 **The model guard is not decoration.** EC register layouts differ between
 chassis. The same address that sets a power limit here could mean something else

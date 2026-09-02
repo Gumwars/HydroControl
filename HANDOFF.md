@@ -400,7 +400,14 @@ external outputs are wired to the dGPU so **iGPU-only kills external displays**.
    bit 3 are both dead ends and are recorded as such in DESIGN.md §3.2.
 4. **LPP**: decode the `0x31` reply frame; probe the ASCII console (`?`, `help`)
    carefully — it drives a pump.
-5. **envycontrol integration** by detect-and-delegate, not vendoring.
+5. **GPU mode in the app**, if it is wanted: read the byte for status, write
+   both EFI variables to switch, reboot to apply. Only ever write the three
+   values the firmware itself produced (DESIGN.md §7.7) — never invent a fourth.
+   Note this is the one write in the project with no power-cycle backstop, so it
+   deserves to be a deliberate decision rather than something added because it
+   became possible. **envycontrol is not an alternative** and integrating it was
+   dropped: it changes which GPU the stack renders on, not hardware routing.
+
 6. **Rust port.** `hydrocd` + Tauri v2 reusing `ui/index.html` unchanged. Note
    Tauri on Linux uses webkit2gtk, so it carries the same 130 MB dependency the
    Python desktop app does. `Intent` and `Observed` as distinct types would have

@@ -293,7 +293,7 @@ Set this in the **BIOS**, not in software. Three modes:
 | Mode | What actually happens |
 |---|---|
 | **Dynamic** (default) | Both GPUs present. Panel on the Intel iGPU, the RTX renders and hands frames over. External outputs work. Best battery. |
-| **dGPU only** | Panel routed to the RTX. **The Intel GPU disappears from the PCI bus entirely** — no PRIME, no Intel VAAPI, and the RTX drives your desktop at idle. Best latency and performance, worst battery. |
+| **dGPU only** | Panel routed to the RTX. **The Intel GPU disappears from the PCI bus entirely** — no PRIME, no Intel VAAPI, and the RTX drives your desktop at idle. External displays still work. Best latency and performance, worst battery. |
 | **iGPU only** | RTX removed. **External displays stop working** — on this chassis they are wired to the discrete GPU. Longest battery life. |
 
 **This is a real hardware switch, not a software preference.** It is worth being

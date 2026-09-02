@@ -361,9 +361,15 @@ async function refreshState(){
   }
   const l=await api('/api/lpp');
   S.lpp=l||{running:false};
-  const f=await api('/api/fan');if(f)S.fan=Object.assign(S.fan||{},f,
-    {cpu:(S.fanDirty?S.fan.cpu:f.cpu)||f.presets.balanced.cpu,
-     gpu:(S.fanDirty?S.fan.gpu:f.gpu)||f.presets.balanced.gpu});
+  const gp=await api('/api/gpu');if(gp)S.gpu=gp;
+  // Defensive: this runs inside the shared state refresh, so anything that
+  // throws here blanks the WHOLE app, not just the fan page. A presets map
+  // without 'balanced' used to do exactly that.
+  const f=await api('/api/fan');
+  if(f){const fb=(f.presets&&f.presets.balanced)||{};
+    S.fan=Object.assign(S.fan||{},f,
+      {cpu:(S.fanDirty&&S.fan?S.fan.cpu:f.cpu)||fb.cpu||null,
+       gpu:(S.fanDirty&&S.fan?S.fan.gpu:f.gpu)||fb.gpu||null});}
   if(S.lppFan===null&&typeof S.lpp.fan==='number')S.lppFan=S.lpp.fan;
   if(S.section==='lpp'&&!S.lpp.present)S.section='overview';
   render();
@@ -549,6 +555,10 @@ function curveChart(fan){
 }
 function vFans(){
   if(!S.fan)return `<div class="card">reading fan state…</div>`;
+  if(S.state.fan_mode==='manual'&&!(S.fan.cpu&&S.fan.gpu))
+    return `<div class="card"><div class="kick">Fan control</div>
+      <div class="lbl">Manual mode is on but no curve could be read. Switch to Auto
+      and back, or re-apply a preset.</div></div>`;
   const manual=S.state.fan_mode==='manual',floor=S.fan.min_duty||25;
   return `
   <div class="card">
@@ -645,6 +655,62 @@ function bindFans(){
       try{svg.releasePointerCapture(ev.pointerId);}catch(_){}
       render();});
   });
+}
+
+// ── GPU mode ────────────────────────────────────────────────────────────────
+// Deliberately two-step. Everything else in this app writes volatile EC state
+// that a power cycle undoes; this writes non-volatile firmware, so it should not
+// be one stray click away. The mode shown is read from the firmware variables,
+// never from stored intent.
+function gpuCard(){
+  const g=S.gpu;
+  if(!g||!g.supported)return '';
+  if(!g.mode)return `<div class="card">
+    <div class="kick">Graphics mode</div>
+    <div class="lbl">${esc(g.error||'could not read the firmware variables')}</div></div>`;
+  const pend=S.gpuPending;
+  return `<div class="card">
+    <div class="row"><div class="kick">Graphics mode</div>
+      <span class="kv">${esc(g.label)}</span></div>
+    <div class="lbl">${esc(g.note)}</div>
+    ${g.reboot_pending?`<div class="lbl" style="color:var(--color-warn)">
+      A change has been written but not applied — reboot to take effect.</div>`:''}
+    <div class="seg" id="gpumode" style="align-self:flex-start;margin-top:var(--space-3)">
+      ${g.modes.map(m=>`<button data-v="${m.id}" aria-pressed="${g.mode===m.id}">${esc(m.label)}</button>`).join('')}</div>
+    ${S.gpuMsg?`<div class="lbl" style="margin-top:var(--space-2);color:${
+      S.gpuMsg.bad?'var(--color-danger)':'var(--color-accent)'}">${esc(S.gpuMsg.text)}</div>`:''}
+    ${pend?`<div class="card" style="margin-top:var(--space-3);border-color:var(--color-warn)">
+      <div class="kick">Change to ${esc((g.modes.find(m=>m.id===pend)||{}).label||pend)}?</div>
+      <div class="lbl">${esc((g.modes.find(m=>m.id===pend)||{}).note||'')}</div>
+      <div class="lbl">This writes your <b>firmware settings</b>, not the EC. Unlike
+        everything else here, a power cycle will not undo it — the BIOS menu can. It
+        takes effect at the <b>next reboot</b>, not now.</div>
+      <div style="margin-top:var(--space-3)">
+        <button class="btn" id="gpuconfirm">Write it</button>
+        <button class="btn" id="gpucancel" style="margin-left:8px">Cancel</button></div>
+    </div>`:''}
+  </div>`;
+}
+function bindGpu(){
+  const seg=$('#gpumode');
+  if(seg)seg.onclick=e=>{const b=e.target.closest('[data-v]');if(!b)return;
+    S.gpuMsg=null;
+    if(b.dataset.v===S.gpu.mode){S.gpuPending=null;render();return;}
+    S.gpuPending=b.dataset.v;render();};
+  const c=$('#gpucancel');if(c)c.onclick=()=>{S.gpuPending=null;S.gpuMsg=null;render();};
+  const ok=$('#gpuconfirm');
+  if(ok)ok.onclick=async()=>{
+    S.gpuMsg={text:'writing firmware…'};render();
+    const d=await api('/api/gpu/set',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({mode:S.gpuPending,confirm:true})});
+    if(d&&d.ok){
+      S.gpuPending=null;
+      S.gpuMsg={text:d.message||'written — reboot to apply'};
+      const g=await api('/api/gpu');if(g)S.gpu=g;
+    }else{
+      S.gpuMsg={text:'failed: '+((d&&d.error)||'no response'),bad:true};
+    }
+    render();};
 }
 function chargeName(id){const c=CHARGE.find(c=>c.id===id);return c?c.name:(id||'—');}
 
@@ -853,6 +919,7 @@ function vSys(){
       <div class="lbl kv" style="font-size:10.5px">${t.path}</div></div>
       <button class="sw" data-toggle="${t.id}" aria-pressed="${!!S.state[t.id]}"><i></i></button></div>`).join('')}
   </div>
+  ${gpuCard()}
   <div class="card" style="margin-top:var(--space-4)">
     <div class="kick">Power behaviour when off</div>
     <div class="lbl">The driver rejects both being enabled, so this is one choice, not two switches.</div>
@@ -1095,6 +1162,7 @@ function bind(){
         speed:toWireSpeed(S.chin.speed)})});
     msg('#chinmsg',d&&d.ok?`chin bar → ${S.chin.mode}`:'failed: '+((d&&d.error)||'no response'),!(d&&d.ok));};
   bindFans();
+  bindGpu();
 }
 window.addEventListener('keydown',e=>{
   if(S.section!=='light'||S.kbTab!=='perkey')return;

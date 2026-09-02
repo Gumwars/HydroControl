@@ -54,7 +54,7 @@ On CachyOS / Arch:
 
 ```bash
 paru -S base-devel acpi_call-dkms python pipx linux-cachyos-headers
-pipx install ite8291r3-ctl
+sudo pipx install ite8291r3-ctl
 ```
 
 ---

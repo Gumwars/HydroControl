@@ -25,7 +25,7 @@ import os
 import time
 from dataclasses import dataclass, field
 
-from . import fancurve
+from . import fancurve, gpumode
 from .ec import EC, ECUnavailable, ECWriteRejected
 
 PLATFORM = "/sys/bus/platform/devices/INOU0000:00"
@@ -213,6 +213,14 @@ class Hardware:
 
         v = _read(os.path.join(PLATFORM, "ctgp_offset"))
         state["gpu_ctgp_offset"] = int(v) if v else None
+
+        # Firmware GPU mode. Read from the EFI variables rather than stored
+        # intent -- and separately from the live PCI topology, so "written but
+        # not yet rebooted" is visible instead of looking like a failure.
+        gm = gpumode.status()
+        state["gpu_mode"] = gm.get("mode")
+        state["gpu_mode_supported"] = gm.get("supported", False)
+        state["gpu_reboot_pending"] = gm.get("reboot_pending", False)
 
         ec_ok, _ = EC.available()
         if ec_ok:

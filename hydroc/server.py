@@ -28,7 +28,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from .cli import (PROFILE_PATHS, REPAIR_MODPROBE, REPAIR_MODULE, REPAIR_RELOAD,
                   diagnose, load_profile, save_profile)
 from .hardware import Hardware
-from . import fancurve, presets, rgb
+from . import fancurve, gpumode, presets, rgb
 from .hotkeys import ProfileButton
 
 # The LPP dock lives behind a sidecar daemon (hydroc.lppd) because BLE is async
@@ -190,6 +190,9 @@ class Handler(BaseHTTPRequestHandler):
             return self._json({"presets": presets.describe(),
                                "active": presets.match(state),
                                "button": _button.status()})
+        if route == "/api/gpu":
+            return self._json(gpumode.status())
+
         if route == "/api/fan":
             state = _hw.read_state()
             return self._json({
@@ -226,6 +229,20 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         route = self.path.split("?")[0]
         payload = self._body()
+
+        if route == "/api/gpu/set":
+            # Not folded into /api/apply on purpose. Everything that route
+            # touches is volatile EC state a power cycle undoes; this writes
+            # non-volatile firmware. It gets its own endpoint and its own
+            # explicit confirm so it cannot be reached by a stray settings dict.
+            payload = self._body()
+            try:
+                return self._json(gpumode.set_mode(payload.get("mode", ""),
+                                                   confirm=bool(payload.get("confirm"))))
+            except gpumode.GpuModeError as e:
+                return self._json({"ok": False, "error": str(e)}, 400)
+            except OSError as e:
+                return self._json({"ok": False, "error": f"firmware write failed: {e}"}, 500)
 
         if route == "/api/apply":
             desired = payload.get("settings")

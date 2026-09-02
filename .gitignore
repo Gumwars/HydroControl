@@ -45,3 +45,8 @@ kbctrl/rgb_sanitycheck.sh
 
 # Editor/manual backups — git makes these redundant
 *.bak
+
+# Per-run firmware backups written by gpu_mode.py before a mode change.
+# Local safety artifacts, not project evidence -- one per switch, and they go
+# stale. The mux-*.json captures that document the encoding ARE committed.
+gpu-mode-backup-*.json

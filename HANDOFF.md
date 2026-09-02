@@ -352,10 +352,34 @@ interface and GNOME and TLP were reading it too. See DESIGN.md §3.2.
 Discriminator: cell voltage at cutoff (~3.6 V/cell = real reserve; ~3.0–3.2 =
 gauge reads high). `battery_watch.py` flushes per sample.
 
-**GPU MUX.** `card2-eDP-2` exists on the NVIDIA card (panel is wireable to the
-dGPU) and Control Center has `DgpuOnly`, so a MUX exists. envycontrol cannot
-flip it — that's a driver-level tool, not a mux switch. Check the BIOS first;
-a wrong MUX write leaves no display, making it the highest-stakes write here.
+**GPU MUX — answered. One byte, two EFI variables, no ACPI path.**
+
+| Mode | `UniWillVariable[0x62]` | `TpvSetup[0x01]` |
+|---|---|---|
+| iGPU only | `0x01` | `0x01` |
+| dGPU only | `0x02` | `0x02` |
+| Dynamic / Hybrid | `0x04` | `0x04` |
+
+Found read-only: capture every EFI variable in each BIOS mode and diff
+(`efivar_capture.py`, captures committed). Exactly one byte varies in each
+variable across all three modes, and `UniWillVariable`'s trailing `0x55` is
+unchanged throughout — **no checksum**. The two mirror each other, so writing one
+alone desyncs firmware state.
+
+No `MXDS`/`MXMX`/`GMUX`/`NVOP` in the DSDT and no NVIDIA `_DSM` GUIDs, so there
+is no runtime switch and this is not Advanced Optimus. Windows writes the same
+variables and reboots — that is what Control Center's `GPUmodeSetWarning` is.
+**Any implementation still needs a reboot.**
+
+**envycontrol was never the tool** — it configures which GPU the stack renders
+on, not hardware routing. Its failure was never evidence about this machine.
+
+**The EC's volatility backstop does not apply here.** A power cycle restores EC
+defaults; EFI variables are non-volatile. Only ever write values the firmware
+itself produced — all three are recorded above — and never invent a fourth.
+
+Also: in dGPU-only the **Intel GPU leaves the PCI bus entirely**, and the
+external outputs are wired to the dGPU so **iGPU-only kills external displays**.
 
 ---
 

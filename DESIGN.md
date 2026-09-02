@@ -910,9 +910,52 @@ which is another argument for keeping EC access daemon-side.
    the init frame `FE 1E 01 00 B8 FF 00 EF`, where `00 B8 FF` reads like an RGB triple
    and `0x1E` is documented here as "purpose unknown".
 
-7. **GPU MUX.** `card2-eDP-2` exists on the NVIDIA card and Control Center has `DgpuOnly`,
-   so a MUX exists; envycontrol cannot flip it. Check the BIOS first. A wrong MUX write
-   leaves no display, which makes it the highest-stakes write in the project.
+7. **Answered: the GPU mode is one byte in two EFI variables, and there is no
+   ACPI mux at all.** Established read-only by capturing every EFI variable in
+   each of the three BIOS modes and diffing (`efivar_capture.py`; captures
+   committed as `mux-{hybrid,dgpu,igpu}.json`):
+
+   | Mode | `UniWillVariable[0x62]` | `TpvSetup[0x01]` |
+   |---|---|---|
+   | iGPU only | `0x01` | `0x01` |
+   | dGPU only | `0x02` | `0x02` |
+   | Dynamic / Hybrid | `0x04` | `0x04` |
+
+   Across all three captures **exactly one byte varies in each variable** and the
+   values are powers of two. The trailing `0x55` of the 180-byte
+   `UniWillVariable` blob is identical in all three, so **there is no checksum**
+   over it — which was the specific thing that would have made a byte-level
+   write dangerous.
+
+   The two variables mirror each other; a write that set only one would leave
+   firmware state inconsistent. `UniWillVariable` carries `PROJECT_ID` `0x19` at
+   offset `0x0A`, confirming it is the Uniwill chassis config block.
+
+   **There is no runtime path.** No `MXDS`/`MXMX`/`GMUX`/`NVOP` method anywhere
+   in the DSDT, and **zero** NVIDIA `_DSM` GUIDs (`NBCI`, Optimus), so this is
+   not Advanced Optimus either. `\_SB.AMW0.OEMG`'s only spare GPU slot
+   (`SAC1=0x0300`, `SA00=3`) returns a hardcoded `0xFF`. Windows' Control Center
+   must be writing these same variables and prompting a restart — which is
+   exactly what its `GPUmodeSetWarning` string is for. The BIOS applies the byte
+   at POST, so **a reboot is required in any implementation**; nothing here
+   enables dynamic switching.
+
+   **This retires "the highest-stakes write in the project".** There is no MUX
+   write to get wrong. What remains is an EFI variable write, whose risk profile
+   is different from everything else here: EC RAM is volatile and a power cycle
+   restores factory defaults, but **EFI variables are not**, so that backstop
+   does not apply. Mitigating facts: no checksum, the BIOS can always set the
+   mode back, and we now hold all three values *as the firmware itself wrote
+   them* — so an implementation need never invent a value.
+
+   **envycontrol was never the tool.** It configures which GPU the graphics
+   stack renders on; it cannot drive hardware routing on any laptop. Its failure
+   here was never evidence about this machine.
+
+   Two consequences worth knowing. In **dGPU-only the Intel GPU disappears from
+   the PCI bus entirely** (`00:02.0` is gone) — no PRIME, no Intel VAAPI, and the
+   dGPU drives the panel at idle. And on this chassis the external outputs are
+   wired to the dGPU, so **iGPU-only kills external displays**.
 
 8. **`0x0730` = 75** — a second copy of the PL1 value. Purpose unknown.
 

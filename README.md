@@ -24,11 +24,13 @@ small privileged daemon.
 | **Chin bar** | static, breathing, wave, clash, catchup — colour and speed where the effect supports it, restored at boot |
 | **LPP cooling dock** | fan duty and pump mode over Bluetooth LE, re-applied on reconnect — verified |
 | **Fan curves** | your own curve driven by the EC's own tables — CPU and GPU independently, with hysteresis |
+| **Graphics mode** | Dynamic · dGPU only · iGPU only — a real firmware switch, applied at the next reboot |
 | **Platform toggles** | Fn lock, Super key, touchpad hotkey, AC auto-boot, USB powershare |
 
-**Not yet:** switching GPU mode from the app — the mechanism is understood (see
-below) but it is a firmware write and a reboot, so it is being approached
-carefully.
+**Not yet:** battery calibration, display refresh-rate switching and the cooling
+dock's auto mode, all of which the Windows app has. Also not yet: switching to
+iGPU-only *without* a reboot — the firmware path always needs one, but there is
+an ACPI method that ejects the dGPU at runtime that nothing here uses.
 
 The profile button beside the power key cycles the presets, but only when the
 BIOS has it set to performance modes rather than fan profiles. It works by
@@ -288,7 +290,17 @@ sudo python3 lb_set_color.py --test          # walk through colours interactivel
 
 ## GPU mode — iGPU / dGPU / Dynamic
 
-Set this in the **BIOS**, not in software. Three modes:
+Set this from **System → Graphics mode** in the app, or in the BIOS. Both write
+the same two firmware variables, and either way the BIOS applies the change at
+the next boot — **a reboot is always required**. There is a command-line
+equivalent too:
+
+```bash
+sudo python3 gpu_mode.py              # show the current mode
+sudo python3 gpu_mode.py --set dynamic
+```
+
+Three modes:
 
 | Mode | What actually happens |
 |---|---|
@@ -318,10 +330,20 @@ set it, including from Windows, where Control Center writes these same variables
 and asks you to restart. See [DESIGN.md](DESIGN.md) §7.7 for how this was
 established (read-only, by diffing every EFI variable across the three modes).
 
-**A caution if you go looking.** Unlike everything else this project touches, EFI
-variables are **not** volatile. The "power cycle restores factory defaults" rule
-that makes EC experimentation safe does not apply to them. The BIOS menu is the
-supported way to change this.
+**This is a firmware setting, and that makes it different.** Everything else this
+application touches lives in volatile EC RAM, where a full power cycle restores
+factory defaults. EFI variables are not volatile: a power cycle will not undo a
+GPU mode change. Changing it back — from the app or from the BIOS — will.
+
+It is not, however, a hack. The Windows Control Center writes these same two
+variables from userspace and then asks you to restart; that is what its
+"restart required" warning is. Doing it from Linux is the same mechanism, not a
+workaround for a missing one.
+
+The app only ever writes the three values the firmware itself produced, refuses
+to act if the two variables disagree or hold anything it does not recognise, and
+backs both up before writing. It asks for confirmation because the change
+outlives a power cycle, not because it is unsafe.
 
 ---
 
@@ -332,10 +354,11 @@ on a full power cycle. If you get the machine into a state you don't like,
 **shut down fully and boot again** — the EC returns to factory defaults. That is
 a genuinely good safety property and worth remembering.
 
-**The one exception is firmware variables.** GPU mode lives in EFI variables,
-which are non-volatile — a power cycle will not undo a change there. Nothing in
-this application writes them, and the BIOS menu is the supported way to change
-GPU mode.
+**The one exception is graphics mode.** It lives in EFI variables, which are
+non-volatile — a power cycle will not undo a change there, unlike everything
+else here. The app can write it, behind a confirmation, using only values the
+firmware itself produced; changing it back from the app or the BIOS is what
+undoes it.
 
 **The model guard is not decoration.** EC register layouts differ between
 chassis. The same address that sets a power limit here could mean something else

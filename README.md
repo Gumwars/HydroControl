@@ -308,6 +308,14 @@ Three modes:
 | **dGPU only** | Panel routed to the RTX. **The Intel GPU disappears from the PCI bus entirely** — no PRIME, no Intel VAAPI, and the RTX drives your desktop at idle. External displays still work. Best latency and performance, worst battery. |
 | **iGPU only** | RTX removed. **External displays stop working** — on this chassis they are wired to the discrete GPU. Longest battery life. |
 
+**One side effect worth knowing about before you pick dGPU only.** With the
+iGPU off the bus, NVIDIA is the only GPU anything can render on, and WebKitGTK's
+frame sharing is unreliable there — application windows built on it, this one
+included, can dissolve into horizontal streaks after a few minutes and need
+reopening. HydroControl detects that case and works around it for its own
+window, so you should not see it here; other GTK/WebKit apps on your desktop
+may still be affected.
+
 **This is a real hardware switch, not a software preference.** It is worth being
 clear about the difference, because it is easy to conflate: `envycontrol` and
 similar tools change which GPU the graphics stack *renders* on. They cannot move

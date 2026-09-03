@@ -198,6 +198,21 @@ as reference; derive our own values.
 
 ## Traps
 
+**dGPU-only mode garbles our own window — `hydroc/desktop.py`,
+`webkit_env()`.** WebKitGTK hands frames between its processes as DMA-BUFs, and
+that sharing is broken on NVIDIA: the window renders correctly, then minutes
+later becomes horizontal streaks of stale video memory with visible vertical
+seams, frozen, until it is closed and reopened. In Dynamic mode the Intel iGPU
+does this work and it never appears. Selecting **dGPU only** removes the iGPU
+from the PCI bus, leaving `renderD128` on `nvidia` as the only render node — so
+a setting we ship breaks the app that ships it. The window now sets
+`WEBKIT_DISABLE_DMABUF_RENDERER=1` for itself when NVIDIA is the only render
+node, and leaves hybrid machines on the fast path. Diagnose it with
+`udevadm info --query=property --name=/dev/dri/renderD128 | grep ID_PATH` and
+`grep DRIVER /sys/class/drm/renderD128/device/uevent`. Note the shape of the
+corruption before blaming the page: streaks with seams are a buffer-sharing
+artifact, not anything the UI drew.
+
 **The driver's DMI table is not the whole story.** `install.sh` refuses to run
 off a HYDROC-16, deliberately. `compat_probe.py` gathers evidence about a
 sibling chassis read-only; a good result justifies adding a board to the

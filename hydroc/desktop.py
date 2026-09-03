@@ -22,13 +22,89 @@ desktop dialog rather than a terminal.
 
 from __future__ import annotations
 
+import glob
 import os
 import shutil
 import socket
 import subprocess
 import sys
 
-import gi
+# -- WebKit on an NVIDIA-only machine ------------------------------------
+#
+# This has to run before WebKit spawns its web process, which is why it sits
+# above the gi import rather than in Window.__init__ where it would read more
+# naturally.
+#
+# WebKitGTK shares rendered frames between its web process and the UI process
+# as DMA-BUFs. On NVIDIA that buffer sharing goes wrong: the window comes up
+# correct and then, minutes later, turns into horizontal streaks of stale
+# video memory with visible vertical seams -- content read back with the wrong
+# stride, then frozen, because no new frame ever lands. Closing and reopening
+# clears it until it happens again.
+#
+# It matters to *this* project specifically, because our own Graphics mode
+# switch causes it. In Dynamic mode the Intel iGPU is present and does this
+# work correctly. Selecting dGPU only removes the iGPU from the PCI bus
+# entirely (README, "GPU mode"), leaving NVIDIA as the only render node -- so
+# the app we ship breaks its own window as a consequence of a setting we ship.
+# Falling back to shared memory costs a little CPU on a 1 Hz dashboard and
+# nothing that anyone will see.
+
+
+def render_nodes() -> list[tuple[str, str]]:
+    """Every DRM render node and the kernel driver behind it.
+
+    Render nodes rather than card nodes: a render node is exactly what a
+    client like WebKit opens to draw with, so this is the set it can choose
+    from. Unreadable entries are skipped rather than raised -- a diagnosis
+    this window makes about itself must never be the reason it fails to open.
+    """
+    found = []
+    for node in sorted(glob.glob("/dev/dri/renderD*")):
+        name = os.path.basename(node)
+        try:
+            with open(f"/sys/class/drm/{name}/device/uevent", encoding="utf-8") as fh:
+                for line in fh:
+                    if line.startswith("DRIVER="):
+                        found.append((name, line.strip().split("=", 1)[1]))
+                        break
+        except OSError:
+            continue
+    return found
+
+
+def webkit_env(nodes: list[tuple[str, str]], environ: dict) -> dict:
+    """What to add to the environment before WebKit starts. Pure.
+
+    Narrow on purpose. The workaround is applied only when NVIDIA is the sole
+    thing available to render on, because that is the case we have actually
+    seen fail and the case our own dGPU-only mode creates. A hybrid machine
+    keeps the fast path.
+
+    Anything the user set themselves is left alone -- setting
+    WEBKIT_DISABLE_DMABUF_RENDERER in the environment is the override, in
+    either direction, and needs no flag of ours.
+    """
+    if "WEBKIT_DISABLE_DMABUF_RENDERER" in environ:
+        return {}
+    if not nodes or any(driver != "nvidia" for _name, driver in nodes):
+        return {}
+    return {"WEBKIT_DISABLE_DMABUF_RENDERER": "1"}
+
+
+def apply_webkit_env() -> dict:
+    """Apply webkit_env() to this process. Returns what it changed."""
+    try:
+        env = webkit_env(render_nodes(), os.environ)
+    except Exception:                                # noqa: BLE001
+        return {}
+    os.environ.update(env)
+    return env
+
+
+WEBKIT_WORKAROUND = apply_webkit_env()
+
+import gi                                            # noqa: E402
 
 gi.require_version("Gtk", "4.0")
 gi.require_version("WebKit", "6.0")

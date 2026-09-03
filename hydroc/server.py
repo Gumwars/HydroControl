@@ -235,7 +235,10 @@ class Handler(BaseHTTPRequestHandler):
             # touches is volatile EC state a power cycle undoes; this writes
             # non-volatile firmware. It gets its own endpoint and its own
             # explicit confirm so it cannot be reached by a stray settings dict.
-            payload = self._body()
+            # Note: `payload` is already read above. Reading the body a second
+            # time here blocks forever -- the client has sent exactly
+            # Content-Length bytes and is waiting on us, so rfile.read() never
+            # returns and the request hangs with no reply and no write.
             try:
                 return self._json(gpumode.set_mode(payload.get("mode", ""),
                                                    confirm=bool(payload.get("confirm"))))

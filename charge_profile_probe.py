@@ -63,6 +63,20 @@ PROFILE_MASK = 0x30
 PROFILE_SHIFT = 4
 REG_CHARGE_CTRL = 0x07B9        # recorded only, never written here
 
+# 0x07C6 is sampled read-only, and it may matter more than 0x07B9 does.
+# It is the same byte that holds ENABLE_UNIVERSAL_FAN_CTRL -- the switch that
+# turned a feature we had written off as absent into a working one -- and two
+# bits away it carries a battery status bit and a "full for 24 hours" flag that
+# nothing in the driver reads or writes. Together with the WMI event
+# UNIWILL_OSD_BAT_ERM_UPDATE (0xBF), which the keymap explicitly ignores, that
+# is the shape of a battery-care subsystem which is NOT the 0x07B9 threshold.
+# If the real mechanism lives here, a full charge cycle is when it would show.
+# The whole byte is logged, not just the two known bits: reading the
+# neighbourhood is what caught 0x0984 being unmapped rather than confirming.
+REG_AP_OEM_6 = 0x07C6
+BATTERY_CHARGE_FULL_OVER_24H = 1 << 3
+BATTERY_ERM_STATUS_REACHED = 1 << 4
+
 # Encodings straight out of uniwill-acpi.c. Ordered low-to-high on purpose:
 # the whole design depends on raising the profile, never lowering it.
 PROFILES = [
@@ -165,6 +179,7 @@ def cell_count() -> int:
 
 def sample(cells: int) -> dict:
     raw = ec_read(REG_CHARGE_CTRL)
+    oem6 = ec_read(REG_AP_OEM_6)
     v_uv = sysfs_int("voltage_now")
     i_ua = sysfs_int("current_now")
     return {
@@ -180,14 +195,21 @@ def sample(cells: int) -> dict:
         "profile": read_profile(),
         "threshold": None if raw is None else raw & 0x7F,
         "reached": None if raw is None else int(bool(raw & 0x80)),
+        "oem6": None if oem6 is None else f"0x{oem6:02X}",
+        "erm_reached": None if oem6 is None else int(bool(oem6 & BATTERY_ERM_STATUS_REACHED)),
+        "full_24h": None if oem6 is None else int(bool(oem6 & BATTERY_CHARGE_FULL_OVER_24H)),
     }
 
 
 class Log:
     COLS = ["t", "phase", "ac", "status", "capacity", "charge_now", "charge_full",
-            "current_ma", "voltage_uv", "v_per_cell", "profile", "threshold", "reached"]
+            "current_ma", "voltage_uv", "v_per_cell", "profile", "threshold",
+            "reached", "oem6", "erm_reached", "full_24h"]
 
     def __init__(self, path):
+        self.oem6_seen: dict[str, int] = {}
+        self.erm_events: list[dict] = []
+        self.full24_events: list[dict] = []
         fresh = not path or not os.path.exists(path) or os.path.getsize(path) == 0
         self.fh = open(path, "a") if path else None
         if self.fh and fresh:
@@ -195,6 +217,7 @@ class Log:
             self.fh.flush()
 
     def write(self, s: dict, phase: str) -> None:
+        self.note(s, phase)
         if not self.fh:
             return
         row = dict(s, phase=phase)
@@ -203,10 +226,30 @@ class Log:
         self.fh.flush()          # hours unattended; never buffer the evidence
 
 
+    def note(self, s: dict, phase: str) -> None:
+        """Record what 0x07C6 did, whether or not a CSV is being written.
+
+        Kept as first-occurrence events rather than a count: the question is
+        whether these bits EVER arm, and one armed sample is the finding.
+        """
+        raw = s.get("oem6")
+        if raw is None:
+            return
+        self.oem6_seen[raw] = self.oem6_seen.get(raw, 0) + 1
+        for bit, store in (("erm_reached", self.erm_events),
+                           ("full_24h", self.full24_events)):
+            if s.get(bit) and not store:
+                store.append({"t": s["t"], "phase": phase, "oem6": raw,
+                              "capacity": s.get("capacity")})
+
+
 def show(s: dict, phase: str) -> None:
     print(f"{s['t'][11:]}  {phase:<14} {str(s['status'] or '?'):<12} "
           f"cap={str(s['capacity']):>3}%  {str(s['current_ma']):>6} mA  "
-          f"{s['v_per_cell']} V/cell  prof={BY_VALUE.get(s['profile'], s['profile'])}",
+          f"{s['v_per_cell']} V/cell  prof={BY_VALUE.get(s['profile'], s['profile'])}"
+          f"  oem6={s.get('oem6') or '--'}"
+          f"{'  << ERM ARMED' if s.get('erm_reached') else ''}"
+          f"{'  << FULL 24H' if s.get('full_24h') else ''}",
           flush=True)
 
 
@@ -433,6 +476,15 @@ def main() -> int:
         "charge_full_design": sysfs_int("charge_full_design"),
         "order": order,
         "results": results,
+        # Reported independently of the voltage verdict. This is a separate
+        # question that happens to share a charge cycle, and it stands on its
+        # own whichever way the profiles turn out.
+        "oem6": {
+            "register": "0x07C6",
+            "values_seen": log.oem6_seen,
+            "erm_first_armed": log.erm_events[0] if log.erm_events else None,
+            "full_24h_first_set": log.full24_events[0] if log.full24_events else None,
+        },
         "verdict": verdict(results, args),
     }
     path = args.json or (os.path.splitext(args.output)[0] + ".json")
@@ -440,7 +492,21 @@ def main() -> int:
         json.dump(summary, fh, indent=2)
 
     v = summary["verdict"]
-    print(f"\n{'='*64}\n{v['conclusion'].upper()}\n  {v['detail']}\n{'='*64}")
+    print(f"\n{'='*64}\n{v['conclusion'].upper()}\n  {v['detail']}")
+    if v.get("caveat"):
+        print(f"  caveat: {v['caveat']}")
+
+    o = summary["oem6"]
+    print(f"\n0x07C6 over the run: {', '.join(f'{k} x{n}' for k, n in o['values_seen'].items()) or 'never read'}")
+    if o["erm_first_armed"]:
+        e = o["erm_first_armed"]
+        print(f"  ERM STATUS ARMED at {e['t']} ({e['phase']}, {e['capacity']}%, {e['oem6']})"
+              f" -- follow this, it is a live battery mechanism the driver ignores")
+    else:
+        print("  ERM status never armed")
+    if o["full_24h_first_set"]:
+        print(f"  full-for-24h set at {o['full_24h_first_set']['t']}")
+    print(f"{'='*64}")
     print(f"samples: {args.output}\nsummary: {path}")
     return 0
 

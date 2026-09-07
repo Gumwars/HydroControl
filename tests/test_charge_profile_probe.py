@@ -139,5 +139,85 @@ class VerdictTest(unittest.TestCase):
         self.assertEqual(self.m.verdict(r, Args())["conclusion"], "inconclusive")
 
 
+
+class Oem6SamplingTest(unittest.TestCase):
+    """0x07C6 is sampled read-only, and may be the mechanism that matters."""
+
+    def setUp(self):
+        self.m = load()
+
+    def read(self, oem6):
+        """ec_read keyed by address, so the call order cannot silently change
+        what the test is asserting."""
+        def _r(addr):
+            return {self.m.REG_CHARGE_CTRL: 0x50,
+                    self.m.REG_OEM_4: 0x20,
+                    self.m.REG_AP_OEM_6: oem6}[addr]
+        return mock.patch.object(self.m, "ec_read", side_effect=_r)
+
+    def sample_with(self, oem6):
+        with self.read(oem6), \
+             mock.patch.object(self.m, "sysfs_int", return_value=1000), \
+             mock.patch.object(self.m, "sysfs_str", return_value="Full"), \
+             mock.patch.object(self.m, "on_ac", return_value=True):
+            return self.m.sample(4)
+
+    def test_decodes_erm_and_24h_bits(self):
+        s = self.sample_with(0x14)                 # bit 4 ERM + bit 2
+        self.assertEqual(s["oem6"], "0x14")
+        self.assertEqual(s["erm_reached"], 1)
+        self.assertEqual(s["full_24h"], 0)
+
+    def test_decodes_full_24h(self):
+        s = self.sample_with(0x08)
+        self.assertEqual(s["full_24h"], 1)
+        self.assertEqual(s["erm_reached"], 0)
+
+    def test_clear_byte_is_zero_not_none(self):
+        """Unreadable and 'read as clear' must never look the same."""
+        s = self.sample_with(0x00)
+        self.assertEqual(s["erm_reached"], 0)
+        self.assertIsNotNone(s["oem6"])
+
+    def test_unreadable_stays_none(self):
+        def _r(addr):
+            return None if addr == self.m.REG_AP_OEM_6 else 0x00
+        with mock.patch.object(self.m, "ec_read", side_effect=_r), \
+             mock.patch.object(self.m, "sysfs_int", return_value=1), \
+             mock.patch.object(self.m, "sysfs_str", return_value="Full"), \
+             mock.patch.object(self.m, "on_ac", return_value=True):
+            s = self.m.sample(4)
+        self.assertIsNone(s["oem6"])
+        self.assertIsNone(s["erm_reached"])
+
+
+class Oem6TrackingTest(unittest.TestCase):
+
+    def setUp(self):
+        self.m = load()
+        self.log = self.m.Log(None)               # no file; tracking must still run
+
+    def note(self, oem6, erm=0, full=0, t="12:00:00", cap=100):
+        self.log.write({"t": t, "oem6": oem6, "erm_reached": erm,
+                        "full_24h": full, "capacity": cap}, "stationary")
+
+    def test_counts_every_value_seen(self):
+        self.note("0x04"); self.note("0x04"); self.note("0x14", erm=1)
+        self.assertEqual(self.log.oem6_seen, {"0x04": 2, "0x14": 1})
+
+    def test_records_only_the_first_arming(self):
+        self.note("0x14", erm=1, t="12:00:01")
+        self.note("0x14", erm=1, t="12:00:02")
+        self.assertEqual(len(self.log.erm_events), 1)
+        self.assertEqual(self.log.erm_events[0]["t"], "12:00:01")
+
+    def test_never_arming_leaves_no_event(self):
+        self.note("0x04"); self.note("0x04")
+        self.assertEqual(self.log.erm_events, [])
+
+    def test_unreadable_samples_are_not_counted(self):
+        self.log.write({"t": "12:00:00", "oem6": None}, "stationary")
+        self.assertEqual(self.log.oem6_seen, {})
+
 if __name__ == "__main__":
     unittest.main()

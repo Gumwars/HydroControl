@@ -219,5 +219,29 @@ class Oem6TrackingTest(unittest.TestCase):
         self.log.write({"t": "12:00:00", "oem6": None}, "stationary")
         self.assertEqual(self.log.oem6_seen, {})
 
+class DriftTest(unittest.TestCase):
+    """The daemon re-applies its stored charging profile; the probe must not
+    credit one profile's resting voltage to another."""
+
+    def setUp(self):
+        self.m = load()
+
+    def test_matching_profile_is_not_drift(self):
+        self.assertFalse(self.m.drifted({"profile": 2}, 2))
+
+    def test_different_profile_is_drift(self):
+        self.assertTrue(self.m.drifted({"profile": 0}, 2))
+
+    def test_unreadable_profile_is_not_treated_as_drift(self):
+        """A failed EC read must not restart the quiet window forever."""
+        self.assertFalse(self.m.drifted({"profile": None}, 2))
+        self.assertFalse(self.m.drifted({}, 2))
+
+    def test_high_capacity_is_zero_not_falsy(self):
+        """high_capacity is 0x00 -- a truthiness check here would miss it."""
+        self.assertTrue(self.m.drifted({"profile": 0}, 1))
+        self.assertFalse(self.m.drifted({"profile": 0}, 0))
+
+
 if __name__ == "__main__":
     unittest.main()

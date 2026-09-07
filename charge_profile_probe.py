@@ -253,6 +253,19 @@ def show(s: dict, phase: str) -> None:
           flush=True)
 
 
+def drifted(s: dict, expect: int) -> bool:
+    """Did something else change the profile under us?
+
+    The daemon stores a charging profile and re-applies it on any /api/apply,
+    so one click in the app during a multi-hour run would swap the profile
+    mid-leg. Every sample records the profile, but a settled reading is only
+    meaningful if the profile held for the whole quiet window -- otherwise we
+    would attribute one profile's resting voltage to another.
+    """
+    p = s.get("profile")
+    return p is not None and p != expect
+
+
 def wait_for_ac(log, cells, args) -> None:
     if on_ac():
         return
@@ -264,7 +277,7 @@ def wait_for_ac(log, cells, args) -> None:
         time.sleep(args.idle_interval)
 
 
-def settle(log, cells, args, phase: str) -> dict | None:
+def settle(log, cells, args, phase: str, expect: int) -> dict | None:
     """Wait until the pack is full and the current has genuinely stopped.
 
     'Genuinely' is the whole point. A momentary dip below the threshold is not
@@ -285,6 +298,15 @@ def settle(log, cells, args, phase: str) -> dict | None:
                   flush=True)
             quiet, quiet_since = [], None
             time.sleep(args.idle_interval)
+            continue
+
+        if drifted(s, expect):
+            print(f"  ! profile changed under us ({BY_VALUE.get(s['profile'])}) "
+                  f"-- re-asserting {BY_VALUE.get(expect)} and starting the "
+                  f"quiet window again", flush=True)
+            set_profile(expect)
+            quiet, quiet_since = [], None
+            time.sleep(args.interval)
             continue
 
         cur = s["current_ma"]
@@ -317,7 +339,7 @@ def settle(log, cells, args, phase: str) -> dict | None:
     return None
 
 
-def watch_resume(log, cells, args, phase: str) -> bool:
+def watch_resume(log, cells, args, phase: str, expect: int) -> bool:
     """After raising the profile: does the charger start again?
 
     This is the measurement. If the previous profile terminated lower, the pack
@@ -329,6 +351,11 @@ def watch_resume(log, cells, args, phase: str) -> bool:
         s = sample(cells)
         log.write(s, phase)
         show(s, phase)
+        if drifted(s, expect):
+            print(f"  ! profile changed under us -- re-asserting", flush=True)
+            set_profile(expect)
+            time.sleep(args.interval)
+            continue
         cur = s["current_ma"]
         if cur is not None and cur > args.resume_ma:
             print(f"  -> RESUMED at {cur} mA. The previous profile was "
@@ -456,8 +483,9 @@ def main() -> int:
             # The first profile has nothing to resume from; every later one is
             # a raise, and that is the actual experiment.
             if i > 0:
-                entry["resumed"] = watch_resume(log, cells, args, f"raise:{name}")
-            entry["settled"] = settle(log, cells, args, name)
+                entry["resumed"] = watch_resume(log, cells, args,
+                                                f"raise:{name}", BY_NAME[name])
+            entry["settled"] = settle(log, cells, args, name, BY_NAME[name])
             results.append(entry)
 
     except KeyboardInterrupt:

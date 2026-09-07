@@ -380,10 +380,53 @@ Their per-board exclusions are `PF5PU1G`, `LAPQC71A`, `LAPQC71B` and `A60 MUV`
 these profiles on Stellaris 16 gated on nothing but that bit. Whether they do
 anything *there* is unknown to us and is the open question with them.
 
-Still open: whether the profiles lower the charge **termination voltage**
-instead of capping by percentage. Every full-charge sample we hold was taken
-under charge, where `voltage_now` is the charger's applied voltage.
-`charge_profile_probe.py` answers it without needing three discharge cycles.
+**Answered 2026-09-07: they do not lower the termination voltage either.**
+`charge_profile_probe.py`, 512 samples over 2 h 11 m. Charge to termination
+under Stationary, then raise the profile twice without discharging -- if a
+lower profile terminated lower, the pack would sit below the higher profile's
+target and the charger would have no choice but to restart.
+
+| profile | settled (31 samples / 300 s at 0 mA) | resumed on raise |
+|---|---|---|
+| Stationary | 16677000 uV = **4.1692 V/cell** | -- |
+| Balanced | 16677000 uV = **4.1692 V/cell** | no |
+| High Capacity | 16654000 uV = **4.1635 V/cell** | no |
+
+Stationary and Balanced are identical to the microvolt. The whole spread is
+5.7 mV/cell against a measured reproducibility of ~12 mV within a session and
+~47 mV across sessions, and High Capacity settled *lower* than Stationary --
+the wrong direction for any care mechanism, which is what noise looks like.
+Every leg ended `charge_now == charge_full == charge_full_design == 6400000`,
+and every settled reading carried `threshold: 80, reached: 0` at a genuinely
+terminated pack, reproducing 2026-08-30 independently under all three profiles.
+Raw data: `charge-profiles.csv`, `charge-profiles.json`.
+
+`0x07C6` read `0x04` on all 512 samples -- bit 2, the fan-control enable, and
+nothing else ever. **ERM never armed** through a full charge and forty minutes
+of terminated float, so that lead is closed for the charge phase.
+`BATTERY_CHARGE_FULL_OVER_24H` (bit 3) never set either, but that needs a night
+plugged in to mean anything: worth one `ec_poke.py read 0x07C6` after one.
+
+**This closes the ceiling only.** Three things remain untested, and the result
+above must not be read as more than it is:
+
+- **The floor** -- the recharge threshold. A profile that lets the pack fall to
+  80% before topping up is real battery care, and it is invisible to every
+  measurement we have taken, because a floor does not matter at the ceiling.
+  Invert the trick to test it: discharge to ~85%, plug in under High Capacity,
+  then step down to Stationary and watch for charging to *stop*.
+- **The discharge cutoff** -- whether a profile reserves capacity at the bottom.
+  Motivated by a reported ~30% power-off that nobody actually observed. `last -x`
+  shows 44 unclean shutdowns since May against 636 boots, spread over 13 hours
+  of the day and tapering 16 (Jun) -> 3 (Aug) -> 2 (Sep), which tracks this
+  project stabilising rather than the pack. UPower is set to act at 2%
+  (`PercentageAction=2.0`) and no battery-critical action appears anywhere in
+  the journal. Discriminator unchanged: cell voltage at cutoff, ~3.6 V/cell =
+  real reserve and therefore policy, ~3.0-3.2 = the gauge reads high.
+  `battery_watch.py` flushes per sample, so it survives the power-off.
+- **A plug-in-latched profile.** If the EC only evaluates the profile when the
+  charger is connected, the mid-charge raises prove nothing. Rerun with
+  `--order high_capacity,stationary` and unplug/replug after the switch.
 
 `compat_probe.py` should report `0x078E` bit 3 read-only for sibling chassis --
 it is a runtime capability check we could use instead of a DMI assertion.

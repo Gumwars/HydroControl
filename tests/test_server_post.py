@@ -61,14 +61,14 @@ class PostRoutesAnswerTest(unittest.TestCase):
                                      {"mode": "dynamic", "confirm": True})
         self.assertEqual(status, 200)
         self.assertTrue(body.get("ok"))
-        m.assert_called_once_with("dynamic", confirm=True)
+        m.assert_called_once_with("dynamic", confirm=True, acknowledge_risks=False)
 
     def test_gpu_set_passes_the_body_through(self):
         """The payload must survive -- a hang was not the only way to lose it."""
         with mock.patch.object(server.gpumode, "set_mode",
                                return_value={"ok": True}) as m:
             self.post("/api/gpu/set", {"mode": "igpu", "confirm": True})
-        m.assert_called_once_with("igpu", confirm=True)
+        m.assert_called_once_with("igpu", confirm=True, acknowledge_risks=False)
 
     def test_gpu_set_without_confirm_is_refused_not_hung(self):
         with mock.patch.object(server.gpumode, "set_mode",

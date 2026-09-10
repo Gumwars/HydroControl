@@ -685,6 +685,20 @@ function gpuCard(){
       <div class="lbl">This writes your <b>firmware settings</b>, not the EC. Unlike
         everything else here, a power cycle will not undo it — the BIOS menu can. It
         takes effect at the <b>next reboot</b>, not now.</div>
+      ${(() => {const r=(g.modes.find(m=>m.id===pend)||{}).risks||[];
+        if(!r.length)return '';
+        return `<div class="card" style="margin-top:var(--space-3);border-color:var(--color-danger)">
+          <div class="kick" style="color:var(--color-danger)">${r.length} thing${
+            r.length>1?'s':''} could stop the desktop coming back</div>
+          ${r.map(x=>`<div style="margin-top:var(--space-2)">
+            <div><b>${esc(x.name)}</b></div>
+            <div class="lbl">${esc(x.detail)}</div>
+            <div class="lbl">→ ${esc(x.remedy)}</div></div>`).join('')}
+          <div class="lbl" style="margin-top:var(--space-3)">${esc(g.recovery||'')}</div>
+          <label style="display:flex;gap:8px;align-items:flex-start;margin-top:var(--space-3)">
+            <input type="checkbox" id="gpuack" ${S.gpuAck?'checked':''}>
+            <span>I have read these and want to write it anyway</span></label>
+        </div>`;})()}
       <div style="margin-top:var(--space-3)">
         <button class="btn" id="gpuconfirm">Write it</button>
         <button class="btn" id="gpucancel" style="margin-left:8px">Cancel</button></div>
@@ -697,20 +711,28 @@ function bindGpu(){
     S.gpuMsg=null;
     if(b.dataset.v===S.gpu.mode){S.gpuPending=null;render();return;}
     S.gpuPending=b.dataset.v;render();};
-  const c=$('#gpucancel');if(c)c.onclick=()=>{S.gpuPending=null;S.gpuMsg=null;render();};
+  const c=$('#gpucancel');if(c)c.onclick=()=>{
+    S.gpuPending=null;S.gpuMsg=null;S.gpuAck=false;render();};
+  const ack=$('#gpuack');
+  if(ack)ack.onchange=e=>{S.gpuAck=e.target.checked;render();};
   const ok=$('#gpuconfirm');
-  if(ok)ok.onclick=async()=>{
+  if(ok){
+    // The checkbox only exists when there are risks; with none, nothing gates.
+    const risks=((S.gpu.modes||[]).find(m=>m.id===S.gpuPending)||{}).risks||[];
+    ok.disabled=risks.length>0&&!S.gpuAck;
+    ok.onclick=async()=>{
     S.gpuMsg={text:'writing firmware…'};render();
     const d=await api('/api/gpu/set',{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({mode:S.gpuPending,confirm:true})});
+      body:JSON.stringify({mode:S.gpuPending,confirm:true,acknowledge_risks:!!S.gpuAck})});
     if(d&&d.ok){
-      S.gpuPending=null;
-      S.gpuMsg={text:d.message||'written — reboot to apply'};
+      S.gpuPending=null;S.gpuAck=false;
+      S.gpuMsg={text:(d.message||'written — reboot to apply')
+                     +(d.recovery?'  '+d.recovery:'')};
       const g=await api('/api/gpu');if(g)S.gpu=g;
     }else{
       S.gpuMsg={text:'failed: '+((d&&d.error)||'no response'),bad:true};
     }
-    render();};
+    render();};}
 }
 function chargeName(id){const c=CHARGE.find(c=>c.id===id);return c?c.name:(id||'—');}
 

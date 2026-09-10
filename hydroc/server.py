@@ -240,8 +240,10 @@ class Handler(BaseHTTPRequestHandler):
             # Content-Length bytes and is waiting on us, so rfile.read() never
             # returns and the request hangs with no reply and no write.
             try:
-                return self._json(gpumode.set_mode(payload.get("mode", ""),
-                                                   confirm=bool(payload.get("confirm"))))
+                return self._json(gpumode.set_mode(
+                    payload.get("mode", ""),
+                    confirm=bool(payload.get("confirm")),
+                    acknowledge_risks=bool(payload.get("acknowledge_risks"))))
             except gpumode.GpuModeError as e:
                 return self._json({"ok": False, "error": str(e)}, 400)
             except OSError as e:

@@ -308,6 +308,25 @@ Three modes:
 | **dGPU only** | Panel routed to the RTX. **The Intel GPU disappears from the PCI bus entirely** — no PRIME, no Intel VAAPI, and the RTX drives your desktop at idle. External displays still work. Best latency and performance, worst battery. |
 | **iGPU only** | RTX removed. **External displays stop working** — on this chassis they are wired to the discrete GPU. Longest battery life. |
 
+> [!WARNING]
+> **iGPU-only can leave you without a desktop, and the only way back is the BIOS.**
+> Reported on a LUKS-encrypted machine: the root filesystem decrypted, then no
+> session ever started. If your system has been configured to expect the
+> discrete GPU — an `/etc/X11/xorg.conf` pinning a `BusID`, which **EnvyControl
+> writes**, or environment variables naming `nvidia` or a specific
+> `/dev/dri/card*` — those stop being true the moment the dGPU leaves the bus.
+>
+> The app now checks for this before writing and lists what it finds. From the
+> command line, `sudo python3 gpu_mode.py --set igpu` refuses unless you pass
+> `--accept-risks`.
+>
+> **Recovery: enter the BIOS setup at power-on and set the graphics mode back
+> there.** The BIOS writes the same two variables and needs no working Linux.
+>
+> Switching from **dGPU-only** is the riskiest jump, because the Intel GPU is
+> off the PCI bus entirely — nothing can verify it works first. Go via
+> **Dynamic**, reboot, confirm the desktop comes up on Intel, then switch.
+
 **One side effect worth knowing about before you pick dGPU only.** With the
 iGPU off the bus, NVIDIA is the only GPU anything can render on, and WebKitGTK's
 frame sharing is unreliable there — application windows built on it, this one

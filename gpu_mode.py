@@ -37,6 +37,19 @@ import subprocess
 import sys
 from datetime import datetime
 
+# The one thing this otherwise-standalone script does not reimplement. A safety
+# check that exists in two places drifts, and the copy that goes stale is the
+# one nobody is looking at when it matters.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+try:
+    from hydroc.gpumode import RECOVERY, preflight
+except Exception:                                    # noqa: BLE001
+    RECOVERY = ("If the desktop does not come back: enter the BIOS at power-on "
+                "and set the graphics mode back there.")
+
+    def preflight(mode):                             # noqa: D103
+        return None                                  # None means "could not check"
+
 EFIVARS = "/sys/firmware/efi/efivars"
 
 # name-prefix -> (byte offset into the DATA, expected data length)
@@ -172,7 +185,26 @@ def self_test():
     return 0 if ok else 1
 
 
-def set_mode(mode, dry_run):
+def show_risks(mode) -> int:
+    """Print what could go wrong. Returns the number of risks found."""
+    risks = preflight(mode)
+    if risks is None:
+        print("  ! could not run the pre-flight check (hydroc package not "
+              "importable from here) -- proceeding unchecked\n")
+        return 0
+    if not risks:
+        return 0
+    print(f"\n  {'!' * 3} PRE-FLIGHT: {len(risks)} thing(s) could leave this "
+          f"machine without a desktop after the reboot:\n")
+    for r in risks:
+        print(f"    - {r['name']}")
+        print(f"        {r['detail']}")
+        print(f"        -> {r['remedy']}\n")
+    print(f"  {RECOVERY}\n")
+    return len(risks)
+
+
+def set_mode(mode, dry_run, accept_risks=False):
     if mode not in MODES:
         raise GpuModeError(f"unknown mode {mode!r}; want one of {', '.join(MODES)}")
     target = MODES[mode]
@@ -201,9 +233,14 @@ def set_mode(mode, dry_run):
         off = VARS[name][0]
         print(f"  {name.split('-')[0]:22} byte 0x{off:02X}: "
               f"0x{data[off]:02X} -> 0x{target:02X}")
+    n = show_risks(mode)
     if dry_run:
-        print("\n[dry-run] nothing written.")
+        print("[dry-run] nothing written.")
         return 0
+    if n and not accept_risks:
+        print("  Refusing to write. Re-run with --accept-risks once you have "
+              "read the above.")
+        return 2
 
     for name, (_, attrs, data) in cur.items():
         off = VARS[name][0]
@@ -220,6 +257,7 @@ def set_mode(mode, dry_run):
         return 1
     print("\nboth variables now read "
           f"0x{target:02X}. The BIOS applies this at POST -- REBOOT to take effect.")
+    print(f"\n{RECOVERY}")
     return 0
 
 
@@ -229,6 +267,9 @@ def main():
     ap.add_argument("--self-test", action="store_true",
                     help="prove the write path without changing anything")
     ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument("--accept-risks", action="store_true",
+                    help="proceed even though the pre-flight check found "
+                         "something that could stop the desktop coming back")
     args = ap.parse_args()
 
     if not os.path.isdir(EFIVARS):
@@ -239,7 +280,7 @@ def main():
         if args.self_test:
             return self_test()
         if args.set:
-            return set_mode(args.set, args.dry_run)
+            return set_mode(args.set, args.dry_run, args.accept_risks)
         return show_status()
     except GpuModeError as e:
         raise SystemExit(f"refusing: {e}")

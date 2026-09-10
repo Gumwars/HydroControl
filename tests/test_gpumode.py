@@ -34,6 +34,12 @@ class Fake(unittest.TestCase):
         p2 = mock.patch.object(gm.subprocess, "run", return_value=None)
         p2.start()
         self.addCleanup(p2.stop)
+        # These test the firmware structure, not the boot-risk heuristics --
+        # which read the real machine's config and would otherwise decide the
+        # outcome here. test_gpumode_preflight.py owns that behaviour.
+        p3 = mock.patch.object(gm, "preflight", return_value=[])
+        p3.start()
+        self.addCleanup(p3.stop)
 
     def write(self, byte_uw=0x04, byte_tp=None, uw_len=180, tp_len=11):
         byte_tp = byte_uw if byte_tp is None else byte_tp

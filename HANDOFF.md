@@ -344,9 +344,92 @@ parser must reassemble on `FE`…`EF`. Control Center has `strPumpStatus` and
 `LCPUMP_DUTY`, so state is readable and the pump may take a duty rather than
 four modes. `lppd` keeps the last 40 notifications for correlation.
 
-**Charging modes do nothing observable.** Mapping confirmed against
-tuxedo-drivers; neither `Trickle` nor `Long_Life` caps charging over one cycle.
-Do not present them as percentage caps.
+**Charging modes do nothing observable, and the EC claims they do.** Neither
+`Trickle` nor `Long_Life` caps charging over a cycle. Do not present them as
+percentage caps.
+
+`0x078E` bit 3 is the vendor's **capability flag** for the charging profiles.
+tuxedo-drivers gates `uw_has_charging_profile()` on exactly that read; mainline
+defines `CHARGING_PROFILE BIT(3)` and never reads it, which is why we assert
+`BATTERY_CHARGE_MODES` from DMI instead. Measured 2026-09-06: `0x078E` = `0xFC`,
+so **bit 3 is set** -- the EC advertises support for profiles that do nothing.
+
+That byte is trustworthy, and it was worth checking, because `0xFC` is one bit
+away from the `0x0984` failure. Two things clear it: `0x0780`-`0x079F` reads
+`0x00` everywhere else (unmapped space reads `0xFF`, so this is a real value in
+an otherwise empty window), and `0x0783`/`0x0784` in the same dump held `0x23`
+and `0x2D` -- 35 W and 45 W, matching the running PL1/PL2 exactly. It is a
+capability flag and not live state: switching Stationary -> High Capacity via
+`charge_types` and re-reading left bit 3 set.
+
+**Our write is not the problem.** `uw_set_charging_profile()` reads `0x07A6`,
+masks `~(0x03 << 4)`, ORs in `profile << 4`, writes it back. Byte for byte what
+`charge_profile_probe.py` and `hydroc` do -- no init step, no enable bit, no WMI
+call, nothing to re-apply beyond resume. If the profiles work anywhere, they
+work with this write, so "we are driving it wrong" is closed.
+
+**tuxedo-drivers has no numeric charge limit for Uniwill at all.** `0x07B9`
+appears nowhere in it; the only `charge_control_end_threshold` in the tree is
+Clevo's FlexiCharger, a different platform. On the reference implementation
+Uniwill battery care *is* the profiles, which suggests `0x07B9` may be vestigial
+across the line rather than only on this SKU.
+
+Their per-board exclusions are `PF5PU1G`, `LAPQC71A`, `LAPQC71B` and `A60 MUV`
+-- no Stellaris, and Stellaris is Uniwill (every SKU lands in
+`uniwill_keyboard.h`/`uniwill_leds.h`, none in the Clevo files). So Tuxedo ships
+these profiles on Stellaris 16 gated on nothing but that bit. Whether they do
+anything *there* is unknown to us and is the open question with them.
+
+**Answered 2026-09-07: they do not lower the termination voltage either.**
+`charge_profile_probe.py`, 512 samples over 2 h 11 m. Charge to termination
+under Stationary, then raise the profile twice without discharging -- if a
+lower profile terminated lower, the pack would sit below the higher profile's
+target and the charger would have no choice but to restart.
+
+| profile | settled (31 samples / 300 s at 0 mA) | resumed on raise |
+|---|---|---|
+| Stationary | 16677000 uV = **4.1692 V/cell** | -- |
+| Balanced | 16677000 uV = **4.1692 V/cell** | no |
+| High Capacity | 16654000 uV = **4.1635 V/cell** | no |
+
+Stationary and Balanced are identical to the microvolt. The whole spread is
+5.7 mV/cell against a measured reproducibility of ~12 mV within a session and
+~47 mV across sessions, and High Capacity settled *lower* than Stationary --
+the wrong direction for any care mechanism, which is what noise looks like.
+Every leg ended `charge_now == charge_full == charge_full_design == 6400000`,
+and every settled reading carried `threshold: 80, reached: 0` at a genuinely
+terminated pack, reproducing 2026-08-30 independently under all three profiles.
+Raw data: `charge-profiles.csv`, `charge-profiles.json`.
+
+`0x07C6` read `0x04` on all 512 samples -- bit 2, the fan-control enable, and
+nothing else ever. **ERM never armed** through a full charge and forty minutes
+of terminated float, so that lead is closed for the charge phase.
+`BATTERY_CHARGE_FULL_OVER_24H` (bit 3) never set either, but that needs a night
+plugged in to mean anything: worth one `ec_poke.py read 0x07C6` after one.
+
+**This closes the ceiling only.** Three things remain untested, and the result
+above must not be read as more than it is:
+
+- **The floor** -- the recharge threshold. A profile that lets the pack fall to
+  80% before topping up is real battery care, and it is invisible to every
+  measurement we have taken, because a floor does not matter at the ceiling.
+  Invert the trick to test it: discharge to ~85%, plug in under High Capacity,
+  then step down to Stationary and watch for charging to *stop*.
+- **The discharge cutoff** -- whether a profile reserves capacity at the bottom.
+  Motivated by a reported ~30% power-off that nobody actually observed. `last -x`
+  shows 44 unclean shutdowns since May against 636 boots, spread over 13 hours
+  of the day and tapering 16 (Jun) -> 3 (Aug) -> 2 (Sep), which tracks this
+  project stabilising rather than the pack. UPower is set to act at 2%
+  (`PercentageAction=2.0`) and no battery-critical action appears anywhere in
+  the journal. Discriminator unchanged: cell voltage at cutoff, ~3.6 V/cell =
+  real reserve and therefore policy, ~3.0-3.2 = the gauge reads high.
+  `battery_watch.py` flushes per sample, so it survives the power-off.
+- **A plug-in-latched profile.** If the EC only evaluates the profile when the
+  charger is connected, the mid-charge raises prove nothing. Rerun with
+  `--order high_capacity,stationary` and unplug/replug after the switch.
+
+`compat_probe.py` should report `0x078E` bit 3 read-only for sibling chassis --
+it is a runtime capability check we could use instead of a DMI assertion.
 
 **The charge threshold is never enforced — answered, and the feature dropped.**
 A full cycle logged on 2026-08-30 with `charge_ctrl_watch.py`: with `0x07B9`

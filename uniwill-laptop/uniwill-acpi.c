@@ -2695,15 +2695,42 @@ static struct uniwill_device_descriptor hydroc16g1_descriptor __initdata = {
 	 * throughout, the pack charged 76% -> 100% without pausing, and
 	 * CHARGE_CTRL_REACHED (bit 7) never armed at any point, including at
 	 * 100%. The EC is not failing to hold the threshold; it never evaluates
-	 * it. Nothing in the EC advertises the feature either -- 0x078E bit 3 is
-	 * CHARGING_PROFILE, not a charge-limit capability -- so this bit was only
-	 * ever an assumption carried over from sibling chassis.
+	 * it. Nothing in the EC advertises a charge limit either, so this bit was
+	 * only ever an assumption carried over from sibling chassis.
 	 *
-	 * Claiming it exposes charge_control_end_threshold, which is a standard
-	 * interface: GNOME, TLP and anything else reading it would report a
-	 * battery limit that does not exist. A missing feature is discoverable; a
-	 * limit that silently does nothing is worse than none, because it is why
-	 * someone leaves a machine plugged in permanently.
+	 * 0x078E bit 3 does not advertise it. That bit is the vendor's capability
+	 * flag for the charging *profiles*, which is a different feature:
+	 * tuxedo-drivers gates uw_has_charging_profile() on exactly this read, and
+	 * mainline defines CHARGING_PROFILE BIT(3) without ever reading it. Note
+	 * that tuxedo-drivers has no numeric charge limit for Uniwill anywhere --
+	 * its only charge_control_end_threshold is Clevo's FlexiCharger, a
+	 * different platform. On the reference implementation, Uniwill battery care
+	 * *is* the profiles, which is a further reason to doubt that 0x07B9 was ever
+	 * a live feature on this line rather than only on this SKU.
+	 *
+	 * BATTERY_CHARGE_MODES is claimed, and that claim is now known to be weaker
+	 * than it looks. Measured 2026-09-06: 0x078E reads 0xFC here, so bit 3 is
+	 * SET -- the EC advertises profile support -- and the profiles still do
+	 * nothing over a full cycle. The value is trustworthy: 0x0780-0x079F is
+	 * 0x00 elsewhere (unmapped space reads 0xFF, so this is a real byte), and
+	 * PL1/PL2 at 0x0783/0x0784 in the same dump matched the running power
+	 * limits exactly. It is a capability flag rather than live state, confirmed
+	 * by switching Stationary -> High Capacity and re-reading: bit 3 held.
+	 *
+	 * Our write is not the problem. uw_set_charging_profile() reads 0x07A6,
+	 * masks ~(0x03 << 4), ORs in profile << 4 and writes it back -- byte for
+	 * byte what we do, with no init step, no enable bit and no WMI call. If
+	 * the profiles work anywhere, they work with this write.
+	 *
+	 * So the EC sets a capability bit for a feature it does not implement, at
+	 * least by percentage. Whether the profiles instead lower the charge
+	 * termination voltage is still open; charge_profile_probe.py answers it.
+	 *
+	 * Claiming the charge limit exposes charge_control_end_threshold, which
+	 * is a standard interface: GNOME, TLP and anything else reading it would
+	 * report a battery limit that does not exist. A missing feature is
+	 * discoverable; a limit that silently does nothing is worse than none,
+	 * because it is why someone leaves a machine plugged in permanently.
 	 */
 };
 

@@ -291,6 +291,40 @@ def arming_warning(on_ac_now: bool) -> str | None:
             "and start the probe on battery.")
 
 
+class DriftTracker:
+    """Believe drift only after several consecutive disagreements.
+
+    A single bad EC read must never cause a write. On 2026-09-24 one sample
+    read profile=0 and oem6=0x5F while every neighbour read 2 and 0x04 -- two
+    registers wrong in the same cycle, which is a bad read, not a state
+    change. The guard re-asserted anyway, writing 0x07A6 at 75% capacity. If
+    this EC latches its charge ceiling at plug-in, that write is precisely what
+    would clear it, so the guard written to protect the experiment is the
+    prime suspect for having corrupted it.
+
+    A real change -- the daemon re-applying its stored profile -- persists and
+    will still be caught a few samples later. A glitch will not.
+    """
+
+    def __init__(self, confirm: int):
+        self.confirm = confirm
+        self.run = 0
+        self.events: list[dict] = []
+
+    def saw(self, s: dict, expect: int) -> bool:
+        """True only when a re-assert is actually warranted."""
+        if not drifted(s, expect):
+            self.run = 0
+            return False
+        self.run += 1
+        if self.run < self.confirm:
+            return False
+        self.run = 0
+        self.events.append({"t": s.get("t"), "read": s.get("profile"),
+                            "expected": expect, "capacity": s.get("capacity")})
+        return True
+
+
 def wait_for_ac(log, cells, args) -> None:
     if on_ac():
         return
@@ -302,7 +336,7 @@ def wait_for_ac(log, cells, args) -> None:
         time.sleep(args.idle_interval)
 
 
-def settle(log, cells, args, phase: str, expect: int) -> dict | None:
+def settle(log, cells, args, phase: str, expect: int, drift) -> dict | None:
     """Wait until the pack is full and the current has genuinely stopped.
 
     'Genuinely' is the whole point. A momentary dip below the threshold is not
@@ -325,10 +359,11 @@ def settle(log, cells, args, phase: str, expect: int) -> dict | None:
             time.sleep(args.idle_interval)
             continue
 
-        if drifted(s, expect):
-            print(f"  ! profile changed under us ({BY_VALUE.get(s['profile'])}) "
-                  f"-- re-asserting {BY_VALUE.get(expect)} and starting the "
-                  f"quiet window again", flush=True)
+        if drift.saw(s, expect):
+            print(f"  ! profile held at {BY_VALUE.get(s['profile'])} for "
+                  f"{drift.confirm} samples -- re-asserting "
+                  f"{BY_VALUE.get(expect)}. NOTE: this writes 0x07A6 mid-cycle "
+                  f"and may clear a latched ceiling", flush=True)
             set_profile(expect)
             quiet, quiet_since = [], None
             time.sleep(args.interval)
@@ -364,7 +399,7 @@ def settle(log, cells, args, phase: str, expect: int) -> dict | None:
     return None
 
 
-def watch_resume(log, cells, args, phase: str, expect: int) -> bool:
+def watch_resume(log, cells, args, phase: str, expect: int, drift) -> bool:
     """After raising the profile: does the charger start again?
 
     This is the measurement. If the previous profile terminated lower, the pack
@@ -376,8 +411,8 @@ def watch_resume(log, cells, args, phase: str, expect: int) -> bool:
         s = sample(cells)
         log.write(s, phase)
         show(s, phase)
-        if drifted(s, expect):
-            print(f"  ! profile changed under us -- re-asserting", flush=True)
+        if drift.saw(s, expect):
+            print(f"  ! profile drift confirmed -- re-asserting", flush=True)
             set_profile(expect)
             time.sleep(args.interval)
             continue
@@ -451,6 +486,10 @@ def main() -> int:
     ap.add_argument("--resume-window", type=float, default=900)
     ap.add_argument("--timeout", type=float, default=6 * 3600,
                     help="give up waiting for one settle after this long")
+    ap.add_argument("--drift-confirm", type=int, default=3,
+                    help="consecutive disagreeing reads before believing the "
+                         "profile actually changed. 1 restores the old "
+                         "write-on-one-bad-read behaviour")
     ap.add_argument("--same-mv", type=float, default=15,
                     help="mV/cell within which two resting voltages are the same")
     ap.add_argument("--status", action="store_true", help="one sample, no writes")
@@ -496,6 +535,7 @@ def main() -> int:
         print(f"  {'!' * 3} {warning}\n", flush=True)
 
     log = Log(args.output)
+    drift = DriftTracker(args.drift_confirm)
     results: list[dict] = []
 
     try:
@@ -526,8 +566,10 @@ def main() -> int:
             # a raise, and that is the actual experiment.
             if i > 0:
                 entry["resumed"] = watch_resume(log, cells, args,
-                                                f"raise:{name}", BY_NAME[name])
-            entry["settled"] = settle(log, cells, args, name, BY_NAME[name])
+                                                f"raise:{name}", BY_NAME[name],
+                                                drift)
+            entry["settled"] = settle(log, cells, args, name, BY_NAME[name],
+                                      drift)
             results.append(entry)
 
     except KeyboardInterrupt:
@@ -548,6 +590,9 @@ def main() -> int:
         # A null result from a run that could not arm the ceiling is not a
         # null result. Carried in the summary so it cannot be read without it.
         "arming_warning": warning,
+        # Any mid-cycle write to 0x07A6 may clear a latched ceiling, so a run
+        # containing one cannot be read as evidence that the ceiling is absent.
+        "profile_reasserts": drift.events,
         "results": results,
         # Reported independently of the voltage verdict. This is a separate
         # question that happens to share a charge cycle, and it stands on its

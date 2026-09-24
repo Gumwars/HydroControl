@@ -273,5 +273,72 @@ class ArmingWarningTest(unittest.TestCase):
                              "as fast as the near-full interval")
 
 
+class DriftTrackerTest(unittest.TestCase):
+    """One bad EC read must never cause a write.
+
+    2026-09-24: a single sample read profile=0 and oem6=0x5F while every
+    neighbour read 2 and 0x04. The guard re-asserted on it, writing 0x07A6 at
+    75% capacity -- which, if the EC latches its ceiling at plug-in, is exactly
+    what would clear it. The guard corrupted the experiment it was protecting.
+    """
+
+    def setUp(self):
+        self.m = load()
+
+    def track(self, confirm=3):
+        return self.m.DriftTracker(confirm)
+
+    def sample(self, prof):
+        return {"t": "12:00:00", "profile": prof, "capacity": 75}
+
+    def test_a_single_bad_read_does_not_trigger_a_write(self):
+        d = self.track()
+        self.assertFalse(d.saw(self.sample(0), 2))
+        self.assertEqual(d.events, [])
+
+    def test_two_of_three_is_still_not_enough(self):
+        d = self.track()
+        d.saw(self.sample(0), 2)
+        self.assertFalse(d.saw(self.sample(0), 2))
+
+    def test_a_sustained_change_is_believed(self):
+        """The daemon really does re-apply its stored profile; that persists."""
+        d = self.track()
+        for _ in range(2):
+            d.saw(self.sample(0), 2)
+        self.assertTrue(d.saw(self.sample(0), 2))
+        self.assertEqual(len(d.events), 1)
+        self.assertEqual(d.events[0]["read"], 0)
+
+    def test_one_good_read_resets_the_run(self):
+        """Glitches are isolated; a good sample between them means no change."""
+        d = self.track()
+        d.saw(self.sample(0), 2)
+        d.saw(self.sample(0), 2)
+        d.saw(self.sample(2), 2)            # good read
+        self.assertFalse(d.saw(self.sample(0), 2))
+
+    def test_unreadable_profile_is_not_drift(self):
+        """Six reads failed outright in that run; none should provoke a write."""
+        d = self.track()
+        for _ in range(5):
+            self.assertFalse(d.saw({"t": "t", "profile": None}, 2))
+
+    def test_the_counter_resets_after_firing(self):
+        d = self.track(confirm=2)
+        d.saw(self.sample(0), 2)
+        self.assertTrue(d.saw(self.sample(0), 2))
+        self.assertFalse(d.saw(self.sample(0), 2))   # needs 2 again
+        self.assertTrue(d.saw(self.sample(0), 2))
+        self.assertEqual(len(d.events), 2)
+
+    def test_events_record_enough_to_invalidate_a_run(self):
+        d = self.track(confirm=1)
+        d.saw(self.sample(0), 2)
+        e = d.events[0]
+        for k in ("t", "read", "expected", "capacity"):
+            self.assertIn(k, e)
+
+
 if __name__ == "__main__":
     unittest.main()

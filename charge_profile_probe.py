@@ -90,6 +90,12 @@ BY_VALUE = {v: n for n, v, _ in PROFILES}
 BAT = "/sys/class/power_supply/BAT0"
 AC = "/sys/class/power_supply/AC0/online"
 
+# Sampling cadence. The reported phantom climb runs ~2% every 5-10 s, and the
+# old 60 s idle interval applied to exactly the stretch where it happens --
+# everything below --full-pct -- so it could not have resolved it.
+DEFAULT_INTERVAL = 5.0
+DEFAULT_IDLE_INTERVAL = 5.0
+
 # 6 ms between EC accesses. DESIGN.md 4.2: sustained EC traffic is the hazard,
 # and this script runs for hours unattended.
 EC_DELAY = 0.006
@@ -266,6 +272,25 @@ def drifted(s: dict, expect: int) -> bool:
     return p is not None and p != expect
 
 
+def arming_warning(on_ac_now: bool) -> str | None:
+    """None if this run can arm a plug-in-latched ceiling; a warning if not.
+
+    The 2026-09-07 run started with the charger already in and concluded the
+    profiles were inert. A user on the same board then saw the ceiling engage
+    by selecting the profile while unplugged and connecting afterwards. If the
+    EC only evaluates the profile at plug-in, a run that begins on AC can only
+    ever reproduce that null -- so it must say so rather than report "inert"
+    as though the question had been asked.
+    """
+    if not on_ac_now:
+        return None
+    return ("started with the charger already connected, so the profile was "
+            "written into a cycle that was already running. If this EC latches "
+            "the profile at plug-in, the ceiling cannot arm and an 'inert' "
+            "verdict from this run means nothing. Unplug, let it discharge, "
+            "and start the probe on battery.")
+
+
 def wait_for_ac(log, cells, args) -> None:
     if on_ac():
         return
@@ -412,8 +437,8 @@ def main() -> int:
                     help="summary path (default: alongside --output)")
     ap.add_argument("--order", default="stationary,balanced,high_capacity",
                     help="profiles low-to-high; raising is what forces a resume")
-    ap.add_argument("--interval", type=float, default=10.0)
-    ap.add_argument("--idle-interval", type=float, default=60.0)
+    ap.add_argument("--interval", type=float, default=DEFAULT_INTERVAL)
+    ap.add_argument("--idle-interval", type=float, default=DEFAULT_IDLE_INTERVAL)
     ap.add_argument("--full-pct", type=int, default=99,
                     help="capacity that counts as full")
     ap.add_argument("--settle-ma", type=int, default=60,
@@ -466,10 +491,27 @@ def main() -> int:
     print(f"{cells}S pack. Starting profile: "
           f"{BY_VALUE.get(original, original)}. It will be restored on exit.\n")
 
+    warning = arming_warning(on_ac())
+    if warning:
+        print(f"  {'!' * 3} {warning}\n", flush=True)
+
     log = Log(args.output)
     results: list[dict] = []
 
     try:
+        # Set the first profile BEFORE waiting for the charger. Our 2026-09-07
+        # run set it into a cycle that was already running -- ac=1, Charging,
+        # 61%, 4998 mA in the very first sample -- and measured nothing. A user
+        # on the same board then saw the ceiling engage by selecting the profile
+        # while unplugged and then connecting. If the EC latches the profile at
+        # plug-in, that ordering is the whole experiment, and we had it backwards.
+        first = order[0]
+        if not on_ac():
+            print(f"setting {first} before the charger goes in -- if the EC "
+                  f"latches the profile at plug-in, this is the only ordering "
+                  f"that arms it\n", flush=True)
+            set_profile(BY_NAME[first])
+
         wait_for_ac(log, cells, args)
 
         for i, name in enumerate(order):
@@ -503,6 +545,9 @@ def main() -> int:
         "charge_full": sysfs_int("charge_full"),
         "charge_full_design": sysfs_int("charge_full_design"),
         "order": order,
+        # A null result from a run that could not arm the ceiling is not a
+        # null result. Carried in the summary so it cannot be read without it.
+        "arming_warning": warning,
         "results": results,
         # Reported independently of the voltage verdict. This is a separate
         # question that happens to share a charge cycle, and it stands on its

@@ -2708,10 +2708,13 @@ static struct uniwill_device_descriptor hydroc16g1_descriptor __initdata = {
 	 * *is* the profiles, which is a further reason to doubt that 0x07B9 was ever
 	 * a live feature on this line rather than only on this SKU.
 	 *
-	 * BATTERY_CHARGE_MODES is claimed, and that claim is now known to be weaker
-	 * than it looks. Measured 2026-09-06: 0x078E reads 0xFC here, so bit 3 is
-	 * SET -- the EC advertises profile support -- and the profiles still do
-	 * nothing over a full cycle. The value is trustworthy: 0x0780-0x079F is
+	 * BATTERY_CHARGE_MODES is claimed, and the claim looks correct after all.
+	 * Measured 2026-09-06: 0x078E reads 0xFC here, so bit 3 is SET -- the EC
+	 * advertises profile support. Our own 2026-09-07 cycle measured nothing,
+	 * but it set the profile into a charge already in progress; two later
+	 * reports, one on this same board, show Stationary stopping charge around
+	 * 82% and then walking the *reported* percentage to 100% with zero current.
+	 * Treat the profiles as working and our null as a broken experiment. The value is trustworthy: 0x0780-0x079F is
 	 * 0x00 elsewhere (unmapped space reads 0xFF, so this is a real byte), and
 	 * PL1/PL2 at 0x0783/0x0784 in the same dump matched the running power
 	 * limits exactly. It is a capability flag rather than live state, confirmed

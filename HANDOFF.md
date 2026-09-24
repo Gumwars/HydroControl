@@ -412,7 +412,36 @@ Their per-board exclusions are `PF5PU1G`, `LAPQC71A`, `LAPQC71B` and `A60 MUV`
 these profiles on Stellaris 16 gated on nothing but that bit. Whether they do
 anything *there* is unknown to us and is the open question with them.
 
-**Answered 2026-09-07: they do not lower the termination voltage either.**
+> **RETRACTED 2026-09-24.** Two independent reports, one of them on a
+> **HYDROC-16 G1** -- the same board -- say Stationary *does* work: charging
+> slows near 80%, stops entirely around 82-83%, and the reported percentage
+> then climbs to 100% at roughly 2% every 5-10 s with `current_now` at **zero**
+> the whole way, ending at "Fully charged". The disguise is below the OS, so
+> every consumer of `power_supply` telemetry sees a normal full charge.
+>
+> **Our run could not have seen it.** The first sample of 2026-09-07 reads
+> `ac=1, status=Charging, cap=61%, 4998 mA` -- the probe wrote the profile into
+> a cycle that was already running. That is exactly the plug-in-latch caveat
+> the same run's summary carried and nobody acted on. Our own negative control
+> agrees: raising to High Capacity after Stationary settled produced no resume,
+> which means that 100% was genuinely full, which is what you get when the
+> ceiling never armed.
+>
+> So the measurements below stand as measurements and are withdrawn as a
+> conclusion about the hardware. What they establish is that *an unarmed cycle*
+> charges normally -- not that the profiles do nothing.
+>
+> Reported arming conditions, still confounded: the profile selected **before
+> the charger is connected**, and a prior discharge to <5%. One report notes
+> the deep discharge was needed; neither isolates it from the plug-in ordering.
+>
+> Method note for anyone repeating this: `charge_now` here moves in exact
+> 64000 uAh steps -- exactly 1% of `charge_full` -- so it is derived from
+> `capacity`, not an independent coulomb count. An implied-current figure
+> computed from it is the faked number restated. `current_now == 0` during a
+> rising percentage is the part that cannot be explained away.
+
+**Measured 2026-09-07, on a cycle that could not arm the ceiling:**
 `charge_profile_probe.py`, 512 samples over 2 h 11 m. Charge to termination
 under Stationary, then raise the profile twice without discharging -- if a
 lower profile terminated lower, the pack would sit below the higher profile's
@@ -439,7 +468,8 @@ of terminated float, so that lead is closed for the charge phase.
 `BATTERY_CHARGE_FULL_OVER_24H` (bit 3) never set either, but that needs a night
 plugged in to mean anything: worth one `ec_poke.py read 0x07C6` after one.
 
-**This closes the ceiling only.** Three things remain untested, and the result
+**This closes nothing.** The run above measured an unarmed cycle. Four things
+remain untested, and the result
 above must not be read as more than it is:
 
 - **The floor** -- the recharge threshold. A profile that lets the pack fall to

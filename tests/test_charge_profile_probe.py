@@ -243,5 +243,35 @@ class DriftTest(unittest.TestCase):
         self.assertFalse(self.m.drifted({"profile": 0}, 0))
 
 
+class ArmingWarningTest(unittest.TestCase):
+    """The 2026-09-07 run set the profile into a cycle already in progress and
+    reported "inert". A same-board user then armed the ceiling by selecting the
+    profile while unplugged. A run that cannot arm it must not be readable as
+    an answer."""
+
+    def setUp(self):
+        self.m = load()
+
+    def test_starting_on_battery_can_arm(self):
+        self.assertIsNone(self.m.arming_warning(False))
+
+    def test_starting_on_ac_cannot_arm(self):
+        w = self.m.arming_warning(True)
+        self.assertIsNotNone(w)
+        self.assertIn("already connected", w)
+
+    def test_the_warning_says_what_to_do_instead(self):
+        """A caveat nobody can act on just gets skipped."""
+        self.assertIn("start the probe on battery", self.m.arming_warning(True))
+
+    def test_sampling_resolves_the_reported_climb(self):
+        """~2% every 5-10 s. The old 60 s idle interval applied to exactly the
+        stretch where the climb happens, so it could never have resolved it."""
+        self.assertLessEqual(self.m.DEFAULT_INTERVAL, 10)
+        self.assertLessEqual(self.m.DEFAULT_IDLE_INTERVAL, 10,
+                             "the idle interval covers the climb; it must be "
+                             "as fast as the near-full interval")
+
+
 if __name__ == "__main__":
     unittest.main()

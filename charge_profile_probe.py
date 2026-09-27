@@ -195,6 +195,12 @@ def sample(cells: int) -> dict:
         "capacity": sysfs_int("capacity"),
         "charge_now": sysfs_int("charge_now"),
         "charge_full": sysfs_int("charge_full"),
+        # Both sysfs, no EC cost. charge_full dropping below design is the one
+        # prediction that separates "the EC caps and lies about it" from "a
+        # relearn redefined full and the gauge is being honest against the new
+        # reference" -- and cycle_count moving is what a relearn looks like.
+        "charge_full_design": sysfs_int("charge_full_design"),
+        "cycle_count": sysfs_int("cycle_count"),
         "current_ma": None if i_ua is None else round(i_ua / 1000),
         "voltage_uv": v_uv,
         "v_per_cell": None if v_uv is None else round(v_uv / 1e6 / cells, 4),
@@ -209,6 +215,7 @@ def sample(cells: int) -> dict:
 
 class Log:
     COLS = ["t", "phase", "ac", "status", "capacity", "charge_now", "charge_full",
+            "charge_full_design", "cycle_count",
             "current_ma", "voltage_uv", "v_per_cell", "profile", "threshold",
             "reached", "oem6", "erm_reached", "full_24h"]
 

@@ -74,6 +74,35 @@ REG_CHARGE_CTRL = 0x07B9        # recorded only, never written here
 # The whole byte is logged, not just the two known bits: reading the
 # neighbourhood is what caught 0x0984 being unmapped rather than confirming.
 REG_AP_OEM_6 = 0x07C6
+
+# The footprint registers. Added 2026-09-28 after decoding the ceiling routine
+# out of 117.ELUK and finding that it is present, identical to the G2 build,
+# and that every guard it tests passes on this machine while the bit it exists
+# to set never arms.
+#
+# That leaves two possibilities which look identical from outside: the routine
+# never runs, or it runs and reads a different 0x07B9 than the one we read back.
+# These three registers tell them apart, because the EC writes them itself.
+#
+# 0x0742 bit 2 is the decisive one. Immediately before the capacity comparison
+# the firmware does, on every pass, one of:
+#
+#     90 07 42  E0  44 04  F0      0x0742 |= 0x04
+#     90 07 42  E0  54 FB  F0      0x0742 &= ~0x04
+#
+# One branch or the other, unconditionally. So the bit is a footprint: if it
+# ever changes, that code ran. If it never moves across a whole charge, the
+# subsystem is idle and the cause is upstream of the EC's own logic.
+#
+# 0x0490 bits 0 and 2 are the two guards in front of the comparison; they read
+# 0x0F throughout a charge in lowec-charge.json, and recording them here means
+# we are not relying on one survey taken at one capacity.
+#
+# 0x0497 moves on its own, which is worth having next to the others for the
+# simple reason that it proves the sampling can see the EC changing something.
+REG_SUPPORT_5 = 0x0742          # bit 2 = the footprint
+REG_BATT_STATUS = 0x0490        # bits 0 and 2 = the ceiling's guards
+REG_CHARGE_LIMIT_MODE = 0x0497
 BATTERY_CHARGE_FULL_OVER_24H = 1 << 3
 BATTERY_ERM_STATUS_REACHED = 1 << 4
 
@@ -265,9 +294,51 @@ def cell_count() -> int:
     return max(1, round(vmin / 1e6 / 3.7))
 
 
+def footprint(samples: list[dict]) -> dict:
+    """Did the EC's own charge-ceiling code run during this capture?
+
+    0x0742 bit 2 is written on every pass through the block immediately before
+    the capacity comparison -- set on one branch, cleared on the other, never
+    left alone. So a change in it is proof the code executed, and a flat line
+    across a whole charge is the strongest evidence available that it did not.
+
+    Deliberately asymmetric. "It moved" is a positive observation and is
+    reported as one. "It never moved" is an absence, and absence over one
+    capture is weaker than presence, so it is reported as a suggestion rather
+    than a finding -- the same distinction this project got wrong when it read
+    a single 0x078E dump as proof of a capability.
+    """
+    seen = [s["support5"] for s in samples if s.get("support5") is not None]
+    bits = [s["ran"] for s in samples if s.get("ran") is not None]
+    guards = [(s.get("guard0"), s.get("guard2")) for s in samples
+              if s.get("guard0") is not None]
+    moved = len(set(seen)) > 1
+    return {
+        "register": "0x0742",
+        "samples": len(seen),
+        "values_seen": sorted(set(seen)),
+        "bit2_moved": moved,
+        "bit2_values": sorted(set(bits)),
+        "guards_always_passed": bool(guards) and all(g == (1, 1) for g in guards),
+        "guard_values_seen": sorted(set(guards)),
+        "reading": (
+            "0x0742 bit 2 changed, so the code around the capacity comparison "
+            "ran. The ceiling failing is then not a matter of that code being "
+            "idle -- look at whether it reads the same 0x07B9 we do."
+            if moved else
+            "0x0742 never changed across this capture. That is consistent with "
+            "the subsystem never running, which would put the cause upstream "
+            "of the EC's own logic. One capture is not proof; it is a reason "
+            "to repeat it."),
+    }
+
+
 def sample(cells: int) -> dict:
     raw = ec_read(REG_CHARGE_CTRL)
     oem6 = ec_read(REG_AP_OEM_6)
+    sup5 = ec_read(REG_SUPPORT_5)
+    bstat = ec_read(REG_BATT_STATUS)
+    climit = ec_read(REG_CHARGE_LIMIT_MODE)
     v_uv = sysfs_int("voltage_now")
     i_ua = sysfs_int("current_now")
     return {
@@ -292,6 +363,14 @@ def sample(cells: int) -> dict:
         "oem6": None if oem6 is None else f"0x{oem6:02X}",
         "erm_reached": None if oem6 is None else int(bool(oem6 & BATTERY_ERM_STATUS_REACHED)),
         "full_24h": None if oem6 is None else int(bool(oem6 & BATTERY_CHARGE_FULL_OVER_24H)),
+        "support5": None if sup5 is None else f"0x{sup5:02X}",
+        # The footprint. If this ever differs between two samples, the code
+        # around the capacity comparison executed.
+        "ran": None if sup5 is None else int(bool(sup5 & 0x04)),
+        "batt_status": None if bstat is None else f"0x{bstat:02X}",
+        "guard0": None if bstat is None else int(bool(bstat & 0x01)),
+        "guard2": None if bstat is None else int(bool(bstat & 0x04)),
+        "charge_limit_mode": None if climit is None else f"0x{climit:02X}",
     }
 
 
@@ -299,10 +378,15 @@ class Log:
     COLS = ["t", "phase", "ac", "status", "capacity", "charge_now", "charge_full",
             "charge_full_design", "cycle_count",
             "current_ma", "voltage_uv", "v_per_cell", "profile", "threshold",
-            "reached", "oem6", "erm_reached", "full_24h"]
+            "reached", "oem6", "erm_reached", "full_24h",
+            "support5", "ran", "batt_status", "guard0", "guard2",
+            "charge_limit_mode"]
 
     def __init__(self, path):
         self.oem6_seen: dict[str, int] = {}
+        # Only the footprint fields, not whole samples. A capture runs for
+        # hours at a few seconds a sample and the rest is already on disk.
+        self.footprint_samples: list[dict] = []
         self._runs: dict[str, int] = {}
         self.erm_events: list[dict] = []
         self.full24_events: list[dict] = []
@@ -314,6 +398,7 @@ class Log:
 
     def write(self, s: dict, phase: str) -> None:
         self.note(s, phase)
+        self._keep_footprint(s)
         if not self.fh:
             return
         row = dict(s, phase=phase)
@@ -321,6 +406,10 @@ class Log:
                                for c in self.COLS) + "\n")
         self.fh.flush()          # hours unattended; never buffer the evidence
 
+
+    def _keep_footprint(self, s: dict) -> None:
+        self.footprint_samples.append(
+            {k: s.get(k) for k in ("support5", "ran", "guard0", "guard2")})
 
     def note(self, s: dict, phase: str) -> None:
         """Record what 0x07C6 did, whether or not a CSV is being written.
@@ -715,6 +804,9 @@ def main() -> int:
             "erm_first_armed": log.erm_events[0] if log.erm_events else None,
             "full_24h_first_set": log.full24_events[0] if log.full24_events else None,
         },
+        # Whether the EC's own ceiling code ran at all. Independent of the
+        # voltage verdict, and after 117.ELUK the more interesting question.
+        "footprint": footprint(log.footprint_samples),
         "verdict": verdict(results, args),
     }
     path = args.json or (os.path.splitext(args.output)[0] + ".json")

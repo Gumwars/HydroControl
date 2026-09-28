@@ -152,7 +152,13 @@ class Oem6SamplingTest(unittest.TestCase):
         def _r(addr):
             return {self.m.REG_CHARGE_CTRL: 0x50,
                     self.m.REG_OEM_4: 0x20,
-                    self.m.REG_AP_OEM_6: oem6}[addr]
+                    self.m.REG_AP_OEM_6: oem6,
+                    # The footprint witnesses. Values are this machine's real
+                    # readings: 0x0742 with bit 2 clear, 0x0490 with both
+                    # guard bits set.
+                    self.m.REG_SUPPORT_5: 0x22,
+                    self.m.REG_BATT_STATUS: 0x0F,
+                    self.m.REG_CHARGE_LIMIT_MODE: 0x45}[addr]
         return mock.patch.object(self.m, "ec_read", side_effect=_r)
 
     def sample_with(self, oem6):
@@ -485,3 +491,96 @@ class WmiDoorTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class FootprintTest(unittest.TestCase):
+    """Did the EC's own ceiling code run?
+
+    117.ELUK contains the charge-ceiling routine, byte for byte the same as the
+    G2 build where the feature reportedly works, and every guard it tests passes
+    on this machine while the bit it exists to set never arms. Two explanations
+    survive that and look identical from outside: the code never runs, or it
+    runs against a different 0x07B9 than the one we read back.
+
+    0x0742 bit 2 separates them. The block immediately before the capacity
+    comparison writes it on every pass -- set on one branch, cleared on the
+    other, never left alone -- so a change proves execution.
+
+    The asymmetry is the point and is tested for. "It moved" is a positive
+    observation. "It never moved" is an absence over one capture, and this
+    project has already once read a single sample as proof of a capability.
+    """
+
+    def setUp(self):
+        self.m = load()
+
+    def frames(self, *specs):
+        """(support5, ran) pairs -> footprint sample dicts, guards passing."""
+        return [{"support5": s, "ran": r, "guard0": 1, "guard2": 1}
+                for s, r in specs]
+
+    def test_a_flat_register_is_not_reported_as_execution(self):
+        f = self.m.footprint(self.frames(*[("0x22", 0)] * 200))
+        self.assertFalse(f["bit2_moved"])
+
+    def test_a_single_change_anywhere_counts(self):
+        """One toggle in a thousand samples still proves the code ran."""
+        f = self.m.footprint(self.frames(*([("0x22", 0)] * 500
+                                           + [("0x26", 1)]
+                                           + [("0x22", 0)] * 499)))
+        self.assertTrue(f["bit2_moved"])
+
+    def test_absence_is_worded_as_a_reason_to_repeat(self):
+        f = self.m.footprint(self.frames(*[("0x22", 0)] * 50))
+        self.assertIn("not proof", f["reading"])
+
+    def test_presence_is_worded_as_a_finding(self):
+        f = self.m.footprint(self.frames(("0x22", 0), ("0x26", 1)))
+        self.assertIn("ran", f["reading"])
+        self.assertNotIn("not proof", f["reading"])
+
+    def test_guards_are_tracked_separately_from_the_footprint(self):
+        """A guard failing would be a different diagnosis entirely -- the code
+        running and declining -- so it must not be conflated with idleness."""
+        s = [{"support5": "0x22", "ran": 0, "guard0": 1, "guard2": 0}]
+        f = self.m.footprint(s)
+        self.assertFalse(f["guards_always_passed"])
+        self.assertFalse(f["bit2_moved"])
+
+    def test_guards_passing_throughout_is_reported(self):
+        f = self.m.footprint(self.frames(*[("0x22", 0)] * 10))
+        self.assertTrue(f["guards_always_passed"])
+
+    def test_unreadable_registers_do_not_fake_a_flat_line(self):
+        """A run where every EC read failed must not read as 'never changed'."""
+        f = self.m.footprint([{"support5": None, "ran": None,
+                               "guard0": None, "guard2": None}] * 20)
+        self.assertEqual(f["samples"], 0)
+        self.assertFalse(f["guards_always_passed"])
+
+    def test_empty_capture_does_not_raise(self):
+        self.assertEqual(self.m.footprint([])["samples"], 0)
+
+
+class FootprintColumnsTest(unittest.TestCase):
+
+    def setUp(self):
+        self.m = load()
+
+    def test_the_new_columns_are_logged(self):
+        for c in ("support5", "ran", "batt_status", "guard0", "guard2",
+                  "charge_limit_mode"):
+            self.assertIn(c, self.m.Log.COLS)
+
+    def test_the_registers_are_the_ones_decoded_from_the_image(self):
+        self.assertEqual(self.m.REG_SUPPORT_5, 0x0742)
+        self.assertEqual(self.m.REG_BATT_STATUS, 0x0490)
+        self.assertEqual(self.m.REG_CHARGE_LIMIT_MODE, 0x0497)
+
+    def test_the_new_registers_are_never_written(self):
+        """These are witnesses. Writing one would destroy what it measures."""
+        with open(_SPEC.origin, encoding="utf-8") as fh:
+            src = fh.read()
+        for reg in ("REG_SUPPORT_5", "REG_BATT_STATUS", "REG_CHARGE_LIMIT_MODE"):
+            self.assertNotIn(f"ec_write({reg}", src)
+            self.assertNotIn(f"_wmi({reg}", src)

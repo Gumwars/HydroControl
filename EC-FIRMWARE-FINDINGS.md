@@ -102,8 +102,14 @@ samples of `wmi-ceiling.csv`, not at any capacity including 100%.
 
 ## What follows
 
-The code is present, correct, and reachable by its own guards, and it does not
-execute. The routine is not wired into whatever task loop calls it on the G2.
+The code is present, correct, and reachable by its own guards, and the bit it
+exists to set is never set.
+
+**Stated more carefully than the first draft of this document did.** "The
+routine is not wired into the task loop" was an inference, and a weak one: the
+caller search that suggested it found nothing in the G2 either, where the
+feature reportedly works, so the method failed rather than the code being
+absent. What is observed is that the bit never arms. Why is not established.
 
 This explains, at once, every result recorded since August:
 
@@ -119,6 +125,24 @@ There was never an arming step to find.
 
 ## What is not established
 
+**A fleet-wide dead feature is implausible on its face.** `117.ELUK` is what
+every HYDROC-16 G1 runs. If the code were simply never invoked, it would be
+never invoked on all of them, and an ODM shipping a register map, a capability
+bit, guards and a comparison that nothing calls is a poor explanation compared
+with a variable specific to this configuration.
+
+One such variable is on the machine and was noticed late: the BIOS is a
+third-party modification. `bios_vendor` reads `Prema Mod` and the board name is
+`HYDROC-16 powered by premamod.com`. Every Eluktronics HYDROC ships this way;
+the board in the outside report does not. If the EC's battery-care task is
+enabled by a POST-time handshake, a modified BIOS that dropped it would produce
+exactly what is observed, with no ODM oversight and no hardware fault.
+
+This is a hypothesis with no evidence for it beyond opportunity. Against it:
+the stock ACPI tables contain no reference to 0x07B9, 0x0490 or 0x0742 at all,
+so whatever the BIOS does here it does not do through ACPI at runtime. That
+narrows it to POST, or rules it out.
+
 **Unreachability is inferred, not proven.** The direct evidence is that the code
 does not run; the mechanism is not identified. Searching for callers found none
 in *either* image, including the G2 where the feature reportedly works, so the
@@ -130,6 +154,13 @@ mean decoding that and showing the G1 dispatch lacks an entry the G2 has.
 NEO 16 / TongFang `X6AR5xxY`, a different project again. If their build wires the
 routine into its task loop and ours does not, both observations are true and
 there was never a conflict to resolve.
+
+**Which of the two live explanations holds is not yet known.** The code never
+running, and the code running against a threshold it reads elsewhere, are
+indistinguishable from outside. 0x0742 bit 2 tells them apart: the block
+immediately before the capacity comparison writes it on every pass, setting it
+on one branch and clearing it on the other, so a change proves execution.
+`charge_profile_probe.py` now records it, along with the two guard bits.
 
 **The profile constants are still undecoded.** The branches load `0xC8` (200) for
 Stationary and `0x64` (100) for Balanced into R3. Units unknown.

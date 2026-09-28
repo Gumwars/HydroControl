@@ -311,6 +311,56 @@ threshold -- and `CHARGE_CTRL_REACHED` has still never armed. The remaining
 possibilities are about *when* the function is called rather than whether it
 can be, and about conditions in its ancestors that have not been decoded.
 
+## Two mechanisms, two gates, and only one of them is shut
+
+Verified from the bytes 2026-09-28, and it reframes everything above.
+
+`0x07A6` (the charging profile) and `0x07B9` (the numeric ceiling) are not two
+views of one feature. They are separate code with separate gates.
+
+```
+ceiling   bank2:0xC88C   LCALL CFED -> 90 07 C3 E0 64 04    gate: 0x07C3 == 4
+profile   bank2:0xBCF6   LCALL CF96 -> 90 04 90 E0 54 01    gate: 0x0490 bit 0
+          0x1BCEE: 12 CF 96 / 70 03 / 02 BE 38
+```
+
+There is no `0x07C3` read anywhere inside the profile function
+(`0x1BCF6-0x1BE38`); the nearest is at `0x1B403`. So the ceiling's gate does not
+gate the profile.
+
+On this machine the two resolve in opposite directions:
+
+| mechanism | gate | measured | state |
+|---|---|---|---|
+| ceiling | `0x07C3 == 4` | `0x0D` | **shut** |
+| profile | `0x0490` bit 0 | `0x0F`, bit 0 set | **open while charging** |
+
+`0x0490` read `0x0F` in 522 of 638 charging samples. The profile path's gate has
+been open throughout every capture this project has taken, and its output has
+never been read.
+
+What the profile does is reduce a charge target rather than cap a percentage:
+
+```
+0x0522:0x0523  =  [0x0A5A:0x0A5B]  -  (constant x [0x0A51])
+```
+
+with the constant selected by `0x07A6` bits 5:4 -- Stationary 200, Balanced 100,
+150 default, 250 on a high-voltage branch -- `0x0A51` a charge-rate code, and
+`0x0A5A:0x0A5B` seeded from `0x030E:0x030F`. The result reaches the charger over
+SMBus.
+
+A reduced charge target makes a pack terminate early. To anyone watching
+capacity that is indistinguishable from a percentage ceiling, which is a
+simpler account of the outside report's 82-85% stop than either a designed
+disguise or an induced fault.
+
+**This is a hypothesis with a verified mechanism and no measurement.** Whether
+the profile path actually runs here is answered by `chg_target` and `hw_base` in
+`charge_profile_probe.py`, and those windows -- `0x03xx` and `0x05xx` -- have
+never been read on this machine. Empty columns would mean the wrong door, not a
+null result.
+
 ## What is not established
 
 **A fleet-wide dead feature is implausible on its face.** `117.ELUK` is what

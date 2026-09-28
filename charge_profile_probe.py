@@ -147,6 +147,32 @@ REG_AP_OEM_6 = 0x07C6
 # and AC transitions also answers the question that matters more than its
 # value right now: does 0x07C3 ever reach 4 on its own? If it does, the state
 # is something we can get the machine into, and nothing needs to be written.
+# The profile OUTPUT path, which is gated separately from the ceiling.
+#
+# 0x07A6 bits 5:4 select a constant -- Stationary 200, Balanced 100, 150
+# default, 250 on a high-voltage branch -- and 0xBE02 computes
+#
+#     0x0522:0x0523  =  [0x0A5A:0x0A5B]  -  (constant x [0x0A51])
+#
+# where 0x0A51 is a charge-rate code (4/3/2, also used as rate x 1040 mA) and
+# 0x0A5A:0x0A5B is seeded from 0x030E:0x030F. The result reaches the charger
+# over SMBus. So Stationary reduces a charge target rather than capping a
+# percentage -- and a reduced target makes a pack terminate early, which is
+# what an observer would describe as a ceiling.
+#
+# This matters because it is a DIFFERENT mechanism from the 0x07C3 gate. The
+# ceiling can be shut while the profile still does something, and if
+# 0x0522:0x0523 moves when the profile changes, that is the proof.
+#
+# 0x03xx and 0x05xx are windows this project has never read. 0x08xx is known
+# to be outside the ECRR window -- 0x087F reads 0xFF, and a probe was built on
+# that address before anyone checked. So these are recorded with the unmapped
+# marker handled up front rather than discovered later.
+REG_CHG_TARGET_LO = 0x0522      # profile output, low byte
+REG_CHG_TARGET_HI = 0x0523
+REG_HW_BASE_LO = 0x030E         # the value the profile constant is subtracted from
+REG_HW_BASE_HI = 0x030F
+
 REG_GATE = 0x07C3               # == 4 arms the ceiling; never written by the EC
 REG_ROMID = 0x0770              # second gate; ROMID_START, unprogrammed here
 REG_AP_OEM = 0x0741             # bit 0 = ENABLE_MANUAL_CTRL (fans), bit 2 = ?
@@ -344,6 +370,20 @@ def cell_count() -> int:
     return max(1, round(vmin / 1e6 / 3.7))
 
 
+def le16(lo, hi):
+    """A 16-bit little-endian pair, or None when the window does not answer.
+
+    0xFFFF is unmapped space on this EC, not a value. 0x087F reads 0xFF and was
+    read as data once already; returning None here means a register outside the
+    ECRR window can never be plotted against battery telemetry and mistaken for
+    a correlation.
+    """
+    if lo is None or hi is None:
+        return None
+    v = lo | (hi << 8)
+    return None if v == 0xFFFF else v
+
+
 def footprint(samples: list[dict]) -> dict:
     """Did the EC's own charge-ceiling code run during this capture?
 
@@ -407,6 +447,8 @@ def footprint(samples: list[dict]) -> dict:
 def sample(cells: int) -> dict:
     raw = ec_read(REG_CHARGE_CTRL)
     oem6 = ec_read(REG_AP_OEM_6)
+    tgt_lo, tgt_hi = ec_read(REG_CHG_TARGET_LO), ec_read(REG_CHG_TARGET_HI)
+    base_lo, base_hi = ec_read(REG_HW_BASE_LO), ec_read(REG_HW_BASE_HI)
     gate = ec_read(REG_GATE)
     romid = ec_read(REG_ROMID)
     apoem = ec_read(REG_AP_OEM)
@@ -437,6 +479,8 @@ def sample(cells: int) -> dict:
         "oem6": None if oem6 is None else f"0x{oem6:02X}",
         "erm_reached": None if oem6 is None else int(bool(oem6 & BATTERY_ERM_STATUS_REACHED)),
         "full_24h": None if oem6 is None else int(bool(oem6 & BATTERY_CHARGE_FULL_OVER_24H)),
+        "chg_target": le16(tgt_lo, tgt_hi),
+        "hw_base": le16(base_lo, base_hi),
         "gate": None if gate is None else f"0x{gate:02X}",
         # The whole question in one column.
         "gate_armed": None if gate is None else int(gate == 4),
@@ -461,6 +505,7 @@ class Log:
             "charge_full_design", "cycle_count",
             "current_ma", "voltage_uv", "v_per_cell", "profile", "threshold",
             "reached", "oem6", "erm_reached", "full_24h",
+            "chg_target", "hw_base",
             "gate", "gate_armed", "romid0", "ap_oem", "manual_fan_ctrl",
             "support5", "ran", "batt_status", "guard0", "guard2",
             "charge_limit_mode"]

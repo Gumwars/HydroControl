@@ -158,6 +158,10 @@ class Oem6SamplingTest(unittest.TestCase):
                     # The footprint witnesses. Values are this machine's real
                     # readings: 0x0742 with bit 2 clear, 0x0490 with both
                     # guard bits set.
+                    self.m.REG_CHG_TARGET_LO: 0xFF,
+                    self.m.REG_CHG_TARGET_HI: 0xFF,
+                    self.m.REG_HW_BASE_LO: 0xFF,
+                    self.m.REG_HW_BASE_HI: 0xFF,
                     self.m.REG_GATE: 0x0D,
                     self.m.REG_ROMID: 0xFF,
                     self.m.REG_AP_OEM: 0x00,
@@ -821,4 +825,55 @@ class GateTest(unittest.TestCase):
 
     def test_the_columns_are_logged(self):
         for c in ("gate", "gate_armed", "romid0"):
+            self.assertIn(c, self.m.Log.COLS)
+
+
+class Le16Test(unittest.TestCase):
+    """0xFFFF is unmapped space, not a number.
+
+    0x03xx and 0x05xx have never been read on this machine. 0x08xx is known to
+    be outside the ECRR window -- 0x087F reads 0xFF, and shadow_probe.py was
+    built on that address and reported a verdict about the EC from it before
+    anyone checked. These columns exist to correlate a charge target against
+    voltage and current, and a column of 65535 would correlate with nothing
+    while looking like data.
+    """
+
+    def setUp(self):
+        self.m = load()
+
+    def test_a_real_pair_is_little_endian(self):
+        self.assertEqual(self.m.le16(0x22, 0x05), 0x0522)
+
+    def test_all_ones_is_unmapped_not_65535(self):
+        self.assertIsNone(self.m.le16(0xFF, 0xFF))
+
+    def test_a_single_ff_byte_is_still_data(self):
+        """0x05FF and 0xFF05 are plausible values; only the full pair marks
+        unmapped space."""
+        self.assertEqual(self.m.le16(0xFF, 0x05), 0x05FF)
+        self.assertEqual(self.m.le16(0x05, 0xFF), 0xFF05)
+
+    def test_an_unreadable_byte_gives_none_not_zero(self):
+        self.assertIsNone(self.m.le16(None, 0x05))
+        self.assertIsNone(self.m.le16(0x22, None))
+
+    def test_zero_is_a_value(self):
+        self.assertEqual(self.m.le16(0, 0), 0)
+
+    def test_the_profile_output_registers_are_the_decoded_ones(self):
+        self.assertEqual(self.m.REG_CHG_TARGET_LO, 0x0522)
+        self.assertEqual(self.m.REG_CHG_TARGET_HI, 0x0523)
+        self.assertEqual(self.m.REG_HW_BASE_LO, 0x030E)
+        self.assertEqual(self.m.REG_HW_BASE_HI, 0x030F)
+
+    def test_none_of_them_are_written(self):
+        with open(_SPEC.origin, encoding="utf-8") as fh:
+            src = fh.read()
+        for reg in ("REG_CHG_TARGET_LO", "REG_CHG_TARGET_HI",
+                    "REG_HW_BASE_LO", "REG_HW_BASE_HI"):
+            self.assertNotIn(f"ec_write({reg}", src)
+
+    def test_the_columns_are_logged(self):
+        for c in ("chg_target", "hw_base"):
             self.assertIn(c, self.m.Log.COLS)

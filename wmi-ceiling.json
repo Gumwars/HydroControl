@@ -1,0 +1,53 @@
+{
+  "when": "2026-09-28T07:47:24",
+  "cells": 4,
+  "charge_full": 5800000,
+  "charge_full_design": 6400000,
+  "set_via": "wmi",
+  "order": [
+    "stationary"
+  ],
+  "arming_warning": null,
+  "profile_reasserts": [],
+  "results": [
+    {
+      "profile": "stationary",
+      "set": true,
+      "resumed": null,
+      "settled": {
+        "t": "2026-09-28T07:47:24",
+        "ac": 1,
+        "status": "Not charging",
+        "capacity": 100,
+        "charge_now": 5800000,
+        "charge_full": 5800000,
+        "charge_full_design": 6400000,
+        "cycle_count": 0,
+        "current_ma": 0,
+        "voltage_uv": 16654000,
+        "v_per_cell": 4.1635,
+        "profile": 2,
+        "threshold": 80,
+        "reached": 0,
+        "oem6": "0x04",
+        "erm_reached": 0,
+        "full_24h": 0,
+        "settled_samples": 61,
+        "settled_seconds": 301
+      }
+    }
+  ],
+  "oem6": {
+    "register": "0x07C6",
+    "values_seen": {
+      "0x04": 979,
+      "0xC0": 1
+    },
+    "erm_first_armed": null,
+    "full_24h_first_set": null
+  },
+  "verdict": {
+    "conclusion": "inconclusive",
+    "detail": "fewer than two profiles produced a settled reading"
+  }
+}

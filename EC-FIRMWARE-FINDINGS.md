@@ -216,7 +216,48 @@ It is also the operation that latched this EC (DESIGN.md 4.1b), so it is not
 being retried from Linux while a safe way to learn the same thing exists:
 watching what the Control Center service actually does.
 
-## The ceiling routine is reachable code, and the banking is decoded
+## CORRECTED 2026-09-28: the bank mapping was wrong, and the routine is dispatched
+
+The section below recorded `file = bank * 0x10000 + logical` and an ancestry
+ending at `bank0:0xC4AE`. Both are wrong, and the way they were wrong is worth
+keeping.
+
+`BANK_SIZE` should be `0x8000`. The error was invisible because halving the
+bank number and doubling the stride land on the **same file offset**: bank 1 at
+`0x10000` and bank 2 at `0x8000` are the same byte. So every disassembly came
+out correct and every bank number came out wrong. Thunks are keyed on
+`(bank, target)`, so lookups never matched -- the ceiling task is **bank 2**,
+and it was searched for in bank 1. That single constant produced the
+"unreachable" reading here, in DeepSeek's independent analysis, and in the G2
+image where the feature reportedly works.
+
+The recorded ancestry was wrong for a second reason: it came from an
+`enclosing()` heuristic ("nearest call target at or below"), which attributed
+the ceiling code to `0xC86D`, a neighbouring function. `0xC86D` does have the
+ancestry that was recorded -- it simply is not the container. The task entry is
+`0xC88C`.
+
+The real chain, identical in both images:
+
+```
+jump table 0x00EA6  ->  thunk 0x1582  ->  bank2:0x86C2
+                    ->  LJMP bank2:0xC88C  ->  JNZ  ->  0xC8BA
+```
+
+`0x00E90-0x00EB8` is a uniform run of 3-byte `LJMP` entries at a fixed stride,
+each pointing at a 6-byte thunk: an indexed jump table, entered by computing
+base + index*3. `bank2:0x86C2` is an ordinary function ending in a tail jump to
+the task. Not a task table, not dead code.
+
+**The ceiling task is dispatched.** What stops it is the gate -- `0x07C3` reads
+`0x0D` where `4` is required -- and everything downstream of that gate is in a
+state that would work.
+
+The methodological rule that resolved this, after it had failed three times:
+when the G1 and the G2 give the **same** answer, the answer is about the tools.
+The G2 is the control, and it showed the identical dead end.
+
+## (superseded) The ceiling routine is reachable code, and the banking is decoded
 
 Established 2026-09-28 with `ec_disasm.py`, and it retires the "dead code"
 reading for good.

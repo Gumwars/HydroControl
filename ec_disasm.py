@@ -82,7 +82,16 @@ for _p in range(8):                        # ACALL / AJMP pages
     LEN[(_p << 5) | 0x01] = 2
 
 DISPATCHER = {0x1100: 0, 0x1114: 1, 0x1128: 2, 0x113C: 3}
-BANK_SIZE = 0x10000
+# file = bank * 0x8000 + logical, for logical in the 0x8000-0xFFFF window.
+#
+# This read 0x10000 until 2026-09-28, and the error was invisible because it
+# produces the SAME file offset with the bank number halved: bank1*0x10000 and
+# bank2*0x8000 are both 0x10000. So every disassembly was correct and every
+# bank number was wrong, which meant thunk lookups keyed on (bank, target)
+# never matched -- the charge-ceiling task is bank 2, and it was searched for
+# in bank 1. That is why it looked unreachable, in this image and in the G2
+# where the feature reportedly works.
+BANK_SIZE = 0x8000
 WINDOW = 0x8000
 
 # rel-offset conditional branches: opcode -> offset position within the insn
@@ -212,6 +221,11 @@ class Image:
         return calls, branches
 
 
+def bank_count(data: bytes) -> int:
+    """Banks that fit after the 32 KB common area."""
+    return max(1, (len(data) - WINDOW) // BANK_SIZE)
+
+
 def entry_points(img: Image):
     """Reset, interrupt vectors, and every cross-bank thunk target."""
     eps = [(0, 0x0000)] + [(0, v) for v in range(0x0003, 0x0100, 8)]
@@ -241,7 +255,7 @@ def main() -> int:
         img = Image(open(path, "rb").read())
         if args.sweep:
             calls, branches, seen = {}, {}, set()
-            for b in range(4):
+            for b in range(bank_count(img.d)):
                 c, br = img.sweep(b)
                 for k, v in c.items():
                     calls.setdefault(k, set()).update(v)

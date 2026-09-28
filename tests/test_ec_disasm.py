@@ -75,9 +75,24 @@ class BankingTest(unittest.TestCase):
         self.m = load()
 
     def test_the_window_maps_by_bank(self):
-        """file = bank * 0x10000 + logical, for the banked window."""
-        self.assertEqual(self.m.phys(1, 0xC8BA), 0x1C8BA)
-        self.assertEqual(self.m.phys(3, 0x8000), 0x38000)
+        """file = bank * 0x8000 + logical.
+
+        This was 0x10000 and the error hid perfectly: it yields the same file
+        offset with the bank number halved, so every disassembly came out
+        right and every bank number came out wrong. Thunks are keyed on
+        (bank, target), so lookups never matched -- the charge-ceiling task is
+        bank 2 and was searched for in bank 1, which is why it read as
+        unreachable in this image AND in the G2 where the feature works.
+        """
+        self.assertEqual(self.m.phys(2, 0xC88C), 0x1C88C)
+        self.assertEqual(self.m.phys(2, 0x86C2), 0x186C2)
+        self.assertEqual(self.m.phys(0, 0x8000), 0x8000)
+
+    def test_the_old_wrong_mapping_would_still_look_plausible(self):
+        """Pinned so nobody 'fixes' it back. bank1 at 0x10000 and bank2 at
+        0x8000 land on the same byte; only the bank number differs, and the
+        bank number is what thunk resolution depends on."""
+        self.assertEqual(self.m.phys(2, 0xC88C), 1 * 0x10000 + 0xC88C)
 
     def test_common_memory_is_not_banked(self):
         for bank in range(4):
@@ -104,9 +119,9 @@ class DecodeTest(unittest.TestCase):
     def test_a_conditional_branch_is_an_edge(self):
         """The false negative. `70 08` at 0xC8B0 reaches 0xC8BA."""
         i = img_from(self.m, {0x1C8B0: bytes([0x70, 0x08])})
-        n, edges = i.decode(1, 0xC8B0)
+        n, edges = i.decode(2, 0xC8B0)
         self.assertEqual(n, 2)
-        self.assertIn(("branch", 1, 0xC8BA), edges)
+        self.assertIn(("branch", 2, 0xC8BA), edges)
 
     def test_a_backward_branch_resolves_signed(self):
         """0xFE is -2, so this SJMP targets itself. Relative offsets are the
@@ -118,31 +133,31 @@ class DecodeTest(unittest.TestCase):
         does not care which label a control transfer carries.
         """
         i = img_from(self.m, {0x1C000: bytes([0x80, 0xFE])})
-        _, edges = i.decode(1, 0xC000)
-        self.assertEqual(edges, [("branch", 1, 0xC000)])
+        _, edges = i.decode(2, 0xC000)
+        self.assertEqual(edges, [("branch", 2, 0xC000)])
 
     def test_a_sweep_does_not_invent_a_call_from_an_operand(self):
         """The false positive. `80 11` is SJMP +17; the 0x11 is data."""
         i = img_from(self.m, {0x1C8DC: bytes([0x80, 0x11])})
-        calls, _ = i.sweep(1)
+        calls, _ = i.sweep(2)
         for (_b, _t), srcs in calls.items():
-            self.assertNotIn((1, 0xC8DD), srcs,
+            self.assertNotIn((2, 0xC8DD), srcs,
                              "decoded the SJMP operand as an ACALL")
 
     def test_a_real_acall_is_still_found(self):
         i = img_from(self.m, {0x1C800: bytes([0x11, 0xBA])})
-        _, edges = i.decode(1, 0xC800)
-        self.assertEqual(edges, [("call", 1, 0xC8BA)])
+        _, edges = i.decode(2, 0xC800)
+        self.assertEqual(edges, [("call", 2, 0xC8BA)])
 
     def test_a_call_through_a_thunk_resolves_to_its_bank_and_target(self):
         """LCALL <thunk> is really call bank:target, and must not stop at the
         thunk -- that is what made the ceiling look unreachable cross-bank."""
-        thunk = bytes([0x90, 0xC8, 0xBA, 0x02, 0x11, 0x14])   # -> bank 1
+        thunk = bytes([0x90, 0xC8, 0xBA, 0x02, 0x11, 0x28])   # -> bank 2
         i = img_from(self.m, {0x1500: thunk,
                               0x1C000: bytes([0x12, 0x15, 0x00])})
-        self.assertEqual(i.thunks.get(0x1500), (1, 0xC8BA))
-        _, edges = i.decode(1, 0xC000)
-        self.assertEqual(edges, [("call", 1, 0xC8BA)])
+        self.assertEqual(i.thunks.get(0x1500), (2, 0xC8BA))
+        _, edges = i.decode(2, 0xC000)
+        self.assertEqual(edges, [("call", 2, 0xC8BA)])
 
     def test_thunks_are_only_taken_from_common_memory(self):
         """A matching byte pattern up in a bank is data, not a thunk."""
@@ -158,13 +173,13 @@ class SweepTest(unittest.TestCase):
     def test_a_sweep_steps_by_instruction_length(self):
         """MOV DPTR is three bytes; its operands must not be decoded."""
         i = img_from(self.m, {0x18000: bytes([0x90, 0x12, 0x34, 0x22])})
-        calls, _ = i.sweep(1)
+        calls, _ = i.sweep(2)
         self.assertEqual(calls, {}, "decoded 0x12 0x34 inside MOV DPTR")
 
     def test_a_sweep_covers_the_whole_window(self):
         i = img_from(self.m, {0x1FFF0: bytes([0x12, 0xC8, 0xBA])})
-        calls, _ = i.sweep(1)
-        self.assertIn((1, 0xC8BA), calls)
+        calls, _ = i.sweep(2)
+        self.assertIn((2, 0xC8BA), calls)
 
 
 if __name__ == "__main__":

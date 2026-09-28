@@ -69,8 +69,38 @@ DEFAULT_PERIOD = 2.0
 # single dump said "capacity". It never moved while capacity climbed to 91%.
 # One frame cannot tell a decode from a coincidence.
 KNOWN = {
-    0x00: "UNIWILL_EC_REG_FLAGS (mailbox)",
-    0x01: "UNIWILL_EC_REG_LDAT (mailbox addr low)",
+    # The mailbox. Placed at 0x00/0x01 in the first draft of this table on
+    # nothing but the order the names appear in tuxedo's header -- which was a
+    # guess, and a wrong one. 0x00 and 0x01 held 0x01 and 0x00 unchanged across
+    # all 140 samples and match nothing.
+    #
+    # It is at 0x8A-0x8E, and the survey proves it. During that run the profile
+    # register had been set to stationary, and low RAM held:
+    #
+    #     0x8A = 0xA6   0x8B = 0x07     -> address 0x07A6
+    #     0x8D = 0x20                   -> bits 5:4 = 2 = stationary
+    #
+    # That is our own last transaction, still latched: the address we write and
+    # the value we write, sitting in the two fields named for exactly that.
+    # ec_dump.py already had these at 0x048A-0x048E in the extended window, so
+    # the 0x04 page and low RAM are two views of one SFR block.
+    #
+    # The consequence is bigger than the map. FLAGS reads 0x00 -- the EC cleared
+    # the handshake bits, which means it serviced the transaction rather than
+    # leaving it pending. The write is not merely accepted at the register; it
+    # is accepted at the protocol, by the EC itself, and the pack still charges
+    # to 100%.
+    #
+    # Still one caveat: these bytes never moved during the survey, so strictly
+    # each one "matched in every frame" rather than "tracked something". Driving
+    # a write to a different address and watching LDAT/HDAT follow would settle
+    # it, and that is a read of a write we already make.
+    0x8A: "UNIWILL_EC_REG_LDAT  -- mailbox addr low  (read 0xA6 = 0x07A6)",
+    0x8B: "UNIWILL_EC_REG_HDAT  -- mailbox addr high (read 0x07)",
+    0x8C: "UNIWILL_EC_REG_FLAGS -- RFLG/WFLG/BFLG/CFLG/DRDY(b7); read 0x00, "
+          "so the EC had completed and cleared the last transaction",
+    0x8D: "UNIWILL_EC_REG_CMDL  -- mailbox data low  (read 0x20 = stationary)",
+    0x8E: "UNIWILL_EC_REG_CMDH  -- mailbox data high",
     0x02: "design capacity, mAh, LE16 at 0x02 (static: 6400)",
     0x03: "design capacity high byte",
     0x04: "full-charge capacity, mAh, LE16 at 0x04 (static: 5800)",

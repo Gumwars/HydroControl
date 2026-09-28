@@ -2708,26 +2708,54 @@ static struct uniwill_device_descriptor hydroc16g1_descriptor __initdata = {
 	 * *is* the profiles, which is a further reason to doubt that 0x07B9 was ever
 	 * a live feature on this line rather than only on this SKU.
 	 *
-	 * BATTERY_CHARGE_MODES is claimed, and the claim looks correct after all.
-	 * Measured 2026-09-06: 0x078E reads 0xFC here, so bit 3 is SET -- the EC
-	 * advertises profile support. Our own 2026-09-07 cycle measured nothing,
-	 * but it set the profile into a charge already in progress; two later
-	 * reports, one on this same board, show Stationary stopping charge around
-	 * 82% and then walking the *reported* percentage to 100% with zero current.
-	 * Treat the profiles as working and our null as a broken experiment. The value is trustworthy: 0x0780-0x079F is
+	 * BATTERY_CHARGE_MODES is claimed. 0x078E reads 0xFC (2026-09-06), so the
+	 * capability bit is SET, and the value is trustworthy: 0x0780-0x079F is
 	 * 0x00 elsewhere (unmapped space reads 0xFF, so this is a real byte), and
 	 * PL1/PL2 at 0x0783/0x0784 in the same dump matched the running power
 	 * limits exactly. It is a capability flag rather than live state, confirmed
 	 * by switching Stationary -> High Capacity and re-reading: bit 3 held.
 	 *
-	 * Our write is not the problem. uw_set_charging_profile() reads 0x07A6,
-	 * masks ~(0x03 << 4), ORs in profile << 4 and writes it back -- byte for
-	 * byte what we do, with no init step, no enable bit and no WMI call. If
-	 * the profiles work anywhere, they work with this write.
+	 * The EC advertises the feature and does not implement it. That conclusion
+	 * held once, was retracted on a third-party report, and is now measured
+	 * properly rather than inferred:
 	 *
-	 * So the EC sets a capability bit for a feature it does not implement, at
-	 * least by percentage. Whether the profiles instead lower the charge
-	 * termination voltage is still open; charge_profile_probe.py answers it.
+	 * 2026-09-07 was a broken experiment -- it set the profile into a charge
+	 * already in progress -- and the retraction was correct at the time. The
+	 * re-run on 2026-09-28 (wmi-ceiling.csv) fixed that and everything else we
+	 * could think of: profile written before AC was attached, no corrective
+	 * write mid-cycle, original pack rather than the failed replacement. It
+	 * charged 66% -> 100% under Stationary, CHARGE_CTRL_REACHED never armed,
+	 * and the profile read back as 2 in all 981 samples.
+	 *
+	 * The reported behaviour elsewhere is a real stop near 82% with
+	 * current_now at 0, followed by a walk to a faked 100%. Neither half
+	 * happens here. No sample read 0 mA; the minimum while charging was
+	 * 612 mA. And the walk cannot be hiding: integrating reported current over
+	 * 78 -> 100% gives 1268 mAh against an observed charge_now delta of
+	 * 1276 mAh, 0.6% apart, so every percent was backed by real current that
+	 * the current register also reported.
+	 *
+	 * That also closes the alternative this comment used to leave open. The
+	 * profiles do not lower the charge termination voltage either -- the pack
+	 * settled at 4.1635 V/cell, a full charge.
+	 *
+	 * Our write is not the problem, and this is now overdetermined.
+	 * uw_set_charging_profile() reads 0x07A6, masks ~(0x03 << 4), ORs in
+	 * profile << 4 and writes it back -- byte for byte what we do. Three write
+	 * paths have set the register and verified it by readback: ECRW/MMIO,
+	 * WKBC, and WMBC. This driver reads it back through its own regmap and
+	 * agrees. And low EC RAM shows the mailbox at 0x8A-0x8E holding LDAT/HDAT
+	 * = 0xA6/0x07 with CMDL = 0x20 and FLAGS cleared to 0x00, which means the
+	 * EC serviced the transaction rather than leaving it pending. The byte
+	 * arrives, the protocol completes, the EC does nothing with it.
+	 *
+	 * Open question, deliberately not acted on here: if the profiles do
+	 * nothing, claiming BATTERY_CHARGE_MODES exposes charge_types for the same
+	 * reason this comment refuses to expose charge_control_end_threshold below
+	 * -- a control that silently does nothing is worse than a missing one.
+	 * The claim is left standing only because the capability bit is genuinely
+	 * set and no one has yet explained the gap between this machine and the
+	 * reports; dropping it should follow an explanation, not precede one.
 	 *
 	 * Claiming the charge limit exposes charge_control_end_threshold, which
 	 * is a standard interface: GNOME, TLP and anything else reading it would

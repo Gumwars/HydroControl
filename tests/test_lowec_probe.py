@@ -147,3 +147,41 @@ class SurveyTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class MailboxDecodeTest(unittest.TestCase):
+    """The mailbox sits at 0x8A-0x8E, not 0x00/0x01.
+
+    The first draft of KNOWN put it at 0x00/0x01 because that is the order the
+    names appear in tuxedo's header. The survey contradicted it: those two
+    bytes held 0x01 and 0x00 for all 140 samples and match nothing, while
+    0x8A/0x8B held 0xA6/0x07 -- the address of the charging profile register,
+    the one register that run was writing -- and 0x8D held 0x20, the stationary
+    bit pattern. ec_dump.py had already mapped the same block at 0x048A in the
+    extended window.
+
+    Pinned because the wrong version was plausible enough to survive review
+    once, and because a misplaced mailbox is the kind of error that makes a
+    later write probe poke arbitrary EC state.
+    """
+
+    def setUp(self):
+        self.m = load()
+
+    def test_the_mailbox_is_where_the_evidence_puts_it(self):
+        for addr, name in ((0x8A, "LDAT"), (0x8B, "HDAT"), (0x8C, "FLAGS"),
+                           (0x8D, "CMDL"), (0x8E, "CMDH")):
+            self.assertIn(addr, self.m.KNOWN, f"0x{addr:02X} missing")
+            self.assertIn(name, self.m.KNOWN[addr],
+                          f"0x{addr:02X} should be {name}")
+
+    def test_the_guessed_locations_are_gone(self):
+        for addr in (0x00, 0x01):
+            self.assertNotIn(addr, self.m.KNOWN,
+                             f"0x{addr:02X} was a guess the survey refuted")
+
+    def test_the_low_and_extended_views_agree_with_ec_dump(self):
+        """0x8A here is 0x048A there -- same SFR block, two windows."""
+        self.assertIn("0x048A", open(
+            os.path.join(os.path.dirname(_SPEC.origin), "ec_dump.py"),
+            encoding="utf-8").read())

@@ -176,9 +176,16 @@ That is how `uw_has_charging_profile()` in tuxedo-drivers -- which gates on
 exactly this bit -- finds it set on a machine where the profiles do nothing,
 with nobody having lied anywhere.
 
-The real gate is **`0x0741` bit 0**, and this project had never read it. If it
-is clear, the EC is declining to honour the profile and that is the answer.
-`charge_profile_probe.py` now records it.
+What the caller branches on is `0x0741` bit 0 -- which is **`ENABLE_MANUAL_CTRL`,
+manual fan control**, defined in `uniwill-acpi.c` and toggled by this project's
+own fan code. It was briefly recorded here as the charging-profile enable, and
+its value on this machine (`0x04`, bit 0 clear) reported as the answer. It is
+not. Reading three instructions past the profile clear shows the same path
+going on to clear `0x09C7`, `0x09C8` and `0x09C9`: a restore-defaults routine
+with the profile as one item on a list, not a gate.
+
+**No enable bit has been found.** The capability bit is written unconditionally
+and nothing yet located decides whether the feature is honoured.
 
 **Which of the two live explanations holds is not yet known.** The code never
 running, and the code running against a threshold it reads elsewhere, are

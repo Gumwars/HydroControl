@@ -57,7 +57,7 @@ LOAD_DPTR = 0x90
 # have to reconstruct a month of argument from a number.
 REGISTERS = {
     0x0740: "PROJECT_ID -- the build's own identity",
-    0x0741: "AP_OEM; bit 0 is the charging-profile enable",
+    0x0741: "AP_OEM; bit 0 = ENABLE_MANUAL_CTRL (fans), bit 2 undocumented",
     0x0742: "SUPPORT_5",
     0x078E: "capability byte; bit 3 gates the charging profiles",
     0x07A6: "charging profile, bits 5:4 (also touchpad bit 6)",
@@ -128,14 +128,21 @@ SEQUENCES = {
          "mislabelled here as a gate. The EC advertises charging-profile "
          "support unconditionally, which is why tuxedo's "
          "uw_has_charging_profile() reading this bit finds it set on a machine "
-         "where the profiles do nothing. The real gate is 0x0741 bit 0."),
+         "where the profiles do nothing. What the caller then branches on is "
+         "0x0741 bit 0, ENABLE_MANUAL_CTRL -- a fan flag -- on a path that "
+         "goes on to clear three more unrelated locations. A restore-defaults "
+         "routine, not a feature gate. No gate has been found."),
     ],
     0x0741: [
-        ("profile enable bit 0 read",
+        ("ENABLE_MANUAL_CTRL bit 0 read",
          rb"\xe0\x54\x01\x22",
-         "MOVX A,@DPTR / ANL A,#01h / RET -- returned to a JNZ that decides "
-         "whether to keep the selected profile or force it back to "
-         "high_capacity. This is the actual charging-profile enable."),
+         "MOVX A,@DPTR / ANL A,#01h / RET. Bit 0 is ENABLE_MANUAL_CTRL -- "
+         "manual FAN control, per uniwill-acpi.c, which this project's own fan "
+         "code toggles. This file briefly called it the charging-profile "
+         "enable because one caller checks it and then clears the profile "
+         "bits; reading three instructions further shows that caller going on "
+         "to clear 0x09C7, 0x09C8 and 0x09C9 as well, which makes it a "
+         "restore-defaults path with the profile as one item on a list."),
     ],
 }
 

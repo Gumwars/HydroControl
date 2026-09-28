@@ -159,10 +159,15 @@ class SequenceTest(unittest.TestCase):
         self.assertIn("capability bit 3 set unconditionally",
                       self.names(image(G2_CAPABILITY_GATE), 0x078E))
 
-    def test_the_real_enable_is_0741_bit_0(self):
+    def test_0741_bit_0_is_named_for_the_fan_flag_it_is(self):
+        """Called the charging-profile enable here once. It is
+        ENABLE_MANUAL_CTRL, for fans, and the name must say so -- a register
+        labelled by the hypothesis it was found under is how a guess becomes a
+        fact without evidence."""
         enable = bytes.fromhex("900741" + "e0" + "5401" + "22")
-        self.assertIn("profile enable bit 0 read",
-                      self.names(image(enable), 0x0741))
+        names = self.names(image(enable), 0x0741)
+        self.assertIn("ENABLE_MANUAL_CTRL bit 0 read", names)
+        self.assertFalse(any("profile enable" in n for n in names))
 
     def test_the_capability_write_needs_the_following_call(self):
         """ORL A,#08h alone is not the pattern; the LCALL is what makes it a

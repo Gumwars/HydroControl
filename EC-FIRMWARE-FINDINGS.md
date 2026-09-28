@@ -123,6 +123,24 @@ This explains, at once, every result recorded since August:
 
 There was never an arming step to find.
 
+## The machinery has been seen working once
+
+Recorded late, from the owner's account of work predating this document, and it
+is the single most important datum here: an earlier session that held the
+charge registers by **continuous re-writing** produced charging that started and
+stopped repeatedly. That is a percentage ceiling engaging, without hysteresis.
+
+Every measurement in this document was taken with a *single* write. On that
+basis the conclusion was heading toward "the code does not run". It runs.
+Whatever distinguishes a held write from a set-once write is what this
+investigation has been missing.
+
+The same episode ended in a latched state -- 100% reported, true charge unknown,
+surviving reboots, cleared by an EC reflash -- which is why the obvious follow-up
+experiment is **not** being run from Linux. DESIGN.md 4.1b has the detail and the
+recovery that was never tried. The Control Center service can be watched on
+Windows for the same answer at no risk.
+
 ## What is not established
 
 **A fleet-wide dead feature is implausible on its face.** `117.ELUK` is what

@@ -691,6 +691,61 @@ to make the next occurrence provable instead of argued.
 
 ---
 
+### 4.1b Sustained re-writes to the charge registers latched a bad state
+
+**Recorded 2026-09-28 from the owner's account of earlier work, predating most
+of this document. It is the only destructive result this project has produced,
+and it was nearly repeated in ignorance.**
+
+While exploring an 80% charge limit, an earlier session held the charge
+registers by re-writing them continuously rather than setting them once. What
+followed, in order:
+
+1. **Charging started and stopped repeatedly.** Bang-bang, no deadband: stop at
+   the threshold, capacity sags, resume, stop again.
+2. A state where **the OS reported 100%** with the true charge unknown.
+3. That state **survived reboots**. A reflash of the EC firmware cleared it.
+
+Two conclusions, pulling in opposite directions.
+
+**The machinery is not inert.** Step 1 is a percentage ceiling engaging. Every
+measurement since -- three write doors, a full cycle under Stationary, 981
+samples with `CHARGE_CTRL_REACHED` never arming -- has been taken with a single
+write, and concluded that nothing responds. Something responded here. Whatever
+separates the two cases is the thing this investigation has been looking for,
+and "the code never runs" cannot be the whole story.
+
+**And it is the one operation known to break this machine.** Everything else
+here lives in volatile EC RAM where the backstop is removing power. This
+latched.
+
+**The recovery was probably cheaper than a reflash, and this was never tested.**
+EC RAM survives a warm reboot, and on a laptop it survives soft power-off too,
+because the EC stays alive on battery standby. Only removing power entirely --
+AC out, battery disconnected, or a forced EC reset -- actually clears it. A
+reflash works because flashing power-cycles the EC, not because the firmware
+was damaged. **If this state is ever hit again, try full power removal before
+reflashing.**
+
+**It may also explain the outside report.** The "phantom full charge" described
+elsewhere -- reported 100%, current reading zero or wrong, true charge
+unknowable -- is the same symptom as step 2, and that report was also produced
+by a sustained write loop, theirs to `0x35`. An induced fault state that looks
+like a designed disguise is a simpler explanation than an ODM building an
+elaborate deception, and it fits both accounts.
+
+**Consequence for the probes.** `charge_profile_probe.py` writes the profile
+once and `--drift-confirm` suppresses re-writes. That guard was added after a
+spurious re-write cleared a latched ceiling; it now has a second and better
+justification. A `--keepalive` mode was proposed and **withdrawn** on this
+evidence. The same question is answerable from Windows by watching what the
+Control Center service does, at no risk, and that is where it should be
+answered first.
+
+It also limits what the footprint capture can conclude. A flat `0x0742` bit 2
+across a single-write run shows the code does not run *under those conditions*.
+It cannot show the code never runs, because we have an account of it running.
+
 ### 4.2 The EC needs 6 ms between accesses, and starving it stops the fans
 
 **Reading EC registers too fast stops the fans.** Not writing — reading.

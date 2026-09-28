@@ -400,5 +400,88 @@ class Oem6ConfirmTest(unittest.TestCase):
         self.assertEqual(len(self.log.full24_events), 1)
 
 
+class WmiDoorTest(unittest.TestCase):
+    """The other way into the EC.
+
+    Both doors set the byte -- wmi_ec_probe.py confirmed agreement on seven
+    registers. Whether both make the EC *act* is the open question, and the
+    reason this path exists at all.
+    """
+
+    def setUp(self):
+        self.m = load()
+        self.m.SET_VIA = "ecrw"
+
+    def test_default_door_is_unchanged(self):
+        """Nothing changes unless --set-via asks for it."""
+        self.assertEqual(self.m.SET_VIA, "ecrw")
+
+    def test_read_encoding_matches_the_probe(self):
+        calls=[]
+        with mock.patch.object(self.m, "_call",
+                               side_effect=lambda e: calls.append(e) or "{0x20,0,0,0}"):
+            self.m._wmi(0x07A6, None)
+        arg = calls[0].split("b")[-1]
+        b = bytes.fromhex(arg)
+        self.assertEqual(len(b), 8)
+        self.assertEqual((b[0], b[1]), (0xA6, 0x07))
+        self.assertEqual(b[5], 1, "function byte must be READ")
+
+    def test_write_encoding_puts_data_in_byte_2(self):
+        calls=[]
+        with mock.patch.object(self.m, "_call",
+                               side_effect=lambda e: calls.append(e) or "{0,0,0,0}"):
+            self.m._wmi(0x07A6, 0x20)
+        b = bytes.fromhex(calls[0].split("b")[-1])
+        self.assertEqual((b[0], b[1]), (0xA6, 0x07))
+        self.assertEqual(b[2], 0x20, "data_low goes in byte 2")
+        self.assertEqual(b[3], 0x00, "data_high is always 0 here")
+        self.assertEqual(b[5], 0, "function byte must be WRITE")
+
+    def test_the_error_marker_is_not_data(self):
+        with mock.patch.object(self.m, "_call", return_value="{0xFE,0xFE,0xFE,0xFE}"):
+            v, err = self.m._wmi(0x07A6, None)
+        self.assertIsNone(v)
+        self.assertIn("FEFEFEFE", err)
+
+    def test_wmi_write_preserves_the_shared_bits(self):
+        """0x07A6 also carries touchpad-off and overboost."""
+        wrote=[]
+        def fake(addr, data=None):
+            if data is not None:
+                wrote.append(data); return 0, None
+            return (0x42 if not wrote else wrote[-1]), None
+        with mock.patch.object(self.m, "_wmi", side_effect=fake), \
+             mock.patch.object(self.m, "ec_read", return_value=0x62), \
+             mock.patch.object(self.m.time, "sleep"):
+            self.m.wmi_set_profile(0x02)
+        self.assertEqual(wrote[0], 0x62)
+        self.assertTrue(wrote[0] & 0x40, "touchpad-off bit dropped")
+        self.assertTrue(wrote[0] & 0x02, "overboost bit dropped")
+
+    def test_doors_disagreeing_after_a_write_stops_the_run(self):
+        """A value visible through one door and not the other is a shadow
+        register -- a bigger finding than the one we are chasing."""
+        def fake(addr, data=None):
+            return (0x20, None)
+        with mock.patch.object(self.m, "_wmi", side_effect=fake), \
+             mock.patch.object(self.m, "ec_read", return_value=0x00), \
+             mock.patch.object(self.m.time, "sleep"):
+            self.assertFalse(self.m.wmi_set_profile(0x02))
+
+    def test_a_failed_wmi_read_writes_nothing(self):
+        with mock.patch.object(self.m, "_wmi", return_value=(None, "boom")) as w:
+            self.assertFalse(self.m.wmi_set_profile(0x02))
+        self.assertEqual(w.call_count, 1, "must not write after a failed read")
+
+    def test_set_profile_routes_to_the_selected_door(self):
+        self.m.SET_VIA = "wmi"
+        with mock.patch.object(self.m, "wmi_set_profile", return_value=True) as w, \
+             mock.patch.object(self.m, "ec_write") as e:
+            self.assertTrue(self.m.set_profile(0x02))
+        w.assert_called_once_with(0x02)
+        e.assert_not_called()
+
+
 if __name__ == "__main__":
     unittest.main()

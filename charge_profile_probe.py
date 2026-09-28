@@ -106,6 +106,10 @@ DEFAULT_IDLE_INTERVAL = 5.0
 EC_DELAY = 0.006
 _last_call = 0.0
 
+# Which door set_profile() uses. Changed only by --set-via, and defaulting to
+# the one every previous run used, so nothing changes unless it is asked for.
+SET_VIA = "ecrw"
+
 
 def _call(expr: str) -> str:
     global _last_call
@@ -134,6 +138,77 @@ def ec_write(addr: int, val: int) -> None:
     _call(f"{ECRW} 0x{addr:X} 0x{val & 0xFF:X}")
 
 
+# --- the other door -------------------------------------------------------
+#
+# Everything above reaches the EC through \_SB.INOU.ECRR/ECRW, which the DSDT
+# implements as MMIO. tuxedo-drivers instead calls a WMI method, and a user on
+# this same model sees the charging ceiling engage while we never have. Both
+# doors set the byte -- wmi_ec_probe.py confirmed they agree on seven registers
+# -- but "the byte is set" and "the EC acted on it" are different claims.
+#
+# The read encoding is duplicated from wmi_ec_probe.py on purpose: that file is
+# contractually unable to write, and its tests assert the absence of any write
+# symbol. Importing a write into it would break the one guarantee it makes.
+WMBC = r"\_SB.AMW0.WMBC"
+WMI_INSTANCE, WMI_METHOD_ID = 0x00, 0x04
+WMI_FUNCTION = {"read": 1, "write": 0}
+WMI_ARG_LEN = 8                       # what tuxedo actually sends; see the probe
+
+
+def _wmi(addr: int, data: int | None):
+    """One WMI EC access. data=None reads; otherwise writes. (value, error)."""
+    buf = bytearray(WMI_ARG_LEN)
+    buf[0] = addr & 0xFF
+    buf[1] = (addr >> 8) & 0xFF
+    if data is None:
+        buf[5] = WMI_FUNCTION["read"]
+    else:
+        buf[2] = data & 0xFF
+        buf[5] = WMI_FUNCTION["write"]
+    raw = _call(f"{WMBC} {WMI_INSTANCE:#x} {WMI_METHOD_ID:#x} b{bytes(buf).hex()}")
+    if raw.startswith("Error"):
+        return None, raw
+    try:
+        vals = ([int(x, 16) for x in raw.strip("{}").split(",") if x.strip()]
+                if raw.startswith("{") else [int(raw, 16) & 0xFF])
+    except ValueError:
+        return None, f"unparsable {raw[:40]}"
+    if not vals:
+        return None, "empty response"
+    if len(vals) >= 4 and vals[:4] == [0xFE, 0xFE, 0xFE, 0xFE]:
+        return None, "firmware returned 0xFEFEFEFE"
+    return vals[0], None
+
+
+def wmi_set_profile(value: int) -> bool:
+    """Set the charging profile through the WMI door.
+
+    Read-modify-write for the same reason as the MMIO path: 0x07A6 also carries
+    OVERBOOST_DYN_TEMP_OFF (bit 1) and TOUCHPAD_TOGGLE_OFF (bit 6).
+
+    Verified through BOTH doors afterwards. If a WMI write lands somewhere ECRR
+    cannot see -- or the reverse -- that is a shadow register, which would be a
+    larger finding than the one we are chasing and must stop the run rather
+    than be averaged away.
+    """
+    cur, err = _wmi(REG_OEM_4, None)
+    if cur is None:
+        print(f"  ! WMI read failed: {err}", flush=True)
+        return False
+    want = (cur & ~PROFILE_MASK) | (value << PROFILE_SHIFT)
+    _wmi(REG_OEM_4, want)
+    time.sleep(0.2)
+    via_wmi, _ = _wmi(REG_OEM_4, None)
+    via_ecrr = ec_read(REG_OEM_4)
+    if via_wmi != via_ecrr:
+        print(f"  !! the two doors disagree after a WMI write: "
+              f"WMI reads 0x{via_wmi:02X}, ECRR reads 0x{via_ecrr:02X}. "
+              f"That is a shadow register, not a profile change. Stopping.",
+              flush=True)
+        return False
+    return via_wmi is not None and (via_wmi & PROFILE_MASK) >> PROFILE_SHIFT == value
+
+
 def read_profile():
     v = ec_read(REG_OEM_4)
     return None if v is None else (v & PROFILE_MASK) >> PROFILE_SHIFT
@@ -146,6 +221,8 @@ def set_profile(value: int) -> bool:
     OVERBOOST_DYN_TEMP_OFF (bit 1) and TOUCHPAD_TOGGLE_OFF (bit 6), so a blind
     byte write here disables the touchpad on a machine nobody is sitting at.
     """
+    if SET_VIA == "wmi":
+        return wmi_set_profile(value)
     cur = ec_read(REG_OEM_4)
     if cur is None:
         return False
@@ -512,6 +589,11 @@ def main() -> int:
     ap.add_argument("--resume-window", type=float, default=900)
     ap.add_argument("--timeout", type=float, default=6 * 3600,
                     help="give up waiting for one settle after this long")
+    ap.add_argument("--set-via", choices=("ecrw", "wmi"), default="ecrw",
+                    help="which door writes the profile. ecrw is MMIO, the "
+                         "path every run so far has used; wmi is the path "
+                         "tuxedo-drivers uses on machines where the ceiling "
+                         "engages")
     ap.add_argument("--drift-confirm", type=int, default=3,
                     help="consecutive disagreeing reads before believing the "
                          "profile actually changed. 1 restores the old "
@@ -527,6 +609,9 @@ def main() -> int:
             raise SystemExit("must run as root")
         if not os.path.exists(CALL):
             raise SystemExit("run: sudo modprobe acpi_call")
+
+    global SET_VIA
+    SET_VIA = args.set_via
 
     cells = cell_count()
     order = [p.strip() for p in args.order.split(",") if p.strip()]
@@ -612,6 +697,7 @@ def main() -> int:
         "cells": cells,
         "charge_full": sysfs_int("charge_full"),
         "charge_full_design": sysfs_int("charge_full_design"),
+        "set_via": SET_VIA,
         "order": order,
         # A null result from a run that could not arm the ceiling is not a
         # null result. Carried in the summary so it cannot be read without it.

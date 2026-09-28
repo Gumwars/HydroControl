@@ -84,6 +84,14 @@ show up in a diff taken around a profile toggle, because it happens earlier.
 
 **Test 1 costs nothing and can make the other four unnecessary. Run it first.**
 
+It also answers something never established: whether this feature works at all,
+anywhere, under measurement. The single outside report of it working has an
+alternative explanation -- `0x35` is the high byte of the current register, so
+forcing it produces exactly the "zero current while charge_now climbs" signature
+that report describes. The G2 firmware contains the code; no G2 has been
+observed doing it. Before hunting for a missing step it is worth knowing there
+is one.
+
 Set Stationary in Control Center. Charge from below 70%. Record capacity,
 current and voltage every 30 s to a file.
 
@@ -107,6 +115,62 @@ Record the TCC version, EC version and BIOS version in the same file. The
 outside report is from an XMG NEO 16 (E25) / TongFang X6AR5xxY, a different
 barebones from this IDY chassis, so the comparison is only meaningful anchored
 to versions.
+
+## Is it the EC or the service? Five minutes, and do it second
+
+Control Center is a service plus a frontend. If the service is what enforces
+the ceiling -- polling capacity and acting when it reaches the target -- then
+the EC registers are storage for a preference and nothing more, the machinery
+decoded out of `117.ELUK` is a legacy or partial path, and no register write
+from Linux could ever have worked, because there was never anything to trigger.
+
+That fits every observation on record: the code present and identical to the
+G2's, its guards passing, the bit never arming, and no enable bit found after
+decoding every reference to the registers involved.
+
+Once test 1 has shown a ceiling, split it:
+
+1. Reach the ceiling with the service running. Confirm charging has stopped.
+2. Stop the Control Center service. Leave the profile set.
+3. Discharge below the threshold, then charge again with the service stopped.
+
+| Result | Meaning |
+|---|---|
+| ceiling still engages | The EC enforces it. There is a register state we have not found, and the test 2 diff should show it. |
+| charges straight past | **The service enforces it in software.** The hunt through EC RAM was looking in the wrong place. |
+
+The second outcome is the better one for this project, because it is the only
+result we can act on: a software ceiling is something HydroControl can
+implement directly rather than merely report. It also makes test 2 far more
+valuable, because the diff would then reveal the mechanism the service uses to
+actually stop charging -- the thing we have never found and have no other way
+to find.
+
+## What the service does that we do not
+
+Whatever the split says, capture the service's own behaviour. Three dumps, each
+of `0x0700-0x07FF` plus low RAM:
+
+- service stopped, profile unset
+- service stopped, profile set through the frontend beforehand
+- service running, same profile, five minutes later
+
+Four things worth watching for specifically, because each would be invisible
+from where we have been standing:
+
+- **A keepalive.** If the profile must be re-asserted periodically and lapses
+  otherwise, we would never have seen it: our probe writes once, and
+  `--drift-confirm` deliberately suppresses re-writes after an earlier bug where
+  a spurious re-write cleared a latched ceiling. The outside report already
+  notes single writes to `0x35` being corrected back within 1-5 s while
+  sustained writes hold, so this EC is known to behave differently under
+  repetition.
+- **A commit or handshake write** to another register after the profile.
+- **An ordering requirement** -- threshold before profile, or either only while
+  discharging, or only across an AC transition.
+- **A different register entirely.** `0x07CD` carries 12-13 references in both
+  images and this project has only ever treated it as the FIXCGLM overlay's
+  scratch slot.
 
 ## Tests 2-4: only if test 1 shows a real ceiling
 

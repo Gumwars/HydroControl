@@ -877,3 +877,80 @@ class Le16Test(unittest.TestCase):
     def test_the_columns_are_logged(self):
         for c in ("chg_target", "hw_base"):
             self.assertIn(c, self.m.Log.COLS)
+
+
+class RateInferenceTest(unittest.TestCase):
+    """rate x 1040 = mA, so the rate code is recoverable from current.
+
+    It has to be, because 0x0A51 is not host-readable and the profile output is
+    hw_base - (constant x rate). A target that differs between two samples is
+    only attributable to the constant if the rate held, and rate is temperature
+    and voltage coupled -- which is exactly what drifts between two sessions.
+    """
+
+    def setUp(self):
+        self.m = load()
+
+    def test_the_three_rate_codes(self):
+        for ma, code in ((4160, 4), (3120, 3), (2080, 2)):
+            self.assertEqual(self.m.infer_rate(ma), code)
+
+    def test_nearby_currents_round_to_a_code(self):
+        self.assertEqual(self.m.infer_rate(3000), 3)
+        self.assertEqual(self.m.infer_rate(4000), 4)
+
+    def test_a_taper_current_is_not_forced_into_a_code(self):
+        """Late in a charge the current is far below any rate; guessing 2 there
+        would divide the offset by a rate that was never selected."""
+        self.assertIsNone(self.m.infer_rate(300))
+        self.assertIsNone(self.m.infer_rate(0))
+        self.assertIsNone(self.m.infer_rate(None))
+
+
+class SwitchVerdictTest(unittest.TestCase):
+    """The mid-charge switch, and the trap in reading it.
+
+    Two separate runs cannot be shown to have sat in the same branch of the
+    constant-selection tree: it forks on hw_base, 0x0A56:0x0A57, 0x09C9:0x09CA
+    and 0x0A5C before it ever consults 0x07A6, and those registers are
+    unmapped. A single switch holds them still.
+    """
+
+    def setUp(self):
+        self.m = load()
+
+    def rows(self, target, base, ma=3120, n=4):
+        return [{"chg_target": target, "hw_base": base, "current_ma": ma}] * n
+
+    def test_a_moving_offset_divides_back_to_a_constant(self):
+        v = self.m.switch_verdict(self.rows(1000, 3120), self.rows(700, 3120),
+                                  "stationary", "high_capacity")
+        self.assertEqual(v["offset_delta"], 300)
+        self.assertEqual(v["rate_inferred"], 3)
+        self.assertEqual(v["constant_delta"], 100)
+        self.assertIn("profile path runs", v["reading"])
+
+    def test_unreadable_columns_are_the_wrong_door_not_a_null(self):
+        v = self.m.switch_verdict(self.rows(None, None), self.rows(None, None),
+                                  "stationary", "high_capacity")
+        self.assertIn("wrong door", v["reading"])
+        self.assertNotIn("not reaching", v["reading"])
+
+    def test_a_small_hw_base_is_not_evidence_the_path_is_idle(self):
+        """The firmware forces the constant to 0 when hw_base < 500, so an
+        unchanged offset there means 'chose no reduction', not 'did not run'.
+        Without this the capture would read as a clean negative."""
+        v = self.m.switch_verdict(self.rows(400, 400), self.rows(400, 400),
+                                  "stationary", "high_capacity")
+        self.assertIn("NOT that the path is idle", v["reading"])
+
+    def test_a_flat_offset_with_a_large_base_is_a_real_negative(self):
+        v = self.m.switch_verdict(self.rows(1000, 3120), self.rows(1000, 3120),
+                                  "stationary", "high_capacity")
+        self.assertIn("did not move", v["reading"])
+        self.assertNotIn("NOT that the path is idle", v["reading"])
+
+    def test_the_boundary_at_500_is_not_off_by_one(self):
+        v = self.m.switch_verdict(self.rows(500, 500), self.rows(500, 500),
+                                  "stationary", "high_capacity")
+        self.assertNotIn("below 500", v["reading"])

@@ -471,6 +471,7 @@ def sample(cells: int) -> dict:
         "charge_full_design": sysfs_int("charge_full_design"),
         "cycle_count": sysfs_int("cycle_count"),
         "current_ma": None if i_ua is None else round(i_ua / 1000),
+        "rate": infer_rate(None if i_ua is None else round(i_ua / 1000)),
         "voltage_uv": v_uv,
         "v_per_cell": None if v_uv is None else round(v_uv / 1e6 / cells, 4),
         "profile": read_profile(),
@@ -503,7 +504,7 @@ def sample(cells: int) -> dict:
 class Log:
     COLS = ["t", "phase", "ac", "status", "capacity", "charge_now", "charge_full",
             "charge_full_design", "cycle_count",
-            "current_ma", "voltage_uv", "v_per_cell", "profile", "threshold",
+            "current_ma", "rate", "voltage_uv", "v_per_cell", "profile", "threshold",
             "reached", "oem6", "erm_reached", "full_24h",
             "chg_target", "hw_base",
             "gate", "gate_armed", "romid0", "ap_oem", "manual_fan_ctrl",
@@ -786,6 +787,124 @@ def verdict(results: list[dict], args) -> dict:
             "spread_mv_per_cell": spread_mv, "resting": vs, "resumed": []}
 
 
+def infer_rate(current_ma):
+    """The charge-rate code, recovered from current.
+
+    0x0A51 holds 2, 3 or 4 and is selected from charger status; the firmware
+    uses it as rate * 1040 = mA elsewhere, so the code is recoverable from
+    current even though 0x0Axx is not host-readable.
+
+    It matters because the profile's output is
+    chg_target = hw_base - (constant * rate), so a target that differs between
+    two samples is only attributable to the constant if the rate held. Rate is
+    temperature and voltage coupled, which is exactly what drifts between two
+    sessions -- and the reason a single mid-charge switch beats two runs.
+    """
+    if current_ma is None or current_ma <= 0:
+        return None
+    r = round(current_ma / 1040)
+    return r if 2 <= r <= 4 else None
+
+
+def switch_run(cells: int, first: str, second: str, at_pct: int, args, log) -> dict:
+    """Charge under one profile, switch to another mid-charge, watch the offset.
+
+    Isolates the profile constant from everything else. The constant is not
+    chosen by 0x07A6 alone -- the selection at 0x1BD07-0x1BE02 branches first on
+    hw_base, 0x0A56:0x0A57, 0x09C9:0x09CA and 0x0A5C, and only then consults the
+    profile bits. Those gate registers are unmapped, so two separate runs cannot
+    be shown to have sat in the same branch, and "comparable capacity" is not a
+    sufficient control.
+
+    Across a single switch, seconds apart, the telemetry and the rate are
+    effectively constant and the profile constant is the only thing that moves.
+    Stationary is 200 and Balanced is 100, so the offset should shift by
+    100 * rate; against the 150 default, 50 * rate.
+
+    A mid-charge write to 0x07A6 is what --drift-confirm exists to prevent, but
+    that guard protects a latched ceiling and the ceiling is shut here
+    (0x07C3 reads 0x0D, not 4). The profile output is recomputed every pass,
+    so there is no latch to disturb.
+    """
+    print(f"switch mode: {first} until >={at_pct}%, then {second}.\n", flush=True)
+    set_profile(BY_NAME[first])
+
+    before, after = [], []
+    fired = None
+    deadline = time.monotonic() + args.timeout
+    while time.monotonic() < deadline:
+        s_ = sample(cells)
+        log.write(s_, f"switch_{first}")
+        cap = s_["capacity"]
+        print(f"  {s_['t'][11:]}  {cap}%  {s_['current_ma']} mA  "
+              f"target={s_['chg_target']} base={s_['hw_base']}", flush=True)
+        if s_["status"] == "Charging":
+            before.append(s_)
+            if cap is not None and cap >= at_pct:
+                fired = s_
+                break
+        time.sleep(args.interval)
+
+    if fired is None:
+        return {"switched": False, "why": "never reached the switch capacity"}
+
+    print(f"\n  switching to {second} at {fired['capacity']}%\n", flush=True)
+    set_profile(BY_NAME[second])
+
+    watch_end = time.monotonic() + args.trigger_watch
+    while time.monotonic() < watch_end:
+        s_ = sample(cells)
+        log.write(s_, f"switch_{second}")
+        after.append(s_)
+        print(f"  {s_['t'][11:]}  {s_['capacity']}%  {s_['current_ma']} mA  "
+              f"target={s_['chg_target']} base={s_['hw_base']}", flush=True)
+        time.sleep(1.0)
+
+    return switch_verdict(before, after, first, second)
+
+
+def switch_verdict(before, after, first, second) -> dict:
+    def offsets(rows):
+        out = []
+        for r in rows:
+            t, b = r.get("chg_target"), r.get("hw_base")
+            if t is not None and b is not None:
+                out.append(b - t)
+        return out
+    pre, post = offsets(before[-8:]), offsets(after)
+    rates = [r for r in (infer_rate(x.get("current_ma")) for x in before[-8:] + after)
+             if r is not None]
+    bases = [x["hw_base"] for x in before[-8:] + after if x.get("hw_base") is not None]
+    have = bool(pre or post)
+    small_base = bool(bases) and all(b < 500 for b in bases)
+    d = (round(sum(post)/len(post)) - round(sum(pre)/len(pre))) if pre and post else None
+    rate = max(set(rates), key=rates.count) if rates else None
+    return {
+        "switched": True, "from": first, "to": second,
+        "offset_before": round(sum(pre)/len(pre)) if pre else None,
+        "offset_after": round(sum(post)/len(post)) if post else None,
+        "offset_delta": d,
+        "rate_inferred": rate,
+        "constant_delta": None if (d is None or not rate) else round(d / rate),
+        "hw_base_seen": sorted(set(bases))[:6],
+        "reading": (
+            "chg_target and hw_base never answered. 0x05xx/0x03xx are outside "
+            "the ECRR window on this machine -- the wrong door, not a null "
+            "result." if not have else
+            "hw_base stayed below 500 for the whole window, and the firmware "
+            "forces the constant to 0 in that case. An unchanged offset here "
+            "means the profile chose no reduction, NOT that the path is idle."
+            if small_base else
+            f"the offset moved by {d} with rate {rate}, i.e. a constant change "
+            f"of about {round(d/rate) if rate else '?'}. The profile path runs "
+            f"on this machine."
+            if d else
+            "the offset did not move across the switch. With hw_base above 500 "
+            "and the rate steady, that is evidence the profile constant is not "
+            "reaching the charge target here."),
+    }
+
+
 def trigger_run(cells: int, profile: str, at_pct: int, args, log) -> dict:
     """Charge past the threshold with no limit set, then write the profile ONCE.
 
@@ -955,6 +1074,11 @@ def main() -> int:
                          "write-on-one-bad-read behaviour")
     ap.add_argument("--same-mv", type=float, default=15,
                     help="mV/cell within which two resting voltages are the same")
+    ap.add_argument("--switch-at", type=int, metavar="PCT",
+                    help="charge under --order's first profile, switch to its "
+                         "second at this capacity, and watch the offset. "
+                         "Isolates the profile constant from telemetry drift "
+                         "better than two separate runs.")
     ap.add_argument("--trigger-at", type=int, metavar="PCT",
                     help="charge with no profile set, then write the profile "
                          "ONCE at this capacity. Meaningful only above the "
@@ -1000,6 +1124,23 @@ def main() -> int:
     original = read_profile()
     if original is None:
         raise SystemExit("cannot read the profile register -- refusing to write blind")
+
+    if args.switch_at is not None:
+        if len(order) != 2:
+            raise SystemExit("--switch-at needs two profiles via --order")
+        log = Log(args.output)
+        try:
+            res = switch_run(cells, order[0], order[1], args.switch_at, args, log)
+        finally:
+            set_profile(original)
+        path = args.json or os.path.splitext(args.output)[0] + ".json"
+        with open(path, "w") as fh:
+            json.dump({"when": datetime.now().isoformat(timespec="seconds"),
+                       "cells": cells, "mode": "switch", "switch": res,
+                       "footprint": footprint(log.footprint_samples)}, fh, indent=2)
+        print(f"\n{res.get('reading', res.get('why'))}\n\nsamples: "
+              f"{args.output}\nsummary: {path}")
+        return 0
 
     if args.trigger_at is not None:
         if len(order) != 1:

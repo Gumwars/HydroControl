@@ -158,6 +158,8 @@ class Oem6SamplingTest(unittest.TestCase):
                     # The footprint witnesses. Values are this machine's real
                     # readings: 0x0742 with bit 2 clear, 0x0490 with both
                     # guard bits set.
+                    self.m.REG_GATE: 0x0D,
+                    self.m.REG_ROMID: 0xFF,
                     self.m.REG_AP_OEM: 0x00,
                     self.m.REG_SUPPORT_5: 0x22,
                     self.m.REG_BATT_STATUS: 0x0F,
@@ -520,7 +522,8 @@ class FootprintTest(unittest.TestCase):
     def frames(self, *specs):
         """(support5, ran) pairs -> footprint sample dicts, guards passing."""
         return [{"support5": s, "ran": r, "guard0": 1, "guard2": 1,
-                 "ap_oem": "0x04", "manual_fan_ctrl": 0} for s, r in specs]
+                 "ap_oem": "0x04", "manual_fan_ctrl": 0,
+                 "gate": "0x0D", "gate_armed": 0} for s, r in specs]
 
     def test_ap_oem_is_not_presented_as_a_charging_verdict(self):
         """0x0741 bit 0 is ENABLE_MANUAL_CTRL, for fans. This file claimed it
@@ -758,3 +761,64 @@ class TriggerAnsweredTest(unittest.TestCase):
         """'Single writes do nothing' invites 'hold it then', which is what
         latched this EC."""
         self.assertIn("DESIGN.md 4.1b", self.m.trigger_run.__doc__)
+
+
+class GateTest(unittest.TestCase):
+    """0x07C3, the one byte between us and a working ceiling.
+
+    The charge-ceiling task arms only when 0x07C3 == 4. The firmware reads it
+    at 19 sites and writes it at none, so it is an input to the 8051 -- and
+    this project had never read it until a one-off dump was pasted into a
+    conversation. That is not evidence the repository can cite, which is the
+    reason it is a logged column now.
+
+    The value matters less than the question sampling answers: does 0x07C3
+    ever reach 4 by itself? If it does, the ceiling wants a machine state, not
+    a register write, and nothing needs to be poked.
+    """
+
+    def setUp(self):
+        self.m = load()
+
+    def frames(self, *gates):
+        return [{"gate": g, "gate_armed": int(g == "0x04"), "support5": "0x22",
+                 "ran": 0, "guard0": 1, "guard2": 1, "ap_oem": "0x04",
+                 "manual_fan_ctrl": 0} for g in gates]
+
+    def test_the_registers_are_the_ones_decoded(self):
+        self.assertEqual(self.m.REG_GATE, 0x07C3)
+        self.assertEqual(self.m.REG_ROMID, 0x0770)
+
+    def test_a_shut_gate_is_reported_with_what_was_seen(self):
+        f = self.m.footprint(self.frames("0x0D", "0x0D", "0x0E"))
+        self.assertFalse(f["gate_ever_armed"])
+        self.assertIn("0x0D", f["gate_reading"])
+        self.assertIn("0x0E", f["gate_reading"])
+
+    def test_one_armed_sample_anywhere_is_the_finding(self):
+        """If 0x07C3 hits 4 even once, the ceiling is a reachable machine
+        state and the whole write question goes away."""
+        f = self.m.footprint(self.frames(*(["0x0D"] * 500 + ["0x04"]
+                                           + ["0x0D"] * 500)))
+        self.assertTrue(f["gate_ever_armed"])
+        self.assertIn("needs the machine put into that state", f["gate_reading"])
+
+    def test_an_unread_gate_is_not_reported_as_shut(self):
+        f = self.m.footprint([{"gate": None, "gate_armed": None,
+                               "support5": "0x22", "ran": 0, "guard0": 1,
+                               "guard2": 1, "ap_oem": None,
+                               "manual_fan_ctrl": None}])
+        self.assertEqual(f["gate_reading"], "not read")
+
+    def test_the_gate_is_never_written(self):
+        """It is a state byte read at 19 sites. Writing it tells the EC it is
+        in a state it is not, and the blast radius is all 19."""
+        with open(_SPEC.origin, encoding="utf-8") as fh:
+            src = fh.read()
+        for reg in ("REG_GATE", "REG_ROMID"):
+            self.assertNotIn(f"ec_write({reg}", src)
+            self.assertNotIn(f"_wmi({reg}", src)
+
+    def test_the_columns_are_logged(self):
+        for c in ("gate", "gate_armed", "romid0"):
+            self.assertIn(c, self.m.Log.COLS)

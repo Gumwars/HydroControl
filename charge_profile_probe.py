@@ -126,6 +126,29 @@ REG_AP_OEM_6 = 0x07C6
 # control during a capture, which is worth knowing when reading fan or power
 # behaviour alongside charging, and bit 2 is set on this machine and is
 # undocumented in the driver. Both are witnesses, neither is a verdict.
+# The gate. Decoded 2026-09-28 from 117.ELUK: the charge-ceiling task at
+# bank2:0xC88C opens with
+#
+#     LCALL CFED     ->  F0 90 07 C3 E0 64 04 22   A = [0x07C3] ^ 4
+#     JZ             ->  arm if 0x07C3 == 4
+#     LCALL C49C     ->  0x0770 == 4   (dead here: 0x0770 is ROMID_START
+#                                       and reads 0xFF on this machine)
+#
+# and sets 0x0742 bit 2 accordingly. Our 0x0742 reads 0x22 -- bit 2 clear --
+# for every sample of every capture, which is what a closed gate looks like.
+#
+# 0x07C3 is read at 19 sites in the firmware and written at none: no MOVX,
+# no split DPL/DPH load, and no MOV DPTR,#07C0-07C2 that could INC into it.
+# It is an input to the 8051 application, compared against about a dozen
+# values, and 4 is the one that arms the ceiling.
+#
+# Logged here because a one-off dump pasted into a conversation is not
+# evidence this project can cite. Sampling it across charge, full, discharge
+# and AC transitions also answers the question that matters more than its
+# value right now: does 0x07C3 ever reach 4 on its own? If it does, the state
+# is something we can get the machine into, and nothing needs to be written.
+REG_GATE = 0x07C3               # == 4 arms the ceiling; never written by the EC
+REG_ROMID = 0x0770              # second gate; ROMID_START, unprogrammed here
 REG_AP_OEM = 0x0741             # bit 0 = ENABLE_MANUAL_CTRL (fans), bit 2 = ?
 REG_SUPPORT_5 = 0x0742          # bit 2 = the footprint
 REG_BATT_STATUS = 0x0490        # bits 0 and 2 = the ceiling's guards
@@ -336,12 +359,25 @@ def footprint(samples: list[dict]) -> dict:
     a single 0x078E dump as proof of a capability.
     """
     apoem = [s.get("ap_oem") for s in samples if s.get("ap_oem") is not None]
+    gates = [s.get("gate") for s in samples if s.get("gate") is not None]
     seen = [s["support5"] for s in samples if s.get("support5") is not None]
     bits = [s["ran"] for s in samples if s.get("ran") is not None]
     guards = [(s.get("guard0"), s.get("guard2")) for s in samples
               if s.get("guard0") is not None]
     moved = len(set(seen)) > 1
     return {
+        "gate_register": "0x07C3",
+        "gate_values_seen": sorted(set(gates)),
+        "gate_ever_armed": any(g == "0x04" for g in gates),
+        "gate_reading": (
+            "not read" if not gates else
+            "0x07C3 reached 0x04 during this capture -- the gate opens on its "
+            "own in some state, so the ceiling needs the machine put into that "
+            "state, not a register written."
+            if any(g == "0x04" for g in gates) else
+            f"0x07C3 never reached 0x04 (saw {sorted(set(gates))}). The gate "
+            f"stayed shut for every sample, which is consistent with 0x0742 "
+            f"bit 2 reading clear throughout."),
         "ap_oem_register": "0x0741",
         "ap_oem_values_seen": sorted(set(apoem)),
         "ap_oem_reading": (
@@ -371,6 +407,8 @@ def footprint(samples: list[dict]) -> dict:
 def sample(cells: int) -> dict:
     raw = ec_read(REG_CHARGE_CTRL)
     oem6 = ec_read(REG_AP_OEM_6)
+    gate = ec_read(REG_GATE)
+    romid = ec_read(REG_ROMID)
     apoem = ec_read(REG_AP_OEM)
     sup5 = ec_read(REG_SUPPORT_5)
     bstat = ec_read(REG_BATT_STATUS)
@@ -399,6 +437,10 @@ def sample(cells: int) -> dict:
         "oem6": None if oem6 is None else f"0x{oem6:02X}",
         "erm_reached": None if oem6 is None else int(bool(oem6 & BATTERY_ERM_STATUS_REACHED)),
         "full_24h": None if oem6 is None else int(bool(oem6 & BATTERY_CHARGE_FULL_OVER_24H)),
+        "gate": None if gate is None else f"0x{gate:02X}",
+        # The whole question in one column.
+        "gate_armed": None if gate is None else int(gate == 4),
+        "romid0": None if romid is None else f"0x{romid:02X}",
         "ap_oem": None if apoem is None else f"0x{apoem:02X}",
         # ENABLE_MANUAL_CTRL. Named for what it is: manual fan control, not
         # anything to do with charging.
@@ -419,7 +461,7 @@ class Log:
             "charge_full_design", "cycle_count",
             "current_ma", "voltage_uv", "v_per_cell", "profile", "threshold",
             "reached", "oem6", "erm_reached", "full_24h",
-            "ap_oem", "manual_fan_ctrl",
+            "gate", "gate_armed", "romid0", "ap_oem", "manual_fan_ctrl",
             "support5", "ran", "batt_status", "guard0", "guard2",
             "charge_limit_mode"]
 
@@ -451,7 +493,8 @@ class Log:
     def _keep_footprint(self, s: dict) -> None:
         self.footprint_samples.append(
             {k: s.get(k) for k in ("support5", "ran", "guard0", "guard2",
-                                   "ap_oem", "manual_fan_ctrl")})
+                                   "ap_oem", "manual_fan_ctrl", "gate",
+                                   "gate_armed")})
 
     def note(self, s: dict, phase: str) -> None:
         """Record what 0x07C6 did, whether or not a CSV is being written.

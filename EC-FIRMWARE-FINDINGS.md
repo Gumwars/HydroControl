@@ -131,17 +131,20 @@ never invoked on all of them, and an ODM shipping a register map, a capability
 bit, guards and a comparison that nothing calls is a poor explanation compared
 with a variable specific to this configuration.
 
-One such variable is on the machine and was noticed late: the BIOS is a
-third-party modification. `bios_vendor` reads `Prema Mod` and the board name is
-`HYDROC-16 powered by premamod.com`. Every Eluktronics HYDROC ships this way;
-the board in the outside report does not. If the EC's battery-care task is
-enabled by a POST-time handshake, a modified BIOS that dropped it would produce
-exactly what is observed, with no ODM oversight and no hardware fault.
+The likely shape of it is build-time configuration. Uniwill develops one EC
+codebase and ships it to the boutiques, who enable what they want, disable what
+they do not, and brand the result -- nobody writes an EC from scratch per
+chassis. A feature compiled out at its call site, with the function body still
+linked in because an 8051 toolchain does not aggressively strip unreferenced
+code, produces exactly what is observed: the routine present, identical, and
+never invoked. Deliberate, and deliberate at a layer above the code we are
+reading.
 
-This is a hypothesis with no evidence for it beyond opportunity. Against it:
-the stock ACPI tables contain no reference to 0x07B9, 0x0490 or 0x0742 at all,
-so whatever the BIOS does here it does not do through ACPI at runtime. That
-narrows it to POST, or rules it out.
+(An earlier draft blamed the Prema Mod BIOS on the strength of the vendor
+string alone. Withdrawn: Prema is a performance tuner and the owner has direct
+knowledge that battery policy was not touched. The stock ACPI tables also
+reference none of 0x07B9, 0x0490 or 0x0742, so the BIOS does not reach these
+registers at runtime in any case.)
 
 **Unreachability is inferred, not proven.** The direct evidence is that the code
 does not run; the mechanism is not identified. Searching for callers found none
@@ -154,6 +157,28 @@ mean decoding that and showing the G1 dispatch lacks an entry the G2 has.
 NEO 16 / TongFang `X6AR5xxY`, a different project again. If their build wires the
 routine into its task loop and ours does not, both observations are true and
 there was never a conflict to resolve.
+
+### The capability bit was mislabelled here, and it matters
+
+The site at G1 `0x1BBEB` was recorded as a test of `0x078E` bit 3. It is not:
+
+```
+90 07 8E  E0  44 08      A = [0x078E] | 0x08
+12 <callee>              callee:  F0                     write A BACK to 0x078E
+                                  90 07 41  E0  54 01  22   return 0x0741 bit 0
+70 07                    JNZ -> keep the selected profile
+90 07 A6  E0  54 CF  F0  else force it to high_capacity
+```
+
+The capability bit is **written, not read**. The EC advertises charging-profile
+support unconditionally, on every machine, whatever the feature actually does.
+That is how `uw_has_charging_profile()` in tuxedo-drivers -- which gates on
+exactly this bit -- finds it set on a machine where the profiles do nothing,
+with nobody having lied anywhere.
+
+The real gate is **`0x0741` bit 0**, and this project had never read it. If it
+is clear, the EC is declining to honour the profile and that is the answer.
+`charge_profile_probe.py` now records it.
 
 **Which of the two live explanations holds is not yet known.** The code never
 running, and the code running against a threshold it reads elsewhere, are

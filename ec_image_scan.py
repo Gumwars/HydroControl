@@ -57,6 +57,7 @@ LOAD_DPTR = 0x90
 # have to reconstruct a month of argument from a number.
 REGISTERS = {
     0x0740: "PROJECT_ID -- the build's own identity",
+    0x0741: "AP_OEM; bit 0 is the charging-profile enable",
     0x0742: "SUPPORT_5",
     0x078E: "capability byte; bit 3 gates the charging profiles",
     0x07A6: "charging profile, bits 5:4 (also touchpad bit 6)",
@@ -120,10 +121,21 @@ SEQUENCES = {
          "so neither guard is what stops the ceiling."),
     ],
     0x078E: [
-        ("capability bit 3 tested",
-         rb"\xe0\x44\x08",
-         "ORL A,#08h against the capability byte -- the charging-profile "
-         "support flag, used as a gate."),
+        ("capability bit 3 set unconditionally",
+         rb"\xe0\x44\x08\x12",
+         "ORL A,#08h then LCALL to a callee beginning with MOVX @DPTR,A -- so "
+         "the capability bit is WRITTEN BACK, not tested. Previously "
+         "mislabelled here as a gate. The EC advertises charging-profile "
+         "support unconditionally, which is why tuxedo's "
+         "uw_has_charging_profile() reading this bit finds it set on a machine "
+         "where the profiles do nothing. The real gate is 0x0741 bit 0."),
+    ],
+    0x0741: [
+        ("profile enable bit 0 read",
+         rb"\xe0\x54\x01\x22",
+         "MOVX A,@DPTR / ANL A,#01h / RET -- returned to a JNZ that decides "
+         "whether to keep the selected profile or force it back to "
+         "high_capacity. This is the actual charging-profile enable."),
     ],
 }
 

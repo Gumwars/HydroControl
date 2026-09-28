@@ -147,9 +147,29 @@ class SequenceTest(unittest.TestCase):
         self.assertIn("profile bits cleared",
                       self.names(image(G2_PROFILE_CLEARED), 0x07A6))
 
-    def test_capability_gate(self):
-        self.assertIn("capability bit 3 tested",
+    def test_the_capability_bit_is_written_not_tested(self):
+        """Originally labelled a gate, which was wrong and mattered.
+
+        The LCALL that follows lands on a callee beginning MOVX @DPTR,A, so
+        the ORL writes bit 3 back into 0x078E rather than testing it. The EC
+        advertises charging-profile support unconditionally. That is how
+        tuxedo's uw_has_charging_profile() finds the bit set on a machine
+        where the profiles do nothing, with nobody having lied.
+        """
+        self.assertIn("capability bit 3 set unconditionally",
                       self.names(image(G2_CAPABILITY_GATE), 0x078E))
+
+    def test_the_real_enable_is_0741_bit_0(self):
+        enable = bytes.fromhex("900741" + "e0" + "5401" + "22")
+        self.assertIn("profile enable bit 0 read",
+                      self.names(image(enable), 0x0741))
+
+    def test_the_capability_write_needs_the_following_call(self):
+        """ORL A,#08h alone is not the pattern; the LCALL is what makes it a
+        write-back rather than a test, so the matcher requires it."""
+        self.assertEqual(
+            self.names(image(bytes.fromhex("90078e" + "e0" + "4408" + "22")),
+                       0x078E), [])
 
     def test_capacity_subtraction(self):
         self.assertIn("capacity read then subtracted",

@@ -156,6 +156,7 @@ class Oem6SamplingTest(unittest.TestCase):
                     # The footprint witnesses. Values are this machine's real
                     # readings: 0x0742 with bit 2 clear, 0x0490 with both
                     # guard bits set.
+                    self.m.REG_AP_OEM: 0x00,
                     self.m.REG_SUPPORT_5: 0x22,
                     self.m.REG_BATT_STATUS: 0x0F,
                     self.m.REG_CHARGE_LIMIT_MODE: 0x45}[addr]
@@ -516,8 +517,26 @@ class FootprintTest(unittest.TestCase):
 
     def frames(self, *specs):
         """(support5, ran) pairs -> footprint sample dicts, guards passing."""
-        return [{"support5": s, "ran": r, "guard0": 1, "guard2": 1}
-                for s, r in specs]
+        return [{"support5": s, "ran": r, "guard0": 1, "guard2": 1,
+                 "ap_oem": "0x01", "profile_enabled": 1} for s, r in specs]
+
+    def test_a_clear_enable_bit_is_called_the_answer(self):
+        """0x0741 bit 0 clear would end the investigation, so it must not be
+        buried among the other witnesses."""
+        f = self.m.footprint([{"support5": "0x22", "ran": 0, "guard0": 1,
+                               "guard2": 1, "ap_oem": "0x00",
+                               "profile_enabled": 0}])
+        self.assertIn("disabled in", f["enable_reading"])
+
+    def test_a_set_enable_bit_points_further_in(self):
+        f = self.m.footprint(self.frames(("0x22", 0)))
+        self.assertIn("further in", f["enable_reading"])
+
+    def test_an_unread_enable_bit_is_not_reported_as_clear(self):
+        f = self.m.footprint([{"support5": "0x22", "ran": 0, "guard0": 1,
+                               "guard2": 1, "ap_oem": None,
+                               "profile_enabled": None}])
+        self.assertEqual(f["enable_reading"], "not read")
 
     def test_a_flat_register_is_not_reported_as_execution(self):
         f = self.m.footprint(self.frames(*[("0x22", 0)] * 200))

@@ -100,6 +100,23 @@ REG_AP_OEM_6 = 0x07C6
 #
 # 0x0497 moves on its own, which is worth having next to the others for the
 # simple reason that it proves the sampling can see the EC changing something.
+# 0x0741 bit 0 is the feature enable, and until 2026-09-28 this project had
+# never read it. Decoded from both images at the site that was previously
+# mislabelled here as a capability test:
+#
+#     90 07 8E  E0  44 08      A = [0x078E] | 0x08
+#     12 <callee>              callee: F0            -- writes bit 3 BACK
+#                                      90 07 41 E0 54 01 22  -- returns 0741 b0
+#     70 07                    JNZ -> keep the profile
+#     90 07 A6  E0 54 CF F0    else force it to high_capacity
+#
+# So the EC sets the 0x078E capability bit unconditionally and gates the actual
+# behaviour on 0x0741 bit 0. That is how a capability flag comes to advertise a
+# feature that does nothing without anyone having lied: tuxedo's
+# uw_has_charging_profile() reads a bit the firmware always sets.
+#
+# Reading 0 here would be the cleanest answer this investigation could get.
+REG_AP_OEM = 0x0741             # bit 0 = the charging-profile enable
 REG_SUPPORT_5 = 0x0742          # bit 2 = the footprint
 REG_BATT_STATUS = 0x0490        # bits 0 and 2 = the ceiling's guards
 REG_CHARGE_LIMIT_MODE = 0x0497
@@ -308,12 +325,25 @@ def footprint(samples: list[dict]) -> dict:
     than a finding -- the same distinction this project got wrong when it read
     a single 0x078E dump as proof of a capability.
     """
+    enable = [s.get("profile_enabled") for s in samples
+              if s.get("profile_enabled") is not None]
     seen = [s["support5"] for s in samples if s.get("support5") is not None]
     bits = [s["ran"] for s in samples if s.get("ran") is not None]
     guards = [(s.get("guard0"), s.get("guard2")) for s in samples
               if s.get("guard0") is not None]
     moved = len(set(seen)) > 1
     return {
+        "enable_register": "0x0741 bit 0",
+        "profile_enabled_seen": sorted(set(enable)),
+        "enable_reading": (
+            "not read" if not enable else
+            "0x0741 bit 0 is CLEAR. The EC is declining to honour the charging "
+            "profile, and this is the answer -- the feature is disabled in "
+            "this build, not broken and not missing."
+            if set(enable) == {0} else
+            "0x0741 bit 0 is set, so the profile is enabled and the cause lies "
+            "further in." if set(enable) == {1} else
+            "0x0741 bit 0 changed during the capture, which is itself news."),
         "register": "0x0742",
         "samples": len(seen),
         "values_seen": sorted(set(seen)),
@@ -336,6 +366,7 @@ def footprint(samples: list[dict]) -> dict:
 def sample(cells: int) -> dict:
     raw = ec_read(REG_CHARGE_CTRL)
     oem6 = ec_read(REG_AP_OEM_6)
+    apoem = ec_read(REG_AP_OEM)
     sup5 = ec_read(REG_SUPPORT_5)
     bstat = ec_read(REG_BATT_STATUS)
     climit = ec_read(REG_CHARGE_LIMIT_MODE)
@@ -363,6 +394,10 @@ def sample(cells: int) -> dict:
         "oem6": None if oem6 is None else f"0x{oem6:02X}",
         "erm_reached": None if oem6 is None else int(bool(oem6 & BATTERY_ERM_STATUS_REACHED)),
         "full_24h": None if oem6 is None else int(bool(oem6 & BATTERY_CHARGE_FULL_OVER_24H)),
+        "ap_oem": None if apoem is None else f"0x{apoem:02X}",
+        # The enable. If this reads 0, the EC is declining to honour the
+        # profile and everything else follows from that.
+        "profile_enabled": None if apoem is None else int(bool(apoem & 0x01)),
         "support5": None if sup5 is None else f"0x{sup5:02X}",
         # The footprint. If this ever differs between two samples, the code
         # around the capacity comparison executed.
@@ -379,6 +414,7 @@ class Log:
             "charge_full_design", "cycle_count",
             "current_ma", "voltage_uv", "v_per_cell", "profile", "threshold",
             "reached", "oem6", "erm_reached", "full_24h",
+            "ap_oem", "profile_enabled",
             "support5", "ran", "batt_status", "guard0", "guard2",
             "charge_limit_mode"]
 
@@ -409,7 +445,8 @@ class Log:
 
     def _keep_footprint(self, s: dict) -> None:
         self.footprint_samples.append(
-            {k: s.get(k) for k in ("support5", "ran", "guard0", "guard2")})
+            {k: s.get(k) for k in ("support5", "ran", "guard0", "guard2",
+                                   "ap_oem", "profile_enabled")})
 
     def note(self, s: dict, phase: str) -> None:
         """Record what 0x07C6 did, whether or not a CSV is being written.

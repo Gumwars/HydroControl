@@ -15,6 +15,8 @@ resumed but the numbers disagree" -- that is a repeat, not a finding.
 
 import importlib.util
 import os
+import itertools
+import types
 import unittest
 from unittest import mock
 
@@ -604,3 +606,113 @@ class FootprintColumnsTest(unittest.TestCase):
         for reg in ("REG_SUPPORT_5", "REG_BATT_STATUS", "REG_CHARGE_LIMIT_MODE"):
             self.assertNotIn(f"ec_write({reg}", src)
             self.assertNotIn(f"_wmi({reg}", src)
+
+
+class TriggerModeTest(unittest.TestCase):
+    """One write, above the threshold, at a capacity where it shows.
+
+    The theory: the EC evaluates the ceiling when the profile register is
+    written rather than polling on its own. Every negative result in this
+    project wrote once, early, while capacity was BELOW the threshold, so the
+    single evaluation found nothing to do and never ran again.
+
+    The safety property is the important one. Holding these registers by
+    continuous re-writing produced bang-bang charging and then a latched state
+    reporting 100% with the true charge unknown, surviving reboots
+    (DESIGN.md 4.1b). This mode must write exactly once, and must not suggest
+    escalating to a loop when it finds nothing.
+    """
+
+    def setUp(self):
+        self.m = load()
+
+    def args(self, **kw):
+        d = dict(interval=0.0, timeout=5.0, trigger_watch=0.0)
+        d.update(kw)
+        return types.SimpleNamespace(**d)
+
+    def run_trigger(self, samples, at_pct=65, watch=0.0):
+        """Drive trigger_run over a scripted sequence of samples.
+
+        The script repeats its last frame rather than running dry. A mock that
+        raises StopIteration mid-loop fails the test for a reason that has
+        nothing to do with the probe, which is a trap this suite has fallen
+        into before with an expiring monotonic.
+        """
+        script = list(samples)
+        log = mock.Mock()
+        log.footprint_samples = []
+        wrote = []
+        clock = itertools.count(0.0, 1.0)
+
+        def next_sample(_cells):
+            return script.pop(0) if len(script) > 1 else script[0]
+
+        with mock.patch.object(self.m, "sample", side_effect=next_sample), \
+             mock.patch.object(self.m, "set_profile",
+                               side_effect=lambda v: wrote.append(v)), \
+             mock.patch.object(self.m, "time") as t:
+            t.monotonic.side_effect = lambda: next(clock)
+            t.sleep.return_value = None
+            res = self.m.trigger_run(4, "stationary", at_pct,
+                                     self.args(trigger_watch=watch), log)
+        return res, wrote
+
+    def frame(self, cap, ma, thr=60, reached=0, status="Charging", ran=0):
+        return {"t": "2026-09-28T12:00:00", "capacity": cap, "current_ma": ma,
+                "threshold": thr, "reached": reached, "status": status,
+                "v_per_cell": 4.0, "ran": ran, "support5": "0x22"}
+
+    def test_exactly_one_write_when_it_fires(self):
+        res, wrote = self.run_trigger(
+            [self.frame(62, 3700), self.frame(65, 3700)] + [self.frame(65, 0)] * 8)
+        self.assertTrue(res["fired"])
+        self.assertEqual(len(wrote), 1, "the whole point is a single write")
+
+    def test_no_write_at_all_when_it_never_triggers(self):
+        res, wrote = self.run_trigger([self.frame(50, 3700)] * 30)
+        self.assertFalse(res["fired"])
+        self.assertEqual(wrote, [])
+
+    def test_below_the_threshold_does_not_fire(self):
+        """Writing at capacity under the threshold is the experiment this
+        project already ran three times, and it proves nothing."""
+        res, _ = self.run_trigger([self.frame(55, 3700, thr=80)] * 30, at_pct=50)
+        self.assertFalse(res["fired"])
+
+    def test_a_current_collapse_reads_as_engagement(self):
+        res, _ = self.run_trigger(
+            [self.frame(64, 3700), self.frame(65, 3700)]
+            + [self.frame(65, 20)] * 6, watch=3.0)
+        self.assertIn("ENGAGED", res["verdict"])
+
+    def test_a_taper_is_not_mistaken_for_engagement(self):
+        """Current easing from 3700 to 3000 is charging, not a ceiling."""
+        res, _ = self.run_trigger(
+            [self.frame(64, 3700), self.frame(65, 3700)]
+            + [self.frame(65, 3000)] * 6, watch=3.0)
+        self.assertNotIn("ENGAGED", res["verdict"])
+
+    def test_reached_arming_counts_even_without_a_current_drop(self):
+        res, _ = self.run_trigger(
+            [self.frame(64, 3700), self.frame(65, 3700)]
+            + [self.frame(65, 3600, reached=1)] * 6, watch=3.0)
+        self.assertIn("ENGAGED", res["verdict"])
+
+    def test_a_null_result_warns_against_the_loop(self):
+        """The obvious escalation from 'one write did nothing' is 'hold it',
+        which is the operation that latched this EC. The verdict must say so."""
+        res, _ = self.run_trigger(
+            [self.frame(64, 3700), self.frame(65, 3700)]
+            + [self.frame(65, 3600)] * 6, watch=3.0)
+        v = res["verdict"]
+        self.assertIn("NOT escalate", v)
+        self.assertIn("sustained write loop", v)
+
+    def test_the_threshold_register_is_never_written(self):
+        """0x07B9 is recorded, not written. The threshold is set beforehand
+        through the driver's own sysfs interface."""
+        with open(_SPEC.origin, encoding="utf-8") as fh:
+            src = fh.read()
+        self.assertNotIn("ec_write(REG_CHARGE_CTRL", src)
+        self.assertNotIn("_wmi(REG_CHARGE_CTRL", src)

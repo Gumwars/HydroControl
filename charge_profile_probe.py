@@ -698,6 +698,111 @@ def verdict(results: list[dict], args) -> dict:
             "spread_mv_per_cell": spread_mv, "resting": vs, "resumed": []}
 
 
+def trigger_run(cells: int, profile: str, at_pct: int, args, log) -> dict:
+    """Charge past the threshold with no limit set, then write the profile ONCE.
+
+    The theory this tests: the EC does not poll capacity against the threshold
+    on its own, it evaluates when something writes the register. Every negative
+    result in this project set the profile once, early, while capacity was
+    BELOW the threshold -- so the single evaluation that happened found nothing
+    to do and was never repeated, and the pack charged past.
+
+    The prediction is sharp. Write the profile once while capacity is already
+    ABOVE the threshold and the ceiling should engage within seconds.
+
+    Why one write and not a loop. Holding these registers by continuous
+    re-writing is the only operation known to have damaged this machine: it
+    produced bang-bang charging, then a latched state reporting 100% with the
+    true charge unknown, which survived reboots (see DESIGN.md 4.1b). A single
+    write is something this project has done hundreds of times. If evaluation
+    really is write-driven then one write is all the theory needs, and the
+    oscillation seen back then is explained rather than reproduced.
+
+    Timing is the rest of it. An earlier attempt wrote at 94%, deep in the CV
+    taper, where current is falling anyway and a ceiling is indistinguishable
+    from normal termination. At 65% this pack draws ~3700 mA and at 85% about
+    2600, so a collapse toward zero is unambiguous.
+
+    The threshold is NOT written here. Set it beforehand through the driver:
+        echo 60 > /sys/class/power_supply/BAT0/charge_control_end_threshold
+    """
+    print(f"trigger mode: charging with no profile set; at >={at_pct}% "
+          f"a single write of {profile} goes in.\n", flush=True)
+
+    before: list[dict] = []
+    fired_at = None
+    deadline = time.monotonic() + args.timeout
+
+    while time.monotonic() < deadline:
+        s_ = sample(cells)
+        log.write(s_, "trigger_wait")
+        cap, cur = s_["capacity"], s_["current_ma"]
+        thr = s_["threshold"]
+        print(f"  {s_['t'][11:]}  {cap}%  {cur} mA  thr={thr}  "
+              f"reached={s_['reached']}", flush=True)
+        if cap is not None and cur is not None and s_["status"] == "Charging":
+            before.append(s_)
+            if thr is not None and cap <= thr:
+                print(f"    (capacity {cap}% is not above the threshold {thr}%; "
+                      f"the write would prove nothing yet)", flush=True)
+            elif cap >= at_pct:
+                fired_at = s_
+                break
+        time.sleep(args.interval)
+
+    if fired_at is None:
+        return {"fired": False,
+                "why": "never reached the trigger capacity while charging"}
+
+    pre = [b["current_ma"] for b in before[-6:] if b["current_ma"] is not None]
+    pre_ma = round(sum(pre) / len(pre)) if pre else None
+    print(f"\n  writing {profile} once at {fired_at['capacity']}%, "
+          f"{pre_ma} mA\n", flush=True)
+    set_profile(BY_NAME[profile])
+
+    # One write, then watch closely. Fast cadence only in this window, because
+    # the whole question is how quickly current moves after a single poke.
+    after: list[dict] = []
+    watch_end = time.monotonic() + args.trigger_watch
+    while time.monotonic() < watch_end:
+        s_ = sample(cells)
+        log.write(s_, "trigger_watch")
+        after.append(s_)
+        print(f"  {s_['t'][11:]}  {s_['capacity']}%  {s_['current_ma']} mA  "
+              f"reached={s_['reached']}  ran={s_['ran']}", flush=True)
+        time.sleep(1.0)
+
+    post = [a["current_ma"] for a in after if a["current_ma"] is not None]
+    min_ma = min(post) if post else None
+    armed = any(a["reached"] for a in after if a["reached"] is not None)
+    ran = len({a["ran"] for a in after if a["ran"] is not None}) > 1
+    dropped = (pre_ma is not None and min_ma is not None
+               and pre_ma > 500 and min_ma < pre_ma * 0.2)
+
+    return {
+        "fired": True,
+        "profile": profile,
+        "at": {k: fired_at[k] for k in ("t", "capacity", "threshold",
+                                        "current_ma", "v_per_cell")},
+        "current_before_ma": pre_ma,
+        "current_min_after_ma": min_ma,
+        "reached_armed": armed,
+        "footprint_moved": ran,
+        "watched_seconds": args.trigger_watch,
+        "verdict": (
+            "ENGAGED. Current collapsed after a single write with capacity "
+            "already above the threshold. The EC evaluates the ceiling when "
+            "the register is written, not on its own, which is why every "
+            "set-once-then-charge run in this project measured nothing."
+            if dropped or armed else
+            "No response. One write above the threshold changed nothing, so "
+            "write-triggered evaluation does not explain it on its own. Do "
+            "NOT escalate to a sustained write loop from here -- that is the "
+            "operation that latched this EC before. Watch the Control Center "
+            "service on Windows instead."),
+    }
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(
         description="Do charging profiles change the termination voltage?")
@@ -731,6 +836,13 @@ def main() -> int:
                          "write-on-one-bad-read behaviour")
     ap.add_argument("--same-mv", type=float, default=15,
                     help="mV/cell within which two resting voltages are the same")
+    ap.add_argument("--trigger-at", type=int, metavar="PCT",
+                    help="charge with no profile set, then write the profile "
+                         "ONCE at this capacity. Meaningful only above the "
+                         "threshold, and best well below the CV taper where a "
+                         "current drop is unambiguous.")
+    ap.add_argument("--trigger-watch", type=float, default=180,
+                    help="seconds to sample at 1 s after the single write")
     ap.add_argument("--status", action="store_true", help="one sample, no writes")
     ap.add_argument("--dry-run", action="store_true", help="print the plan, write nothing")
     args = ap.parse_args()
@@ -769,6 +881,24 @@ def main() -> int:
     original = read_profile()
     if original is None:
         raise SystemExit("cannot read the profile register -- refusing to write blind")
+
+    if args.trigger_at is not None:
+        if len(order) != 1:
+            raise SystemExit("--trigger-at takes exactly one profile via --order")
+        log = Log(args.output)
+        try:
+            res = trigger_run(cells, order[0], args.trigger_at, args, log)
+        finally:
+            set_profile(original)
+        summary = {"when": datetime.now().isoformat(timespec="seconds"),
+                   "cells": cells, "mode": "trigger", "set_via": SET_VIA,
+                   "trigger": res, "footprint": footprint(log.footprint_samples)}
+        path = args.json or os.path.splitext(args.output)[0] + ".json"
+        with open(path, "w") as fh:
+            json.dump(summary, fh, indent=2)
+        print(f"\n{res.get('verdict', res.get('why'))}\n\nsamples: "
+              f"{args.output}\nsummary: {path}")
+        return 0
     print(f"{cells}S pack. Starting profile: "
           f"{BY_VALUE.get(original, original)}. It will be restored on exit.\n")
 

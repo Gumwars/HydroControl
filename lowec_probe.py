@@ -59,12 +59,41 @@ DEFAULT_PERIOD = 2.0
 
 # Named by tuxedo-drivers for the extended-window mailbox. Knowing which bytes
 # are traffic rather than state keeps them out of the "interesting" list.
+# Decoded 2026-09-28 from one dump plus a 140-sample survey across a
+# 1938 -> 1530 mA taper. "confirmed" means the byte tracked a quantity we read
+# independently from sysfs while both moved; "static" means it matched a known
+# value in a single frame but never changed during the survey, so the match
+# could still be coincidence; "guess" is exactly that.
+#
+# The correction worth keeping: 0xA9 reads 0x59 and capacity was 89%, so a
+# single dump said "capacity". It never moved while capacity climbed to 91%.
+# One frame cannot tell a decode from a coincidence.
 KNOWN = {
     0x00: "UNIWILL_EC_REG_FLAGS (mailbox)",
     0x01: "UNIWILL_EC_REG_LDAT (mailbox addr low)",
-    0x02: "UNIWILL_EC_REG_HDAT (mailbox addr high)",
-    0x03: "UNIWILL_EC_REG_DATA (mailbox data)",
-    0x35: "reported by a user as implicated in suppressed current_now",
+    0x02: "design capacity, mAh, LE16 at 0x02 (static: 6400)",
+    0x03: "design capacity high byte",
+    0x04: "full-charge capacity, mAh, LE16 at 0x04 (static: 5800)",
+    0x05: "full-charge capacity high byte",
+    0x34: "CURRENT, mA, LE16 at 0x34 (confirmed)",
+    0x35: "current high byte (confirmed). NOT a disguise mechanism -- this is "
+          "where the reported current lives, which is why forcing it caps "
+          "current_now while charging continues",
+    0x36: "charge_now, mAh, LE16 at 0x36 (confirmed)",
+    0x37: "charge_now high byte",
+    0x38: "voltage, mV, LE16 at 0x38 (confirmed)",
+    0x39: "voltage high byte",
+    0x49: "guess: a temperature, 27-31 during the survey",
+    0x4C: "guess: a temperature, 50-57 during the survey",
+    0x65: "guess: fan or thermal telemetry, 179-191, noisy",
+    0x6A: "PL1 watts (static: 75, matches 0x0783)",
+    0x6B: "PL2 watts (static: 90, matches 0x0784)",
+    0xA4: "current mirror of 0x34 (confirmed, identical throughout)",
+    0xA5: "current mirror high byte (confirmed)",
+    0xA9: "NOT capacity -- held 0x59 while capacity climbed 89 -> 91",
+    0xAB: "capacity percent (confirmed)",
+    0xAC: "capacity percent, duplicated (confirmed)",
+    0xAD: "guess: a counter, increments ~1 per second",
 }
 
 

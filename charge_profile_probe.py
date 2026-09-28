@@ -701,6 +701,37 @@ def verdict(results: list[dict], args) -> dict:
 def trigger_run(cells: int, profile: str, at_pct: int, args, log) -> dict:
     """Charge past the threshold with no limit set, then write the profile ONCE.
 
+    ANSWERED, AND THE ANSWER IS NO. Do not spend a charge cycle on this.
+
+    This was built to test whether the EC evaluates the ceiling when the
+    profile register is written rather than polling on its own -- which would
+    mean every null result here came from writing early, below the threshold,
+    so the single evaluation found nothing to do.
+
+    The experiment had already been run, twice, before this function existed:
+
+        ceiling-test.csv   profile -> 2 at 85%, threshold 80, still charging
+        ceiling-test.csv   profile -> 2 at 98%, threshold 80, 306 mA
+        phantom-check.csv  profile -> 2 at 86%, threshold 80, 1190 mA
+
+    All three wrote the profile with capacity already above the threshold.
+    None engaged: CHARGE_CTRL_REACHED stayed clear and every one of them
+    charged on to 100%. A single write above the threshold does nothing.
+
+    (phantom-check.csv contains one sample reading reached=1. It is a glitch,
+    not an event: the same sample reads the threshold as 72 instead of 80, and
+    both fields come from the same byte -- 0x50 misread as 0xC8 -- with clean
+    neighbours either side. The known ECRR single-byte glitch, same class as
+    0x07C6 reading 0xC0 once in 980 samples.)
+
+    Kept because it costs nothing and may behave differently on another
+    Uniwill project, and because a documented negative is worth more than an
+    absent test someone rebuilds. What it leaves standing is the distinction
+    the data actually supports: sustained writes produced charging that
+    started and stopped, single writes do nothing, and the difference between
+    held and set is the open question. See DESIGN.md 4.1b before acting on
+    that -- holding these registers is what latched this EC.
+
     The theory this tests: the EC does not poll capacity against the threshold
     on its own, it evaluates when something writes the register. Every negative
     result in this project set the profile once, early, while capacity was

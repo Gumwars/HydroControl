@@ -716,3 +716,45 @@ class TriggerModeTest(unittest.TestCase):
             src = fh.read()
         self.assertNotIn("ec_write(REG_CHARGE_CTRL", src)
         self.assertNotIn("_wmi(REG_CHARGE_CTRL", src)
+
+
+class TriggerAnsweredTest(unittest.TestCase):
+    """--trigger-at is answered, and the docstring must keep saying so.
+
+    It was built to test whether the EC evaluates the ceiling on write rather
+    than by polling. The experiment had already been run twice before the
+    function existed -- ceiling-test.csv wrote Stationary at 85% and 98%, and
+    phantom-check.csv at 86%, all with the threshold at 80, all still charging
+    afterwards. A single write above the threshold does nothing.
+
+    Pinned because the cost of rebuilding it is a charge cycle, and because
+    the reason it is kept (it may behave differently on another Uniwill
+    project) is exactly the reason someone would be tempted to rerun it here.
+    """
+
+    def setUp(self):
+        self.m = load()
+
+    def test_the_docstring_says_it_is_answered(self):
+        d = self.m.trigger_run.__doc__
+        self.assertIn("ANSWERED", d)
+        self.assertIn("Do not spend a charge cycle", d)
+
+    def test_it_cites_the_captures_that_answered_it(self):
+        d = self.m.trigger_run.__doc__
+        for cap in ("ceiling-test.csv", "phantom-check.csv"):
+            self.assertIn(cap, d)
+        for pct in ("85%", "86%", "98%"):
+            self.assertIn(pct, d)
+
+    def test_it_records_the_reached_sample_as_a_glitch(self):
+        """phantom-check.csv has one reached=1. Someone will find it and think
+        it is the breakthrough; the docstring has to get there first."""
+        d = self.m.trigger_run.__doc__
+        self.assertIn("glitch", d)
+        self.assertIn("72", d)
+
+    def test_it_points_at_the_hazard_before_the_obvious_escalation(self):
+        """'Single writes do nothing' invites 'hold it then', which is what
+        latched this EC."""
+        self.assertIn("DESIGN.md 4.1b", self.m.trigger_run.__doc__)

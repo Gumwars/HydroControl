@@ -178,6 +178,44 @@ answered from inside the ECRR window, which is an argument for watching what
 the Control Center service does on Windows rather than for building another
 probe from here.
 
+## Write-triggered evaluation: proposed, tested, refuted
+
+The last surviving Linux-side theory was that the EC does not poll capacity
+against the threshold but evaluates when the profile register is written. It
+would have explained every null result at once, since this project always
+wrote early, below the threshold.
+
+It is wrong, and the disproof was already in the repository:
+
+| capture | profile written at | threshold | current | result |
+|---|---|---|---|---|
+| `ceiling-test.csv` | 85% | 80 | 2006 mA | charged on |
+| `ceiling-test.csv` | 98% | 80 | 306 mA | charged on |
+| `phantom-check.csv` | 86% | 80 | 1190 mA | charged on |
+
+All three wrote Stationary with capacity already above the threshold.
+`CHARGE_CTRL_REACHED` stayed clear in every one and all three reached 100%.
+
+`phantom-check.csv` contains a single sample reading `reached=1`, which is a
+glitch rather than an event: the same sample reads the threshold as 72 instead
+of 80, both fields come from one byte (`0x50` misread as `0xC8`), and the
+neighbours either side are clean. One sample in 1883, the known ECRR
+single-byte glitch.
+
+`charge_profile_probe.py --trigger-at` is kept and marked answered so it is not
+rebuilt.
+
+### What the data does support
+
+Sustained writes produced charging that started and stopped -- the only
+positive observation this investigation has produced. Single writes above the
+threshold do nothing, three times over. The difference is **held versus set**,
+and that is the live question.
+
+It is also the operation that latched this EC (DESIGN.md 4.1b), so it is not
+being retried from Linux while a safe way to learn the same thing exists:
+watching what the Control Center service actually does.
+
 ## What is not established
 
 **A fleet-wide dead feature is implausible on its face.** `117.ELUK` is what

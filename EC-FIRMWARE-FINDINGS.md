@@ -216,6 +216,60 @@ It is also the operation that latched this EC (DESIGN.md 4.1b), so it is not
 being retried from Linux while a safe way to learn the same thing exists:
 watching what the Control Center service actually does.
 
+## The ceiling routine is reachable code, and the banking is decoded
+
+Established 2026-09-28 with `ec_disasm.py`, and it retires the "dead code"
+reading for good.
+
+**The banking scheme.** Four 64 KB banks; logical `0x8000-0xFFFF` is the
+window, so `file = bank * 0x10000 + logical`, and below `0x8000` is common.
+Cross-bank calls go through a thunk in common memory:
+
+```
+90 hi lo    MOV  DPTR,#target
+02 11 xx    LJMP dispatcher      0x1100 / 0x1114 / 0x1128 / 0x113C = bank 0..3
+```
+
+Each dispatcher pushes the old bank's restore-stub id, pushes `DPTR`, sets the
+bank on `P1.0-P1.2` and executes `RET`, which pops `DPTR` into `PC` -- a jump
+disguised as a return. The callee's own `RET` lands on the restore stub, which
+puts the bank back. 536 thunks in the G1 image, 550 in the G2.
+
+**The routine is reached.** In the G1 the ceiling code at `bank1:0xC8BA` is
+entered by a `JNZ` at `0xC8B0`, inside a function at `0xC86D` that has a
+complete ancestry: `0xC7F9` -> `0x85FF` -> thunks -> `bank0:0xC4AE`. The G2 has
+the same shape, three ancestors instead of ten, ending at `bank0:0xD1D0`.
+
+So the routine is live, callable code in both builds. It is not compiled out,
+not orphaned and not stripped of its call site. Whatever explains the ceiling
+never engaging here, it is not that the code is absent from the path.
+
+### Why four earlier searches said the opposite
+
+They were byte scans, and a variable-length instruction set defeats byte scans
+in both directions.
+
+*False negative.* Searching for `LCALL`, `ACALL`, `LJMP`, `AJMP` and `SJMP`
+covers no conditional branch, and the entry to the ceiling code is a `JNZ`. So
+every search returned nothing -- in the G1 **and in the G2 where the feature
+reportedly works.** Getting an identical empty answer from the build where the
+code demonstrably runs should have condemned the method immediately instead of
+being read as evidence about the G1.
+
+*False positive.* `80 11` is `SJMP +17`. A scanner testing every byte as an
+opcode sees the `0x11` and reports an `ACALL`, which produced a caller chain
+that looped back on itself.
+
+`ec_disasm.py` tracks instruction lengths and only decodes at real boundaries.
+Both failure classes are pinned by tests against the actual bytes.
+
+### What this leaves
+
+The code exists, is reachable, and its guards pass with capacity above the
+threshold -- and `CHARGE_CTRL_REACHED` has still never armed. The remaining
+possibilities are about *when* the function is called rather than whether it
+can be, and about conditions in its ancestors that have not been decoded.
+
 ## What is not established
 
 **A fleet-wide dead feature is implausible on its face.** `117.ELUK` is what

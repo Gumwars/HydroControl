@@ -520,6 +520,27 @@ class Log:
         self.erm_events: list[dict] = []
         self.full24_events: list[dict] = []
         fresh = not path or not os.path.exists(path) or os.path.getsize(path) == 0
+        if path and not fresh:
+            # Appending to a file whose header predates a schema change writes
+            # new rows in the new column order under the old header, which
+            # shifts every field after the inserted one. It happened: a capture
+            # was restarted into a file written before the `rate` column
+            # existed, and 42 rows landed with current_ma's value under `rate`,
+            # v_per_cell under `profile`, and so on -- all plausible numbers in
+            # the wrong columns, which is the worst way for data to be wrong.
+            with open(path) as fh:
+                existing = fh.readline().strip().split(",")
+            if existing != self.COLS:
+                added = [c for c in self.COLS if c not in existing]
+                gone = [c for c in existing if c not in self.COLS]
+                raise SystemExit(
+                    f"{path} has a {len(existing)}-column header and this "
+                    f"probe writes {len(self.COLS)}.\n"
+                    + (f"  added since: {', '.join(added)}\n" if added else "")
+                    + (f"  removed since: {', '.join(gone)}\n" if gone else "")
+                    + "Appending would put values under the wrong headings.\n"
+                    + "Use a new -o filename; the old file is still valid for "
+                    + "its own schema.")
         self.fh = open(path, "a") if path else None
         if self.fh and fresh:
             self.fh.write(",".join(self.COLS) + "\n")

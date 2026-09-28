@@ -954,3 +954,60 @@ class SwitchVerdictTest(unittest.TestCase):
         v = self.m.switch_verdict(self.rows(500, 500), self.rows(500, 500),
                                   "stationary", "high_capacity")
         self.assertNotIn("below 500", v["reading"])
+
+
+class HeaderSchemaTest(unittest.TestCase):
+    """Appending under a stale header silently shifts every later column.
+
+    This happened. A capture was restarted into a file written before the
+    `rate` column was added, so 42 rows went in with current_ma's value under
+    `rate`, v_per_cell under `profile`, support5 under `ran`. Every number
+    plausible, every one under the wrong heading -- and nothing in the output
+    looked wrong until the columns were counted.
+    """
+
+    def setUp(self):
+        self.m = load()
+
+    def write(self, path, header):
+        with open(path, "w") as fh:
+            fh.write(",".join(header) + "\n")
+
+    def test_a_stale_header_is_refused(self):
+        import tempfile, os as _os
+        d = tempfile.mkdtemp()
+        p = _os.path.join(d, "old.csv")
+        self.write(p, [c for c in self.m.Log.COLS if c != "rate"])
+        with self.assertRaises(SystemExit) as cm:
+            self.m.Log(p)
+        msg = str(cm.exception)
+        self.assertIn("rate", msg)
+        self.assertIn("wrong headings", msg)
+
+    def test_a_matching_header_appends_without_complaint(self):
+        import tempfile, os as _os
+        d = tempfile.mkdtemp()
+        p = _os.path.join(d, "ok.csv")
+        self.write(p, self.m.Log.COLS)
+        log = self.m.Log(p)
+        self.assertIsNotNone(log.fh)
+        log.fh.close()
+
+    def test_a_fresh_file_gets_the_current_header(self):
+        import tempfile, os as _os
+        d = tempfile.mkdtemp()
+        p = _os.path.join(d, "new.csv")
+        log = self.m.Log(p)
+        log.fh.close()
+        with open(p) as fh:
+            self.assertEqual(fh.readline().strip().split(","), self.m.Log.COLS)
+
+    def test_the_refusal_names_what_changed(self):
+        """So the reader can recover the old file rather than discard it."""
+        import tempfile, os as _os
+        d = tempfile.mkdtemp()
+        p = _os.path.join(d, "old.csv")
+        self.write(p, self.m.Log.COLS + ["ghost"])
+        with self.assertRaises(SystemExit) as cm:
+            self.m.Log(p)
+        self.assertIn("ghost", str(cm.exception))

@@ -66,6 +66,7 @@ REGISTERS = {
     0x07CD: "threshold readback slot",
     0x0783: "PL1 watts",
     0x0784: "PL2 watts",
+    0x0490: "battery status; bits 0 and 2 gate the charge ceiling",
     0x0497: "charge-limit-mode flag",
     0x04A6: "cycle count, low byte",
     0x04AB: "battery capacity percent",
@@ -105,6 +106,18 @@ SEQUENCES = {
          rb"\xe0\xc3\x9b",
          "MOVX A,@DPTR / CLR C / SUBB A,R3 -- capacity minus a register, which "
          "is the comparison a percentage ceiling is made of."),
+    ],
+    0x0490: [
+        ("status bit 0 read as a gate",
+         rb"\xe0\x54\x01\x22",
+         "MOVX A,@DPTR / ANL A,#01h / RET -- an accessor returning bit 0, and "
+         "the first of the two guards in front of the capacity comparison. It "
+         "leaves DPTR on 0x0490, which is why the caller's next MOVX reads the "
+         "same register to test bit 2."),
+        ("status bit 2 read as a gate",
+         rb"\xe0\x54\x04\x22",
+         "the second guard. Both bits read 1 on this machine while charging, "
+         "so neither guard is what stops the ceiling."),
     ],
     0x078E: [
         ("capability bit 3 tested",

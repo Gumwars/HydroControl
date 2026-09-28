@@ -205,11 +205,15 @@ class Oem6TrackingTest(unittest.TestCase):
         self.note("0x04"); self.note("0x04"); self.note("0x14", erm=1)
         self.assertEqual(self.log.oem6_seen, {"0x04": 2, "0x14": 1})
 
-    def test_records_only_the_first_arming(self):
-        self.note("0x14", erm=1, t="12:00:01")
-        self.note("0x14", erm=1, t="12:00:02")
+    def test_records_the_arming_once_not_repeatedly(self):
+        """Once confirmed, it is one event however long the bit stays set --
+        the question is whether it EVER arms, not how many samples saw it.
+        Timestamped at the confirming sample, not the first suspicious one."""
+        for i in range(self.m.OEM6_CONFIRM + 4):
+            self.note("0x14", erm=1, t=f"12:00:{i:02d}")
         self.assertEqual(len(self.log.erm_events), 1)
-        self.assertEqual(self.log.erm_events[0]["t"], "12:00:01")
+        self.assertEqual(self.log.erm_events[0]["t"],
+                         f"12:00:{self.m.OEM6_CONFIRM - 1:02d}")
 
     def test_never_arming_leaves_no_event(self):
         self.note("0x04"); self.note("0x04")
@@ -241,6 +245,242 @@ class DriftTest(unittest.TestCase):
         """high_capacity is 0x00 -- a truthiness check here would miss it."""
         self.assertTrue(self.m.drifted({"profile": 0}, 1))
         self.assertFalse(self.m.drifted({"profile": 0}, 0))
+
+
+class ArmingWarningTest(unittest.TestCase):
+    """The 2026-09-07 run set the profile into a cycle already in progress and
+    reported "inert". A same-board user then armed the ceiling by selecting the
+    profile while unplugged. A run that cannot arm it must not be readable as
+    an answer."""
+
+    def setUp(self):
+        self.m = load()
+
+    def test_starting_on_battery_can_arm(self):
+        self.assertIsNone(self.m.arming_warning(False))
+
+    def test_starting_on_ac_cannot_arm(self):
+        w = self.m.arming_warning(True)
+        self.assertIsNotNone(w)
+        self.assertIn("already connected", w)
+
+    def test_the_warning_says_what_to_do_instead(self):
+        """A caveat nobody can act on just gets skipped."""
+        self.assertIn("start the probe on battery", self.m.arming_warning(True))
+
+    def test_sampling_resolves_the_reported_climb(self):
+        """~2% every 5-10 s. The old 60 s idle interval applied to exactly the
+        stretch where the climb happens, so it could never have resolved it."""
+        self.assertLessEqual(self.m.DEFAULT_INTERVAL, 10)
+        self.assertLessEqual(self.m.DEFAULT_IDLE_INTERVAL, 10,
+                             "the idle interval covers the climb; it must be "
+                             "as fast as the near-full interval")
+
+
+class DriftTrackerTest(unittest.TestCase):
+    """One bad EC read must never cause a write.
+
+    2026-09-24: a single sample read profile=0 and oem6=0x5F while every
+    neighbour read 2 and 0x04. The guard re-asserted on it, writing 0x07A6 at
+    75% capacity -- which, if the EC latches its ceiling at plug-in, is exactly
+    what would clear it. The guard corrupted the experiment it was protecting.
+    """
+
+    def setUp(self):
+        self.m = load()
+
+    def track(self, confirm=3):
+        return self.m.DriftTracker(confirm)
+
+    def sample(self, prof):
+        return {"t": "12:00:00", "profile": prof, "capacity": 75}
+
+    def test_a_single_bad_read_does_not_trigger_a_write(self):
+        d = self.track()
+        self.assertFalse(d.saw(self.sample(0), 2))
+        self.assertEqual(d.events, [])
+
+    def test_two_of_three_is_still_not_enough(self):
+        d = self.track()
+        d.saw(self.sample(0), 2)
+        self.assertFalse(d.saw(self.sample(0), 2))
+
+    def test_a_sustained_change_is_believed(self):
+        """The daemon really does re-apply its stored profile; that persists."""
+        d = self.track()
+        for _ in range(2):
+            d.saw(self.sample(0), 2)
+        self.assertTrue(d.saw(self.sample(0), 2))
+        self.assertEqual(len(d.events), 1)
+        self.assertEqual(d.events[0]["read"], 0)
+
+    def test_one_good_read_resets_the_run(self):
+        """Glitches are isolated; a good sample between them means no change."""
+        d = self.track()
+        d.saw(self.sample(0), 2)
+        d.saw(self.sample(0), 2)
+        d.saw(self.sample(2), 2)            # good read
+        self.assertFalse(d.saw(self.sample(0), 2))
+
+    def test_unreadable_profile_is_not_drift(self):
+        """Six reads failed outright in that run; none should provoke a write."""
+        d = self.track()
+        for _ in range(5):
+            self.assertFalse(d.saw({"t": "t", "profile": None}, 2))
+
+    def test_the_counter_resets_after_firing(self):
+        d = self.track(confirm=2)
+        d.saw(self.sample(0), 2)
+        self.assertTrue(d.saw(self.sample(0), 2))
+        self.assertFalse(d.saw(self.sample(0), 2))   # needs 2 again
+        self.assertTrue(d.saw(self.sample(0), 2))
+        self.assertEqual(len(d.events), 2)
+
+    def test_events_record_enough_to_invalidate_a_run(self):
+        d = self.track(confirm=1)
+        d.saw(self.sample(0), 2)
+        e = d.events[0]
+        for k in ("t", "read", "expected", "capacity"):
+            self.assertIn(k, e)
+
+
+class Oem6ConfirmTest(unittest.TestCase):
+    """0x07C6 glitches, and four glitches in one run had bit 4 set.
+
+    Observed 2026-09-27: 864 samples read 0x04 and five read something else,
+    each exactly once -- 0x37, 0xBE, 0x56, 0x35, 0x2B. One of them corrupted
+    the profile field in the same read cycle. Believing the first sample with
+    bit 4 set reported ERM as armed on a machine where it never armed.
+    """
+
+    def setUp(self):
+        self.m = load()
+        self.log = self.m.Log(None)
+
+    def note(self, oem6, erm=0, full=0, t="12:00:00"):
+        self.log.write({"t": t, "oem6": oem6, "erm_reached": erm,
+                        "full_24h": full, "capacity": 50}, "stationary")
+
+    def test_one_glitched_sample_does_not_arm_erm(self):
+        self.note("0x04"); self.note("0x37", erm=1); self.note("0x04")
+        self.assertEqual(self.log.erm_events, [])
+
+    def test_four_scattered_glitches_do_not_arm_erm(self):
+        """The exact shape of the real run: isolated, never consecutive."""
+        for bad in ("0x37", "0xBE", "0x56", "0x35"):
+            self.note("0x04"); self.note(bad, erm=1)
+        self.note("0x04")
+        self.assertEqual(self.log.erm_events, [])
+
+    def test_a_sustained_bit_is_believed(self):
+        for _ in range(self.m.OEM6_CONFIRM):
+            self.note("0x14", erm=1)
+        self.assertEqual(len(self.log.erm_events), 1)
+        self.assertEqual(self.log.erm_events[0]["confirmed_over"],
+                         self.m.OEM6_CONFIRM)
+
+    def test_a_failed_read_breaks_the_run(self):
+        """An unreadable sample is not evidence the bit stayed set."""
+        self.note("0x14", erm=1); self.note("0x14", erm=1)
+        self.log.write({"t": "t", "oem6": None}, "stationary")
+        self.note("0x14", erm=1)
+        self.assertEqual(self.log.erm_events, [])
+
+    def test_every_value_is_still_counted(self):
+        """Counting all of them is what exposed the glitches in the first
+        place -- confirmation must not hide the distribution."""
+        self.note("0x04"); self.note("0x37", erm=1); self.note("0x04")
+        self.assertEqual(self.log.oem6_seen, {"0x04": 2, "0x37": 1})
+
+    def test_full_24h_needs_the_same_confirmation(self):
+        self.note("0x0C", full=1); self.note("0x04")
+        self.assertEqual(self.log.full24_events, [])
+        for _ in range(self.m.OEM6_CONFIRM):
+            self.note("0x0C", full=1)
+        self.assertEqual(len(self.log.full24_events), 1)
+
+
+class WmiDoorTest(unittest.TestCase):
+    """The other way into the EC.
+
+    Both doors set the byte -- wmi_ec_probe.py confirmed agreement on seven
+    registers. Whether both make the EC *act* is the open question, and the
+    reason this path exists at all.
+    """
+
+    def setUp(self):
+        self.m = load()
+        self.m.SET_VIA = "ecrw"
+
+    def test_default_door_is_unchanged(self):
+        """Nothing changes unless --set-via asks for it."""
+        self.assertEqual(self.m.SET_VIA, "ecrw")
+
+    def test_read_encoding_matches_the_probe(self):
+        calls=[]
+        with mock.patch.object(self.m, "_call",
+                               side_effect=lambda e: calls.append(e) or "{0x20,0,0,0}"):
+            self.m._wmi(0x07A6, None)
+        arg = calls[0].split("b")[-1]
+        b = bytes.fromhex(arg)
+        self.assertEqual(len(b), 8)
+        self.assertEqual((b[0], b[1]), (0xA6, 0x07))
+        self.assertEqual(b[5], 1, "function byte must be READ")
+
+    def test_write_encoding_puts_data_in_byte_2(self):
+        calls=[]
+        with mock.patch.object(self.m, "_call",
+                               side_effect=lambda e: calls.append(e) or "{0,0,0,0}"):
+            self.m._wmi(0x07A6, 0x20)
+        b = bytes.fromhex(calls[0].split("b")[-1])
+        self.assertEqual((b[0], b[1]), (0xA6, 0x07))
+        self.assertEqual(b[2], 0x20, "data_low goes in byte 2")
+        self.assertEqual(b[3], 0x00, "data_high is always 0 here")
+        self.assertEqual(b[5], 0, "function byte must be WRITE")
+
+    def test_the_error_marker_is_not_data(self):
+        with mock.patch.object(self.m, "_call", return_value="{0xFE,0xFE,0xFE,0xFE}"):
+            v, err = self.m._wmi(0x07A6, None)
+        self.assertIsNone(v)
+        self.assertIn("FEFEFEFE", err)
+
+    def test_wmi_write_preserves_the_shared_bits(self):
+        """0x07A6 also carries touchpad-off and overboost."""
+        wrote=[]
+        def fake(addr, data=None):
+            if data is not None:
+                wrote.append(data); return 0, None
+            return (0x42 if not wrote else wrote[-1]), None
+        with mock.patch.object(self.m, "_wmi", side_effect=fake), \
+             mock.patch.object(self.m, "ec_read", return_value=0x62), \
+             mock.patch.object(self.m.time, "sleep"):
+            self.m.wmi_set_profile(0x02)
+        self.assertEqual(wrote[0], 0x62)
+        self.assertTrue(wrote[0] & 0x40, "touchpad-off bit dropped")
+        self.assertTrue(wrote[0] & 0x02, "overboost bit dropped")
+
+    def test_doors_disagreeing_after_a_write_stops_the_run(self):
+        """A value visible through one door and not the other is a shadow
+        register -- a bigger finding than the one we are chasing."""
+        def fake(addr, data=None):
+            return (0x20, None)
+        with mock.patch.object(self.m, "_wmi", side_effect=fake), \
+             mock.patch.object(self.m, "ec_read", return_value=0x00), \
+             mock.patch.object(self.m.time, "sleep"):
+            self.assertFalse(self.m.wmi_set_profile(0x02))
+
+    def test_a_failed_wmi_read_writes_nothing(self):
+        with mock.patch.object(self.m, "_wmi", return_value=(None, "boom")) as w:
+            self.assertFalse(self.m.wmi_set_profile(0x02))
+        self.assertEqual(w.call_count, 1, "must not write after a failed read")
+
+    def test_set_profile_routes_to_the_selected_door(self):
+        self.m.SET_VIA = "wmi"
+        with mock.patch.object(self.m, "wmi_set_profile", return_value=True) as w, \
+             mock.patch.object(self.m, "ec_write") as e:
+            self.assertTrue(self.m.set_profile(0x02))
+        w.assert_called_once_with(0x02)
+        e.assert_not_called()
 
 
 if __name__ == "__main__":

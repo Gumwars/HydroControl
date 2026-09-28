@@ -7,7 +7,7 @@ After=suspend.target hibernate.target hybrid-sleep.target suspend-then-hibernate
 Type=oneshot
 ExecStartPre=-/usr/bin/modprobe acpi_call
 WorkingDirectory=@INSTALL_DIR@
-ExecStart=/usr/bin/python3 -m hydroc.cli apply
+ExecStart=/usr/bin/python3 -m hydroc.cli apply --reason resume
 Environment=PYTHONPATH=@INSTALL_DIR@
 StandardOutput=journal
 StandardError=journal

@@ -17,6 +17,7 @@ import json
 import os
 import sys
 
+from . import found
 from .hardware import Hardware
 
 PROFILE_PATHS = ["/etc/hydroc/profile.json",
@@ -369,6 +370,9 @@ def main(argv=None) -> int:
     ap.add_argument("-p", "--profile", help="profile JSON path")
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--json", action="store_true")
+    ap.add_argument("--reason", default="apply",
+                    help="what triggered this apply (boot, resume, ...) -- "
+                         "recorded with the pre-apply hardware capture")
     args = ap.parse_args(argv)
 
     hw = Hardware()
@@ -424,6 +428,17 @@ def main(argv=None) -> int:
     # apply
     if os.geteuid() != 0 and not args.dry_run:
         raise SystemExit("apply needs root (or use --dry-run)")
+
+    # Read the hardware BEFORE writing to it. Everything below overwrites what
+    # the machine came up with, which is correct -- and is also why nobody could
+    # answer whether any given setting had survived. See hydroc/found.py.
+    if not args.dry_run:
+        rec = found.capture(hw, profile, args.reason)
+        if rec["differences"]:
+            print(f"found at {args.reason}, before applying:")
+            for d in rec["differences"]:
+                print(f"  {d['setting']}: hardware had {d['found']!r}, "
+                      f"profile wants {d['intent']!r}")
 
     changes = hw.apply(profile, dry_run=args.dry_run)
     if args.json:

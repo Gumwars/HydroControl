@@ -362,6 +362,7 @@ async function refreshState(){
   const l=await api('/api/lpp');
   S.lpp=l||{running:false};
   const gp=await api('/api/gpu');if(gp)S.gpu=gp;
+  const fd=await api('/api/found');if(fd)S.found=fd;
   // Defensive: this runs inside the shared state refresh, so anything that
   // throws here blanks the WHOLE app, not just the fan page. A presets map
   // without 'balanced' used to do exactly that.
@@ -662,6 +663,28 @@ function bindFans(){
 // that a power cycle undoes; this writes non-volatile firmware, so it should not
 // be one stray click away. The mode shown is read from the firmware variables,
 // never from stored intent.
+// ── what the hardware was holding before we wrote to it ─────────────────────
+// hydroc-apply overwrites stored intent into the hardware at every boot, which
+// is right -- almost nothing here survives a power cycle. The cost was that
+// nobody could tell which settings HAD survived, because our own write landed
+// first. This shows the reading taken immediately before that write, and only
+// when it disagreed: a setting the hardware kept on its own is a setting we
+// should be reading rather than applying, the way GPU mode already is.
+function foundCard(){
+  const f=S.found;
+  if(!f||f.none||!f.differences||!f.differences.length)return '';
+  return `<div class="card" style="margin-top:var(--space-4)">
+    <div class="row"><div class="kick">Hardware differed at ${esc(f.reason||'apply')}</div>
+      <span class="kv">${esc((f.when||'').replace('T',' '))}</span></div>
+    <div class="lbl">Read before your profile was written over it. A setting the
+      hardware kept by itself does not need us to restore it; one it lost does.</div>
+    ${f.differences.map(d=>`<div class="row" style="margin-top:var(--space-2)">
+      <span>${esc(d.setting)}</span>
+      <span class="kv">had ${esc(JSON.stringify(d.found))} · wanted ${esc(JSON.stringify(d.intent))}</span>
+      </div>`).join('')}
+  </div>`;
+}
+
 function gpuCard(){
   const g=S.gpu;
   if(!g||!g.supported)return '';
@@ -941,6 +964,7 @@ function vSys(){
       <div class="lbl kv" style="font-size:10.5px">${t.path}</div></div>
       <button class="sw" data-toggle="${t.id}" aria-pressed="${!!S.state[t.id]}"><i></i></button></div>`).join('')}
   </div>
+  ${foundCard()}
   ${gpuCard()}
   <div class="card" style="margin-top:var(--space-4)">
     <div class="kick">Power behaviour when off</div>

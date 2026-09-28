@@ -376,6 +376,52 @@ parser must reassemble on `FE`…`EF`. Control Center has `strPumpStatus` and
 `LCPUMP_DUTY`, so state is readable and the pump may take a duty rather than
 four modes. `lppd` keeps the last 40 notifications for correlation.
 
+**Low EC RAM (0x00-0xFF) is a fourth address space, and it is now partly
+mapped -- `lowec_probe.py`.** Everything else in this project reaches the EC
+through `\_SB.INOU.ECRR/ECRW` (MMIO) or `\_SB.AMW0.WMBC` (WMI); both land in
+the *extended* space and neither can see below 0xFF. The standard ACPI EC space
+lives there, reachable via `ec_sys` at `/sys/kernel/debug/ec/ec0/io`, and
+tuxedo-drivers uses it as the mailbox that drives the extended window.
+
+Decoded 2026-09-28 from one dump plus a 140-sample survey across a 1938 -> 1530
+mA taper, by matching bytes against sysfs values read at the same moment:
+
+| bytes | contents |
+|---|---|
+| `0x02-0x03` | design capacity, mAh LE16 (6400) |
+| `0x04-0x05` | full-charge capacity, mAh LE16 (5800) |
+| `0x34-0x35` | **charge current, mA LE16** |
+| `0x36-0x37` | `charge_now`, mAh LE16 |
+| `0x38-0x39` | voltage, mV LE16 |
+| `0x6A`, `0x6B` | PL1, PL2 watts (mirrors `0x0783`/`0x0784`) |
+| `0xA4-0xA5` | a second copy of the current |
+| `0xAB`, `0xAC` | capacity percent, duplicated |
+
+**`0x35` is the high byte of the current register, not a disguise mechanism.**
+A user reported that holding it with a write loop "freezes current_now at a
+suppressed value while charge_now keeps rising", and read that as the machinery
+behind the phantom climb. It is simpler than that: writing the high byte of the
+current register caps the number handed to the OS, and charging was never
+affected. That is a userspace lie, not evidence the EC tells the same one.
+
+**It does give the phantom a signature at the source.** During a real event the
+prediction is `0x34-0x35` reading 0x0000 while `0x36-0x37` keeps climbing --
+the EC advancing its own charge counter with no current behind it. If
+`0x36-0x37` freezes too, the climb is happening further up and the counter is
+innocent. Nobody has caught a phantom with this instrumentation yet.
+
+**A single dump cannot tell a decode from a coincidence.** `0xA9` read `0x59`
+while capacity was 89%, which looked conclusive. It never moved while capacity
+climbed to 91%. The survey exists because of that class of error, and it caught
+this one in its first run.
+
+Still unidentified and worth a look if anyone is down there: `0x49` (27-31),
+`0x4C` (50-57) and `0x65` (179-191) all move continuously and look like
+thermal or fan telemetry; `0xAD` increments about once a second; and
+`0xC0-0xD0` mirrors the structure of `0x00-0x10` with different values (4400
+in both capacity slots) despite there being only one battery in
+`power_supply`.
+
 **Charging modes do nothing observable, and the EC claims they do.** Neither
 `Trickle` nor `Long_Life` caps charging over a cycle. Do not present them as
 percentage caps.
@@ -412,7 +458,36 @@ Their per-board exclusions are `PF5PU1G`, `LAPQC71A`, `LAPQC71B` and `A60 MUV`
 these profiles on Stellaris 16 gated on nothing but that bit. Whether they do
 anything *there* is unknown to us and is the open question with them.
 
-**Answered 2026-09-07: they do not lower the termination voltage either.**
+> **RETRACTED 2026-09-24.** Two independent reports, one of them on a
+> **HYDROC-16 G1** -- the same board -- say Stationary *does* work: charging
+> slows near 80%, stops entirely around 82-83%, and the reported percentage
+> then climbs to 100% at roughly 2% every 5-10 s with `current_now` at **zero**
+> the whole way, ending at "Fully charged". The disguise is below the OS, so
+> every consumer of `power_supply` telemetry sees a normal full charge.
+>
+> **Our run could not have seen it.** The first sample of 2026-09-07 reads
+> `ac=1, status=Charging, cap=61%, 4998 mA` -- the probe wrote the profile into
+> a cycle that was already running. That is exactly the plug-in-latch caveat
+> the same run's summary carried and nobody acted on. Our own negative control
+> agrees: raising to High Capacity after Stationary settled produced no resume,
+> which means that 100% was genuinely full, which is what you get when the
+> ceiling never armed.
+>
+> So the measurements below stand as measurements and are withdrawn as a
+> conclusion about the hardware. What they establish is that *an unarmed cycle*
+> charges normally -- not that the profiles do nothing.
+>
+> Reported arming conditions, still confounded: the profile selected **before
+> the charger is connected**, and a prior discharge to <5%. One report notes
+> the deep discharge was needed; neither isolates it from the plug-in ordering.
+>
+> Method note for anyone repeating this: `charge_now` here moves in exact
+> 64000 uAh steps -- exactly 1% of `charge_full` -- so it is derived from
+> `capacity`, not an independent coulomb count. An implied-current figure
+> computed from it is the faked number restated. `current_now == 0` during a
+> rising percentage is the part that cannot be explained away.
+
+**Measured 2026-09-07, on a cycle that could not arm the ceiling:**
 `charge_profile_probe.py`, 512 samples over 2 h 11 m. Charge to termination
 under Stationary, then raise the profile twice without discharging -- if a
 lower profile terminated lower, the pack would sit below the higher profile's
@@ -439,7 +514,8 @@ of terminated float, so that lead is closed for the charge phase.
 `BATTERY_CHARGE_FULL_OVER_24H` (bit 3) never set either, but that needs a night
 plugged in to mean anything: worth one `ec_poke.py read 0x07C6` after one.
 
-**This closes the ceiling only.** Three things remain untested, and the result
+**This closes nothing.** The run above measured an unarmed cycle. Four things
+remain untested, and the result
 above must not be read as more than it is:
 
 - **The floor** -- the recharge threshold. A profile that lets the pack fall to

@@ -11,15 +11,15 @@ rm -rf "$OUT"; mkdir -p "$OUT"
 
 copy() { mkdir -p "$OUT/$(dirname "$1")"; cp -r "$DIR/$1" "$OUT/$1"; }
 
-# the application
-copy hydroc/ec.py;      copy hydroc/hardware.py; copy hydroc/rgb.py
-copy hydroc/cli.py;     copy hydroc/server.py;   copy hydroc/__init__.py
-copy hydroc/lpp.py;     copy hydroc/lppd.py
-copy hydroc/presets.py; copy hydroc/hotkeys.py
-copy hydroc/version.py
-copy hydroc/deps.py;    copy hydroc/kmod.py
-copy hydroc/fancurve.py; copy hydroc/gpumode.py
-copy hydroc/desktop.py; copy hydroc/desktop_files
+# The application: every module in the package, not a hand-kept list.
+#
+# The list was the bug. deps.py, kmod.py, fancurve.py, gpumode.py and found.py
+# were each added to the package and each forgotten here -- five in a row, every
+# one caught by the smoke test rather than by review, and only because the smoke
+# test executes the entry points. A new module is not a new decision about
+# whether to ship it; the package IS what ships.
+for f in "$DIR"/hydroc/*.py; do copy "hydroc/$(basename "$f")"; done
+copy hydroc/desktop_files
 copy hydroc/ui;         copy hydroc/systemd
 
 # RGB transport (keyboard + chin bar)

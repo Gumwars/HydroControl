@@ -1,0 +1,97 @@
+{
+  "when": "2026-09-24T17:02:06",
+  "cells": 4,
+  "charge_full": 6400000,
+  "charge_full_design": 6400000,
+  "order": [
+    "stationary",
+    "high_capacity"
+  ],
+  "arming_warning": null,
+  "results": [
+    {
+      "profile": "stationary",
+      "set": true,
+      "resumed": null,
+      "settled": {
+        "t": "2026-09-24T16:42:03",
+        "ac": 1,
+        "status": "Not charging",
+        "capacity": 100,
+        "charge_now": 6400000,
+        "charge_full": 6400000,
+        "current_ma": 0,
+        "voltage_uv": 16677000,
+        "v_per_cell": 4.1692,
+        "profile": 2,
+        "threshold": 80,
+        "reached": 0,
+        "oem6": "0x04",
+        "erm_reached": 0,
+        "full_24h": 0,
+        "settled_samples": 61,
+        "settled_seconds": 301
+      }
+    },
+    {
+      "profile": "high_capacity",
+      "set": true,
+      "resumed": false,
+      "settled": {
+        "t": "2026-09-24T17:02:06",
+        "ac": 1,
+        "status": "Not charging",
+        "capacity": 100,
+        "charge_now": 6400000,
+        "charge_full": 6400000,
+        "current_ma": 0,
+        "voltage_uv": 16654000,
+        "v_per_cell": 4.1635,
+        "profile": 0,
+        "threshold": 80,
+        "reached": 0,
+        "oem6": "0x04",
+        "erm_reached": 0,
+        "full_24h": 0,
+        "settled_samples": 61,
+        "settled_seconds": 301
+      }
+    }
+  ],
+  "oem6": {
+    "register": "0x07C6",
+    "values_seen": {
+      "0x04": 1873,
+      "0xA0": 1,
+      "0xBE": 1,
+      "0x4C": 1,
+      "0x35": 1,
+      "0x45": 1,
+      "0x5F": 2,
+      "0x90": 1
+    },
+    "erm_first_armed": {
+      "t": "2026-09-24T14:47:03",
+      "phase": "stationary",
+      "oem6": "0xBE",
+      "capacity": 52
+    },
+    "full_24h_first_set": {
+      "t": "2026-09-24T14:47:03",
+      "phase": "stationary",
+      "oem6": "0xBE",
+      "capacity": 52
+    }
+  },
+  "verdict": {
+    "conclusion": "profiles are inert",
+    "detail": "no profile change restarted the charger, and all settled within 5.7 mV/cell (noise floor 15 mV)",
+    "spread_mv_per_cell": 5.7,
+    "resting": {
+      "stationary": 4.1692,
+      "high_capacity": 4.1635
+    },
+    "resumed": [],
+    "caveat": "assumes the EC re-evaluates the profile while on AC. To rule out a plug-in-latched profile, rerun with --order high_capacity,stationary and unplug/replug after the switch."
+  }
+}

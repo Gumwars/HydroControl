@@ -90,10 +90,25 @@ BY_VALUE = {v: n for n, v, _ in PROFILES}
 BAT = "/sys/class/power_supply/BAT0"
 AC = "/sys/class/power_supply/AC0/online"
 
+# Sampling cadence. The reported phantom climb runs ~2% every 5-10 s, and the
+# old 60 s idle interval applied to exactly the stretch where it happens --
+# everything below --full-pct -- so it could not have resolved it.
+# 0x07C6 reads 0x04 thousands of times and then one garbage byte. Four such
+# one-offs in a single run had bit 4 set, which is enough to report ERM as
+# armed if you believe a single sample. Believe three in a row instead.
+OEM6_CONFIRM = 3
+
+DEFAULT_INTERVAL = 5.0
+DEFAULT_IDLE_INTERVAL = 5.0
+
 # 6 ms between EC accesses. DESIGN.md 4.2: sustained EC traffic is the hazard,
 # and this script runs for hours unattended.
 EC_DELAY = 0.006
 _last_call = 0.0
+
+# Which door set_profile() uses. Changed only by --set-via, and defaulting to
+# the one every previous run used, so nothing changes unless it is asked for.
+SET_VIA = "ecrw"
 
 
 def _call(expr: str) -> str:
@@ -123,6 +138,77 @@ def ec_write(addr: int, val: int) -> None:
     _call(f"{ECRW} 0x{addr:X} 0x{val & 0xFF:X}")
 
 
+# --- the other door -------------------------------------------------------
+#
+# Everything above reaches the EC through \_SB.INOU.ECRR/ECRW, which the DSDT
+# implements as MMIO. tuxedo-drivers instead calls a WMI method, and a user on
+# this same model sees the charging ceiling engage while we never have. Both
+# doors set the byte -- wmi_ec_probe.py confirmed they agree on seven registers
+# -- but "the byte is set" and "the EC acted on it" are different claims.
+#
+# The read encoding is duplicated from wmi_ec_probe.py on purpose: that file is
+# contractually unable to write, and its tests assert the absence of any write
+# symbol. Importing a write into it would break the one guarantee it makes.
+WMBC = r"\_SB.AMW0.WMBC"
+WMI_INSTANCE, WMI_METHOD_ID = 0x00, 0x04
+WMI_FUNCTION = {"read": 1, "write": 0}
+WMI_ARG_LEN = 8                       # what tuxedo actually sends; see the probe
+
+
+def _wmi(addr: int, data: int | None):
+    """One WMI EC access. data=None reads; otherwise writes. (value, error)."""
+    buf = bytearray(WMI_ARG_LEN)
+    buf[0] = addr & 0xFF
+    buf[1] = (addr >> 8) & 0xFF
+    if data is None:
+        buf[5] = WMI_FUNCTION["read"]
+    else:
+        buf[2] = data & 0xFF
+        buf[5] = WMI_FUNCTION["write"]
+    raw = _call(f"{WMBC} {WMI_INSTANCE:#x} {WMI_METHOD_ID:#x} b{bytes(buf).hex()}")
+    if raw.startswith("Error"):
+        return None, raw
+    try:
+        vals = ([int(x, 16) for x in raw.strip("{}").split(",") if x.strip()]
+                if raw.startswith("{") else [int(raw, 16) & 0xFF])
+    except ValueError:
+        return None, f"unparsable {raw[:40]}"
+    if not vals:
+        return None, "empty response"
+    if len(vals) >= 4 and vals[:4] == [0xFE, 0xFE, 0xFE, 0xFE]:
+        return None, "firmware returned 0xFEFEFEFE"
+    return vals[0], None
+
+
+def wmi_set_profile(value: int) -> bool:
+    """Set the charging profile through the WMI door.
+
+    Read-modify-write for the same reason as the MMIO path: 0x07A6 also carries
+    OVERBOOST_DYN_TEMP_OFF (bit 1) and TOUCHPAD_TOGGLE_OFF (bit 6).
+
+    Verified through BOTH doors afterwards. If a WMI write lands somewhere ECRR
+    cannot see -- or the reverse -- that is a shadow register, which would be a
+    larger finding than the one we are chasing and must stop the run rather
+    than be averaged away.
+    """
+    cur, err = _wmi(REG_OEM_4, None)
+    if cur is None:
+        print(f"  ! WMI read failed: {err}", flush=True)
+        return False
+    want = (cur & ~PROFILE_MASK) | (value << PROFILE_SHIFT)
+    _wmi(REG_OEM_4, want)
+    time.sleep(0.2)
+    via_wmi, _ = _wmi(REG_OEM_4, None)
+    via_ecrr = ec_read(REG_OEM_4)
+    if via_wmi != via_ecrr:
+        print(f"  !! the two doors disagree after a WMI write: "
+              f"WMI reads 0x{via_wmi:02X}, ECRR reads 0x{via_ecrr:02X}. "
+              f"That is a shadow register, not a profile change. Stopping.",
+              flush=True)
+        return False
+    return via_wmi is not None and (via_wmi & PROFILE_MASK) >> PROFILE_SHIFT == value
+
+
 def read_profile():
     v = ec_read(REG_OEM_4)
     return None if v is None else (v & PROFILE_MASK) >> PROFILE_SHIFT
@@ -135,6 +221,8 @@ def set_profile(value: int) -> bool:
     OVERBOOST_DYN_TEMP_OFF (bit 1) and TOUCHPAD_TOGGLE_OFF (bit 6), so a blind
     byte write here disables the touchpad on a machine nobody is sitting at.
     """
+    if SET_VIA == "wmi":
+        return wmi_set_profile(value)
     cur = ec_read(REG_OEM_4)
     if cur is None:
         return False
@@ -189,6 +277,12 @@ def sample(cells: int) -> dict:
         "capacity": sysfs_int("capacity"),
         "charge_now": sysfs_int("charge_now"),
         "charge_full": sysfs_int("charge_full"),
+        # Both sysfs, no EC cost. charge_full dropping below design is the one
+        # prediction that separates "the EC caps and lies about it" from "a
+        # relearn redefined full and the gauge is being honest against the new
+        # reference" -- and cycle_count moving is what a relearn looks like.
+        "charge_full_design": sysfs_int("charge_full_design"),
+        "cycle_count": sysfs_int("cycle_count"),
         "current_ma": None if i_ua is None else round(i_ua / 1000),
         "voltage_uv": v_uv,
         "v_per_cell": None if v_uv is None else round(v_uv / 1e6 / cells, 4),
@@ -203,11 +297,13 @@ def sample(cells: int) -> dict:
 
 class Log:
     COLS = ["t", "phase", "ac", "status", "capacity", "charge_now", "charge_full",
+            "charge_full_design", "cycle_count",
             "current_ma", "voltage_uv", "v_per_cell", "profile", "threshold",
             "reached", "oem6", "erm_reached", "full_24h"]
 
     def __init__(self, path):
         self.oem6_seen: dict[str, int] = {}
+        self._runs: dict[str, int] = {}
         self.erm_events: list[dict] = []
         self.full24_events: list[dict] = []
         fresh = not path or not os.path.exists(path) or os.path.getsize(path) == 0
@@ -229,18 +325,31 @@ class Log:
     def note(self, s: dict, phase: str) -> None:
         """Record what 0x07C6 did, whether or not a CSV is being written.
 
-        Kept as first-occurrence events rather than a count: the question is
-        whether these bits EVER arm, and one armed sample is the finding.
+        A bit is only believed after OEM6_CONFIRM consecutive samples show it.
+        This byte reads 0x04 thousands of times and then, perhaps once in two
+        hundred, returns something else entirely -- 0x5F, 0x37, 0xBE, 0x56 --
+        often in the same read cycle that corrupts a neighbouring field. Four
+        of those one-off values happen to have bit 4 set, so recording the
+        first occurrence reported ERM as armed on a machine where it never was.
+
+        The same mistake as the drift guard, made twice: acting on a single
+        read of a register space that is demonstrably not reliable.
         """
         raw = s.get("oem6")
         if raw is None:
+            self._runs = {}
             return
         self.oem6_seen[raw] = self.oem6_seen.get(raw, 0) + 1
         for bit, store in (("erm_reached", self.erm_events),
                            ("full_24h", self.full24_events)):
-            if s.get(bit) and not store:
+            if not s.get(bit):
+                self._runs[bit] = 0
+                continue
+            self._runs[bit] = self._runs.get(bit, 0) + 1
+            if self._runs[bit] >= OEM6_CONFIRM and not store:
                 store.append({"t": s["t"], "phase": phase, "oem6": raw,
-                              "capacity": s.get("capacity")})
+                              "capacity": s.get("capacity"),
+                              "confirmed_over": OEM6_CONFIRM})
 
 
 def show(s: dict, phase: str) -> None:
@@ -266,6 +375,59 @@ def drifted(s: dict, expect: int) -> bool:
     return p is not None and p != expect
 
 
+def arming_warning(on_ac_now: bool) -> str | None:
+    """None if this run can arm a plug-in-latched ceiling; a warning if not.
+
+    The 2026-09-07 run started with the charger already in and concluded the
+    profiles were inert. A user on the same board then saw the ceiling engage
+    by selecting the profile while unplugged and connecting afterwards. If the
+    EC only evaluates the profile at plug-in, a run that begins on AC can only
+    ever reproduce that null -- so it must say so rather than report "inert"
+    as though the question had been asked.
+    """
+    if not on_ac_now:
+        return None
+    return ("started with the charger already connected, so the profile was "
+            "written into a cycle that was already running. If this EC latches "
+            "the profile at plug-in, the ceiling cannot arm and an 'inert' "
+            "verdict from this run means nothing. Unplug, let it discharge, "
+            "and start the probe on battery.")
+
+
+class DriftTracker:
+    """Believe drift only after several consecutive disagreements.
+
+    A single bad EC read must never cause a write. On 2026-09-24 one sample
+    read profile=0 and oem6=0x5F while every neighbour read 2 and 0x04 -- two
+    registers wrong in the same cycle, which is a bad read, not a state
+    change. The guard re-asserted anyway, writing 0x07A6 at 75% capacity. If
+    this EC latches its charge ceiling at plug-in, that write is precisely what
+    would clear it, so the guard written to protect the experiment is the
+    prime suspect for having corrupted it.
+
+    A real change -- the daemon re-applying its stored profile -- persists and
+    will still be caught a few samples later. A glitch will not.
+    """
+
+    def __init__(self, confirm: int):
+        self.confirm = confirm
+        self.run = 0
+        self.events: list[dict] = []
+
+    def saw(self, s: dict, expect: int) -> bool:
+        """True only when a re-assert is actually warranted."""
+        if not drifted(s, expect):
+            self.run = 0
+            return False
+        self.run += 1
+        if self.run < self.confirm:
+            return False
+        self.run = 0
+        self.events.append({"t": s.get("t"), "read": s.get("profile"),
+                            "expected": expect, "capacity": s.get("capacity")})
+        return True
+
+
 def wait_for_ac(log, cells, args) -> None:
     if on_ac():
         return
@@ -277,7 +439,7 @@ def wait_for_ac(log, cells, args) -> None:
         time.sleep(args.idle_interval)
 
 
-def settle(log, cells, args, phase: str, expect: int) -> dict | None:
+def settle(log, cells, args, phase: str, expect: int, drift) -> dict | None:
     """Wait until the pack is full and the current has genuinely stopped.
 
     'Genuinely' is the whole point. A momentary dip below the threshold is not
@@ -300,10 +462,11 @@ def settle(log, cells, args, phase: str, expect: int) -> dict | None:
             time.sleep(args.idle_interval)
             continue
 
-        if drifted(s, expect):
-            print(f"  ! profile changed under us ({BY_VALUE.get(s['profile'])}) "
-                  f"-- re-asserting {BY_VALUE.get(expect)} and starting the "
-                  f"quiet window again", flush=True)
+        if drift.saw(s, expect):
+            print(f"  ! profile held at {BY_VALUE.get(s['profile'])} for "
+                  f"{drift.confirm} samples -- re-asserting "
+                  f"{BY_VALUE.get(expect)}. NOTE: this writes 0x07A6 mid-cycle "
+                  f"and may clear a latched ceiling", flush=True)
             set_profile(expect)
             quiet, quiet_since = [], None
             time.sleep(args.interval)
@@ -339,7 +502,7 @@ def settle(log, cells, args, phase: str, expect: int) -> dict | None:
     return None
 
 
-def watch_resume(log, cells, args, phase: str, expect: int) -> bool:
+def watch_resume(log, cells, args, phase: str, expect: int, drift) -> bool:
     """After raising the profile: does the charger start again?
 
     This is the measurement. If the previous profile terminated lower, the pack
@@ -351,8 +514,8 @@ def watch_resume(log, cells, args, phase: str, expect: int) -> bool:
         s = sample(cells)
         log.write(s, phase)
         show(s, phase)
-        if drifted(s, expect):
-            print(f"  ! profile changed under us -- re-asserting", flush=True)
+        if drift.saw(s, expect):
+            print(f"  ! profile drift confirmed -- re-asserting", flush=True)
             set_profile(expect)
             time.sleep(args.interval)
             continue
@@ -412,8 +575,8 @@ def main() -> int:
                     help="summary path (default: alongside --output)")
     ap.add_argument("--order", default="stationary,balanced,high_capacity",
                     help="profiles low-to-high; raising is what forces a resume")
-    ap.add_argument("--interval", type=float, default=10.0)
-    ap.add_argument("--idle-interval", type=float, default=60.0)
+    ap.add_argument("--interval", type=float, default=DEFAULT_INTERVAL)
+    ap.add_argument("--idle-interval", type=float, default=DEFAULT_IDLE_INTERVAL)
     ap.add_argument("--full-pct", type=int, default=99,
                     help="capacity that counts as full")
     ap.add_argument("--settle-ma", type=int, default=60,
@@ -426,6 +589,15 @@ def main() -> int:
     ap.add_argument("--resume-window", type=float, default=900)
     ap.add_argument("--timeout", type=float, default=6 * 3600,
                     help="give up waiting for one settle after this long")
+    ap.add_argument("--set-via", choices=("ecrw", "wmi"), default="ecrw",
+                    help="which door writes the profile. ecrw is MMIO, the "
+                         "path every run so far has used; wmi is the path "
+                         "tuxedo-drivers uses on machines where the ceiling "
+                         "engages")
+    ap.add_argument("--drift-confirm", type=int, default=3,
+                    help="consecutive disagreeing reads before believing the "
+                         "profile actually changed. 1 restores the old "
+                         "write-on-one-bad-read behaviour")
     ap.add_argument("--same-mv", type=float, default=15,
                     help="mV/cell within which two resting voltages are the same")
     ap.add_argument("--status", action="store_true", help="one sample, no writes")
@@ -437,6 +609,9 @@ def main() -> int:
             raise SystemExit("must run as root")
         if not os.path.exists(CALL):
             raise SystemExit("run: sudo modprobe acpi_call")
+
+    global SET_VIA
+    SET_VIA = args.set_via
 
     cells = cell_count()
     order = [p.strip() for p in args.order.split(",") if p.strip()]
@@ -466,10 +641,28 @@ def main() -> int:
     print(f"{cells}S pack. Starting profile: "
           f"{BY_VALUE.get(original, original)}. It will be restored on exit.\n")
 
+    warning = arming_warning(on_ac())
+    if warning:
+        print(f"  {'!' * 3} {warning}\n", flush=True)
+
     log = Log(args.output)
+    drift = DriftTracker(args.drift_confirm)
     results: list[dict] = []
 
     try:
+        # Set the first profile BEFORE waiting for the charger. Our 2026-09-07
+        # run set it into a cycle that was already running -- ac=1, Charging,
+        # 61%, 4998 mA in the very first sample -- and measured nothing. A user
+        # on the same board then saw the ceiling engage by selecting the profile
+        # while unplugged and then connecting. If the EC latches the profile at
+        # plug-in, that ordering is the whole experiment, and we had it backwards.
+        first = order[0]
+        if not on_ac():
+            print(f"setting {first} before the charger goes in -- if the EC "
+                  f"latches the profile at plug-in, this is the only ordering "
+                  f"that arms it\n", flush=True)
+            set_profile(BY_NAME[first])
+
         wait_for_ac(log, cells, args)
 
         for i, name in enumerate(order):
@@ -484,8 +677,10 @@ def main() -> int:
             # a raise, and that is the actual experiment.
             if i > 0:
                 entry["resumed"] = watch_resume(log, cells, args,
-                                                f"raise:{name}", BY_NAME[name])
-            entry["settled"] = settle(log, cells, args, name, BY_NAME[name])
+                                                f"raise:{name}", BY_NAME[name],
+                                                drift)
+            entry["settled"] = settle(log, cells, args, name, BY_NAME[name],
+                                      drift)
             results.append(entry)
 
     except KeyboardInterrupt:
@@ -502,7 +697,14 @@ def main() -> int:
         "cells": cells,
         "charge_full": sysfs_int("charge_full"),
         "charge_full_design": sysfs_int("charge_full_design"),
+        "set_via": SET_VIA,
         "order": order,
+        # A null result from a run that could not arm the ceiling is not a
+        # null result. Carried in the summary so it cannot be read without it.
+        "arming_warning": warning,
+        # Any mid-cycle write to 0x07A6 may clear a latched ceiling, so a run
+        # containing one cannot be read as evidence that the ceiling is absent.
+        "profile_reasserts": drift.events,
         "results": results,
         # Reported independently of the voltage verdict. This is a separate
         # question that happens to share a charge cycle, and it stands on its

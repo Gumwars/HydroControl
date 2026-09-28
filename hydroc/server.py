@@ -28,7 +28,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from .cli import (PROFILE_PATHS, REPAIR_MODPROBE, REPAIR_MODULE, REPAIR_RELOAD,
                   diagnose, load_profile, save_profile)
 from .hardware import Hardware
-from . import fancurve, gpumode, presets, rgb
+from . import fancurve, found, gpumode, presets, rgb
 from .hotkeys import ProfileButton
 
 # The LPP dock lives behind a sidecar daemon (hydroc.lppd) because BLE is async
@@ -190,6 +190,11 @@ class Handler(BaseHTTPRequestHandler):
             return self._json({"presets": presets.describe(),
                                "active": presets.match(state),
                                "button": _button.status()})
+        if route == "/api/found":
+            # What the hardware was holding before hydroc-apply wrote to it.
+            # None until the first boot after this shipped.
+            return self._json(found.read() or {"none": True})
+
         if route == "/api/gpu":
             return self._json(gpumode.status())
 

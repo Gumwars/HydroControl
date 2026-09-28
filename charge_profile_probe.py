@@ -93,6 +93,11 @@ AC = "/sys/class/power_supply/AC0/online"
 # Sampling cadence. The reported phantom climb runs ~2% every 5-10 s, and the
 # old 60 s idle interval applied to exactly the stretch where it happens --
 # everything below --full-pct -- so it could not have resolved it.
+# 0x07C6 reads 0x04 thousands of times and then one garbage byte. Four such
+# one-offs in a single run had bit 4 set, which is enough to report ERM as
+# armed if you believe a single sample. Believe three in a row instead.
+OEM6_CONFIRM = 3
+
 DEFAULT_INTERVAL = 5.0
 DEFAULT_IDLE_INTERVAL = 5.0
 
@@ -221,6 +226,7 @@ class Log:
 
     def __init__(self, path):
         self.oem6_seen: dict[str, int] = {}
+        self._runs: dict[str, int] = {}
         self.erm_events: list[dict] = []
         self.full24_events: list[dict] = []
         fresh = not path or not os.path.exists(path) or os.path.getsize(path) == 0
@@ -242,18 +248,31 @@ class Log:
     def note(self, s: dict, phase: str) -> None:
         """Record what 0x07C6 did, whether or not a CSV is being written.
 
-        Kept as first-occurrence events rather than a count: the question is
-        whether these bits EVER arm, and one armed sample is the finding.
+        A bit is only believed after OEM6_CONFIRM consecutive samples show it.
+        This byte reads 0x04 thousands of times and then, perhaps once in two
+        hundred, returns something else entirely -- 0x5F, 0x37, 0xBE, 0x56 --
+        often in the same read cycle that corrupts a neighbouring field. Four
+        of those one-off values happen to have bit 4 set, so recording the
+        first occurrence reported ERM as armed on a machine where it never was.
+
+        The same mistake as the drift guard, made twice: acting on a single
+        read of a register space that is demonstrably not reliable.
         """
         raw = s.get("oem6")
         if raw is None:
+            self._runs = {}
             return
         self.oem6_seen[raw] = self.oem6_seen.get(raw, 0) + 1
         for bit, store in (("erm_reached", self.erm_events),
                            ("full_24h", self.full24_events)):
-            if s.get(bit) and not store:
+            if not s.get(bit):
+                self._runs[bit] = 0
+                continue
+            self._runs[bit] = self._runs.get(bit, 0) + 1
+            if self._runs[bit] >= OEM6_CONFIRM and not store:
                 store.append({"t": s["t"], "phase": phase, "oem6": raw,
-                              "capacity": s.get("capacity")})
+                              "capacity": s.get("capacity"),
+                              "confirmed_over": OEM6_CONFIRM})
 
 
 def show(s: dict, phase: str) -> None:

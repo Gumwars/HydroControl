@@ -205,11 +205,15 @@ class Oem6TrackingTest(unittest.TestCase):
         self.note("0x04"); self.note("0x04"); self.note("0x14", erm=1)
         self.assertEqual(self.log.oem6_seen, {"0x04": 2, "0x14": 1})
 
-    def test_records_only_the_first_arming(self):
-        self.note("0x14", erm=1, t="12:00:01")
-        self.note("0x14", erm=1, t="12:00:02")
+    def test_records_the_arming_once_not_repeatedly(self):
+        """Once confirmed, it is one event however long the bit stays set --
+        the question is whether it EVER arms, not how many samples saw it.
+        Timestamped at the confirming sample, not the first suspicious one."""
+        for i in range(self.m.OEM6_CONFIRM + 4):
+            self.note("0x14", erm=1, t=f"12:00:{i:02d}")
         self.assertEqual(len(self.log.erm_events), 1)
-        self.assertEqual(self.log.erm_events[0]["t"], "12:00:01")
+        self.assertEqual(self.log.erm_events[0]["t"],
+                         f"12:00:{self.m.OEM6_CONFIRM - 1:02d}")
 
     def test_never_arming_leaves_no_event(self):
         self.note("0x04"); self.note("0x04")
@@ -338,6 +342,62 @@ class DriftTrackerTest(unittest.TestCase):
         e = d.events[0]
         for k in ("t", "read", "expected", "capacity"):
             self.assertIn(k, e)
+
+
+class Oem6ConfirmTest(unittest.TestCase):
+    """0x07C6 glitches, and four glitches in one run had bit 4 set.
+
+    Observed 2026-09-27: 864 samples read 0x04 and five read something else,
+    each exactly once -- 0x37, 0xBE, 0x56, 0x35, 0x2B. One of them corrupted
+    the profile field in the same read cycle. Believing the first sample with
+    bit 4 set reported ERM as armed on a machine where it never armed.
+    """
+
+    def setUp(self):
+        self.m = load()
+        self.log = self.m.Log(None)
+
+    def note(self, oem6, erm=0, full=0, t="12:00:00"):
+        self.log.write({"t": t, "oem6": oem6, "erm_reached": erm,
+                        "full_24h": full, "capacity": 50}, "stationary")
+
+    def test_one_glitched_sample_does_not_arm_erm(self):
+        self.note("0x04"); self.note("0x37", erm=1); self.note("0x04")
+        self.assertEqual(self.log.erm_events, [])
+
+    def test_four_scattered_glitches_do_not_arm_erm(self):
+        """The exact shape of the real run: isolated, never consecutive."""
+        for bad in ("0x37", "0xBE", "0x56", "0x35"):
+            self.note("0x04"); self.note(bad, erm=1)
+        self.note("0x04")
+        self.assertEqual(self.log.erm_events, [])
+
+    def test_a_sustained_bit_is_believed(self):
+        for _ in range(self.m.OEM6_CONFIRM):
+            self.note("0x14", erm=1)
+        self.assertEqual(len(self.log.erm_events), 1)
+        self.assertEqual(self.log.erm_events[0]["confirmed_over"],
+                         self.m.OEM6_CONFIRM)
+
+    def test_a_failed_read_breaks_the_run(self):
+        """An unreadable sample is not evidence the bit stayed set."""
+        self.note("0x14", erm=1); self.note("0x14", erm=1)
+        self.log.write({"t": "t", "oem6": None}, "stationary")
+        self.note("0x14", erm=1)
+        self.assertEqual(self.log.erm_events, [])
+
+    def test_every_value_is_still_counted(self):
+        """Counting all of them is what exposed the glitches in the first
+        place -- confirmation must not hide the distribution."""
+        self.note("0x04"); self.note("0x37", erm=1); self.note("0x04")
+        self.assertEqual(self.log.oem6_seen, {"0x04": 2, "0x37": 1})
+
+    def test_full_24h_needs_the_same_confirmation(self):
+        self.note("0x0C", full=1); self.note("0x04")
+        self.assertEqual(self.log.full24_events, [])
+        for _ in range(self.m.OEM6_CONFIRM):
+            self.note("0x0C", full=1)
+        self.assertEqual(len(self.log.full24_events), 1)
 
 
 if __name__ == "__main__":

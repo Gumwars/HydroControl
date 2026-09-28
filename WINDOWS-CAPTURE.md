@@ -21,6 +21,65 @@ use of it was correct. That was not wasted -- the EC map, the three doors, the
 write the register" many times over while never answering "does this feature
 work on this machine."
 
+## Setting the machine up
+
+### Pull the Linux drive out
+
+Physically, not by leaving it unselected in the installer. Windows writes boot
+entries to any ESP it finds, and the Limine + initramfs setup on that drive has
+already cost us one evening. Removal is the only guarantee that costs nothing.
+
+### Which battery
+
+The original pack, the one in the machine now -- not the RMA replacement.
+
+`wmi-ceiling.csv` was measured on this pack. Same chassis, same pack, only the
+OS differs, which is the comparison the test exists to make. Fitting a new
+battery first would put a second variable into it: a ceiling appearing under
+Windows would no longer distinguish "Windows engages it" from "the new pack
+does". The pack is in any case already eliminated -- two physically different
+batteries both charged straight past 80%.
+
+The new pack is a confirmation run afterwards, a third data point, not a
+prerequisite.
+
+Charge down below 70% before starting so test 1 has room.
+
+### Capture the firmware versions before anything updates them
+
+This is the one setup step that can be got wrong irreversibly.
+
+The Linux baseline is **EC 1.17, BIOS N.1.09ELUK (2024-05-04)**. A full
+Eluktronics driver install is likely to offer an EC or BIOS update. If one
+applies before the first capture, the comparison to the Linux run is gone and
+we will not know whether a difference came from the OS or the firmware.
+
+So run it deliberately as two passes rather than letting it happen once by
+accident:
+
+| | Firmware | What it answers |
+|---|---|---|
+| **Run A** | EC 1.17, stock, no updates applied | The controlled comparison. Only the OS differs from the Linux baseline. |
+| **Run B** | After the vendor package updates whatever it wants | Whether newer EC firmware implements the feature. |
+
+Record EC and BIOS versions in both, and do not let Windows Update apply
+driver or firmware packages until run A is captured.
+
+If A fails and B works, the answer is firmware and the investigation is over.
+That matters beyond this machine: it is the question we cannot otherwise
+settle, because the one person reporting the feature working has been out of
+contact and may stay that way. Run B answers it without them.
+
+### Dump before and after Control Center is installed
+
+Free, and it tests something we have never looked at. Take a low-RAM and
+`0x07xx` dump on a clean Windows install before TCC, then again after
+installing it and launching it once, before touching any setting.
+
+If TCC writes EC state at install or first launch, that write is itself a
+candidate for the arming step we have been looking for -- and it would never
+show up in a diff taken around a profile toggle, because it happens earlier.
+
 ## The one test that may end this
 
 **Test 1 costs nothing and can make the other four unnecessary. Run it first.**

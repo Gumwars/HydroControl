@@ -50,3 +50,8 @@ kbctrl/rgb_sanitycheck.sh
 # Local safety artifacts, not project evidence -- one per switch, and they go
 # stale. The mux-*.json captures that document the encoding ARE committed.
 gpu-mode-backup-*.json
+
+# Vendor EC firmware images and their update packages. ec_image_scan.py reads
+# these, but they are Eluktronics' binaries and are not ours to redistribute.
+*.ELUK
+*_EC[0-9][0-9][0-9].zip

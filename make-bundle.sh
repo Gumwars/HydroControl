@@ -38,7 +38,7 @@ copy install.sh; copy README.md; copy DESIGN.md; copy LICENSE
 
 # diagnostics testers are asked to run -- see "Diagnostic scripts" in README.md
 for f in lb_mode_probe.py lb_set_color.py compat_probe.py ec_state_capture.py \
-         charge_path_probe.py; do
+         charge_path_probe.py ec_image_scan.py; do
   [[ -e "$DIR/$f" ]] && copy "$f"
 done
 

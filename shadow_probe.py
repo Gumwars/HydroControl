@@ -31,6 +31,25 @@ them disagree. Change the threshold, wait, and read 0x087F:
     it does not  the routine did not run while the threshold changed under it,
                  which is a positive result rather than another silence.
 
+STATUS: DOES NOT WORK ON THE HYDROC-16 G1. 0x087F is not readable here.
+
+It reads 0xFF, which on this EC means unmapped address space rather than a
+value -- DESIGN.md 3.2 recorded exactly that on 2026-08-27, in a table, and
+this file was written anyway. The G2 build keeps the same variable at 0x9164,
+far outside anything ECRR exposes, which should have been the second clue.
+
+The probe now refuses to run rather than reporting a verdict, and it refuses
+BEFORE touching the threshold, because a test whose witness is invisible
+should not be changing anything. Kept rather than deleted: the approach is
+right and the address may be mapped on another Uniwill project, so a machine
+where 0x087F reads something other than 0xFF can use it as written.
+
+On this machine the visible witnesses inside the ECRR window are exhausted.
+The ceiling routine's only observable output is CHARGE_CTRL_REACHED, which
+has never armed; everything else it writes -- 0x087F, 0x09C7-0x09C9, 0x0A51 --
+is outside the window. That is an argument for watching the Control Center
+service on Windows rather than for another probe from here.
+
 WHAT THIS WRITES
 
 The threshold, once, through the kernel driver's own sysfs interface --
@@ -159,7 +178,16 @@ def main() -> int:
           f"  0x087F={shadow_before}")
 
     if shadow_before is None:
-        raise SystemExit("0x087F is unreadable; nothing to compare")
+        raise SystemExit("0x087F did not answer; nothing to compare")
+    if shadow_before == 0xFF:
+        raise SystemExit(
+            "0x087F reads 0xFF, which on this EC is unmapped address space and\n"
+            "not a value (DESIGN.md 3.2: '0x087F sits outside both windows').\n"
+            "The witness is invisible, so the test cannot say anything, and the\n"
+            "threshold has NOT been changed.\n\n"
+            "Reporting 'the routine did not run' from this would be the same\n"
+            "mistake as reading 0x0984 as a hardware interlock when it was\n"
+            "unmapped space with every bit set.")
 
     target = pick_target(original, args.to)
     if target == original:

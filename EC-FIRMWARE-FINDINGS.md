@@ -141,6 +141,43 @@ experiment is **not** being run from Linux. DESIGN.md 4.1b has the detail and th
 recovery that was never tried. The Control Center service can be watched on
 Windows for the same answer at no risk.
 
+## The visible witnesses inside the ECRR window are exhausted
+
+The ceiling routine's only output this machine can observe is
+`CHARGE_CTRL_REACHED`, and it has never armed -- across a full cycle under
+Stationary (981 samples), a second full charge 77% to 100% (638 samples), and
+every earlier run.
+
+Everything else the routine writes is outside the window:
+
+| written by the routine | visible through ECRR? |
+|---|---|
+| `0x07B9` bit 7 (`REACHED`) | yes -- never changes |
+| `0x0742` bit 2 | yes -- never changes, but see below |
+| `0x087F` (threshold shadow) | **no**, reads `0xFF` |
+| `0x09C7`-`0x09C9`, `0x0A51` | no |
+
+Two tests were built against these and both are weaker than they looked.
+
+`0x0742` bit 2 is written on every pass through the block before the capacity
+comparison, set on one branch and cleared on the other. But the clearing branch
+writes the same value when the bit is already clear, so a flat line cannot
+separate "never ran" from "ran and decided the same way every time". It read
+`0x22` for all 638 samples, which means less than it appears to.
+
+`0x087F` looked better because it is causal: the EC copies the threshold into
+it only when the two disagree, so changing the threshold should force a write.
+It reads `0xFF` -- unmapped space, every bit set. DESIGN.md 3.2 recorded that
+on 2026-08-27, in a table, before `shadow_probe.py` was written; the probe was
+built anyway and reported "the routine did not run" from it, which is the same
+error as reading `0x0984` as a hardware interlock. It now refuses on `0xFF`
+without touching the threshold.
+
+The conclusion is not about the EC. It is that this question cannot be
+answered from inside the ECRR window, which is an argument for watching what
+the Control Center service does on Windows rather than for building another
+probe from here.
+
 ## What is not established
 
 **A fleet-wide dead feature is implausible on its face.** `117.ELUK` is what

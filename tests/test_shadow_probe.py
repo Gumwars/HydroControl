@@ -107,6 +107,56 @@ class VerdictTest(unittest.TestCase):
         self.assertEqual(v["reading"], "unreadable")
 
 
+class UnmappedTest(unittest.TestCase):
+    """0xFF is not a value on this EC.
+
+    0x087F reads 0xFF on the HYDROC-16 G1 -- unmapped space, recorded in
+    DESIGN.md 3.2 on 2026-08-27, before this probe existed. The first run of
+    this file read 255 and reported "the routine did not run", which is the
+    0x0984 mistake again: unmapped space has every bit set and says nothing.
+
+    Two things are pinned. It must refuse, and it must refuse BEFORE touching
+    the threshold -- a test whose witness is invisible has no business changing
+    the machine's charge limit.
+    """
+
+    def setUp(self):
+        self.m = load()
+
+    def run_main(self, shadow):
+        wrote = []
+        with mock.patch.object(self.m.os, "geteuid", return_value=0), \
+             mock.patch.object(self.m.os.path, "exists", return_value=True), \
+             mock.patch.object(self.m, "read_threshold", return_value=80), \
+             mock.patch.object(self.m, "ec_read", side_effect=[0x50, shadow]), \
+             mock.patch.object(self.m, "write_threshold",
+                               side_effect=lambda v: wrote.append(v)), \
+             mock.patch.object(self.m.sys, "argv", ["shadow_probe.py"]):
+            with self.assertRaises(SystemExit) as cm:
+                self.m.main()
+        return str(cm.exception), wrote
+
+    def test_it_refuses_on_an_unmapped_read(self):
+        msg, _ = self.run_main(0xFF)
+        self.assertIn("unmapped", msg)
+
+    def test_it_does_not_touch_the_threshold_when_it_refuses(self):
+        _, wrote = self.run_main(0xFF)
+        self.assertEqual(wrote, [], "refused, so nothing should have changed")
+
+    def test_a_real_value_is_not_refused(self):
+        """0xFE is a plausible byte. Only all-ones is the unmapped marker."""
+        with mock.patch.object(self.m.os, "geteuid", return_value=0), \
+             mock.patch.object(self.m.os.path, "exists", return_value=True), \
+             mock.patch.object(self.m, "read_threshold", return_value=80), \
+             mock.patch.object(self.m, "ec_read", return_value=0xFE), \
+             mock.patch.object(self.m, "write_threshold", return_value=None), \
+             mock.patch.object(self.m.time, "sleep", side_effect=KeyboardInterrupt), \
+             mock.patch.object(self.m.sys, "argv", ["shadow_probe.py"]):
+            with self.assertRaises(KeyboardInterrupt):
+                self.m.main()
+
+
 class RestoreTest(unittest.TestCase):
 
     def setUp(self):

@@ -2,6 +2,38 @@
 
 Status: planned, not yet run. Blocked on a Windows install.
 
+## What we now know, and what is left for Windows
+
+Updated 2026-09-28 after the firmware decode. The plan below was written when
+"does a charge ceiling exist" was still open. It is not.
+
+**Settled from Linux, by measurement:**
+
+- The feature is **charge-voltage derating**, not a percentage ceiling. The EC
+  subtracts `constant x cell_count` mV from the pack maximum, in 50 mV/cell
+  steps, selected by a table keyed on battery telemetry. The profile is
+  consulted at only two rungs of that table.
+- This machine sits on the **most derated rung**: 17800 mV max, 16800 mV target,
+  4.200 V/cell. Confirmed with every term measured.
+- A controlled mid-charge switch from Stationary to High Capacity moved the
+  target by **zero millivolts** across 238 samples.
+- The separate percentage-ceiling path is gated on `0x07C3 == 4`; it reads
+  `0x0D`, and **nothing in the firmware writes it**.
+- The cycle-count gate is eliminated: 133 against a threshold of 550.
+- Two remaining gates (`0x0A5C`, `0x09C9:0x09CA`) are in address ranges `ECRR`
+  cannot read at all.
+
+**What only Windows can answer:**
+
+1. Does `0x07C3` read `4` under Windows? If so the gate is host-driven and the
+   Control Center service drives it. That is the whole question.
+2. Does TCC move `chg_target` off 16800, and in which direction?
+3. Can the mailbox path read `0x09xx`/`0x0Axx`, which `ECRR` cannot?
+4. Is the ceiling, if it engages, enforced by the EC or by the service?
+
+Nothing below requires believing the decode. Every test is a register read with
+a measured Linux value to diff against.
+
 ## Why this, and why it should have been first
 
 Everything in this repo about the charging profiles is inference from one side
@@ -93,28 +125,70 @@ observed doing it. Before hunting for a missing step it is worth knowing there
 is one.
 
 Set Stationary in Control Center. Charge from below 70%. Record capacity,
-current and voltage every 30 s to a file.
+current and voltage every 30 s.
 
-The measurement that matters is **volts per cell** (`voltage / 4`), not
-percentage and not current:
+**What "working" looks like is now specific.** The feature is not a percentage
+ceiling -- it is charge-voltage derating. The EC subtracts
+`constant x cell_count` millivolts from the pack maximum, in 50 mV/cell steps,
+and the profile is consulted at only two rungs of that table. So the question is
+not "does charging stop at 80%" but **"does the charge target move off
+4.200 V/cell"**.
 
 | Observation | Meaning |
 |---|---|
-| Plateaus near **4.05 V/cell**, stops well short of full | The ceiling works under Windows. The gap is ours -- go to tests 2-4. |
-| Climbs to **~4.18 V/cell** and reports Full | The feature does not work on this machine under its own vendor software either. The investigation is over; the difference is hardware or firmware, not Linux. |
+| Terminates **below 4.20 V/cell** | Something is derating further than Linux ever sees. Go to the register tests. |
+| Terminates at **~4.20 V/cell**, as Linux does | Windows reaches the same rung. The profile is not the variable, and the difference is not the OS. |
+| Terminates **above 4.20 V/cell** (4.25 / 4.35) | The profile IS being consulted, and it raises the target. Which matches the decode and contradicts the feature's own name. |
 
-Linux under Stationary settled at **4.1635 V/cell**, 100%, 0 mA
-(`wmi-ceiling.json`, 2026-09-28). That is the number to beat.
+The third row is the one worth bracing for. Per the decoded table, Stationary
+selects 200 (4.25 V/cell) and Balanced 100 (4.35 V/cell), both **higher** than
+the 4.20 V this machine already uses. If TCC reproduces that, the feature is not
+a charge limiter and the outside report needs another explanation entirely.
 
-Voltage is the right ground truth because the one mechanism anyone has proposed
-for faking this -- forcing `0x35` -- is the high byte of the *current* register.
-Voltage lives at `0x38`, a different register that mechanism does not touch. A
-disguise that suppresses reported current cannot also invent a cell voltage.
+Linux baseline, measured: **4.1635 V/cell resting at 100%**
+(`wmi-ceiling.json`), with `chg_target` pinned at 16800 mV through a controlled
+mid-charge profile switch (`switch1.csv`, 238 samples).
 
-Record the TCC version, EC version and BIOS version in the same file. The
-outside report is from an XMG NEO 16 (E25) / TongFang X6AR5xxY, a different
-barebones from this IDY chassis, so the comparison is only meaningful anchored
-to versions.
+## The register watchlist, with Linux values to diff against
+
+Every one of these has a measured value from this machine. A Windows read that
+differs is a finding on its own, independent of what the battery does.
+
+| register | Linux value | what it means |
+|---|---|---|
+| `0x0522:0x0523` (LE) | **16800** | charge target, mV = 4.200 V/cell. The output. |
+| `0x030E:0x030F` (**BE**) | **17800** | pack maximum, 4.450 V/cell. The input. |
+| `0x07C3` | **0x0D** | the ceiling gate. Arms only at `4`. Nothing in firmware writes it. |
+| `0x0742` bit 2 | **0** | the ceiling's footprint; set when the gate opens. |
+| `0x0491` | **0xC0** | cell count selector; `0xC0` = 4. |
+| `0x04A2:0x04A3` | **3030** | stress-counter driver, sitting exactly on a breakpoint. |
+| `0x04A6:0x04A7` | **133** | cycle count. Derating rung needs >= 550. |
+| `0x04AB` | capacity % | sanity check. |
+
+Note the mixed endianness: `0x030E:0x030F` is big-endian, `0x0522:0x0523` is
+little-endian. Reading both the same way is how this project lost an afternoon.
+
+**The single most valuable read is `0x07C3`.** If it is `4` under Windows and
+`0x0D` under Linux, the gate is host-driven and the Control Center service is
+what drives it -- which would be the whole answer.
+
+## Can Windows read what Linux cannot?
+
+`ECRR` exposes only `0x03xx`, `0x04xx`, `0x05xx`, `0x07xx`, `0x0Fxx`. The ranges
+`0x08xx`, `0x09xx` and `0x0Axx` read `0xFF` -- unmapped. That is where the
+derating table's own inputs live:
+
+- `0x0A5C` -- SMBus-sourced gate, no readable source, invisible on Linux
+- `0x09C9:0x09CA` -- the accumulated stress counter, invisible
+- `0x0A51` -- cell count (derivable from `0x0491`, so not a loss)
+- `0x0A54` -- threshold as read from the pack
+
+**Test whether the mailbox path reaches further than the MMIO window.** Drive
+`0x8A-0x8E` to read `0x0A5C` and `0x09C9:0x09CA`. If they answer under Windows,
+the two gates this project could never observe become readable, and the derating
+decision can be checked directly rather than inferred. If they read `0xFF` there
+too, the limit is the EC's own window and not the door -- worth knowing either
+way, and it is a five-minute test.
 
 ## Is it the EC or the service? Five minutes, and do it second
 

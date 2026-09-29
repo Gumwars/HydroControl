@@ -154,23 +154,51 @@ mid-charge profile switch (`switch1.csv`, 238 samples).
 Every one of these has a measured value from this machine. A Windows read that
 differs is a finding on its own, independent of what the battery does.
 
-| register | Linux value | what it means |
+**Two mechanisms, kept separate.** Conflating them makes any result
+uninterpretable, because they have different gates:
+
+### Percentage ceiling -- gated on `0x07C3 == 4`
+
+| register | Linux | meaning |
 |---|---|---|
-| `0x0522:0x0523` (LE) | **16800** | charge target, mV = 4.200 V/cell. The output. |
-| `0x030E:0x030F` (**BE**) | **17800** | pack maximum, 4.450 V/cell. The input. |
-| `0x07C3` | **0x0D** | the ceiling gate. Arms only at `4`. Nothing in firmware writes it. |
-| `0x0742` bit 2 | **0** | the ceiling's footprint; set when the gate opens. |
+| `0x07C3` | **0x0D** | the gate. Arms only at `4`; nothing in firmware writes it. |
+| `0x0742` bit 2 | **0** | the footprint, set when the gate opens. |
+| `0x07B9` | 0x50 | threshold 80, `REACHED` clear. |
+
+If `0x07C3` reads `4` under Windows, **the service arms the ceiling** -- but that
+says nothing about the derating, which is a different feature on different
+gates. Label the result accordingly.
+
+### Charge-voltage derating -- gated on telemetry, NOT on `0x07C3`
+
+| register | Linux | meaning |
+|---|---|---|
+| `0x0522:0x0523` (LE) | **16800** | the charge target, mV = 4.200 V/cell. **The output that matters.** |
+| `0x030E:0x030F` (**BE**) | **17800** | pack maximum, 4.450 V/cell. |
+| `0x07A6` | 0x20 / 0x00 | the profile itself -- without it you cannot tell "profile overridden" from "TCC wrote nothing". |
+| `0x0502:0x0503` | **3030** | battery temperature, 0.1 K = 29.85 C. The derating is thermal, so a target read without a temperature is uninterpretable. |
+| `0x04A2:0x04A3` | **3030** | copy of the above, feeding the stress accumulator. |
+| `0x04A6:0x04A7` | **133** | cycle count. **Live and drifting** -- it was 132 a day earlier. Not a mismatch. |
 | `0x0491` | **0xC0** | cell count selector; `0xC0` = 4. |
-| `0x04A2:0x04A3` | **3030** | stress-counter driver, sitting exactly on a breakpoint. |
-| `0x04A6:0x04A7` | **133** | cycle count. Derating rung needs >= 550. |
 | `0x04AB` | capacity % | sanity check. |
 
 Note the mixed endianness: `0x030E:0x030F` is big-endian, `0x0522:0x0523` is
 little-endian. Reading both the same way is how this project lost an afternoon.
 
-**The single most valuable read is `0x07C3`.** If it is `4` under Windows and
-`0x0D` under Linux, the gate is host-driven and the Control Center service is
-what drives it -- which would be the whole answer.
+### The predicted outcome, and why it is a conclusion
+
+The derating constant is chosen by temperature and accumulated stress **before**
+`0x07A6` is consulted. On the same physical pack, at the same temperature,
+Windows should land on the same rung -- so `0x0522:0x0523` should stay at
+**16800 whatever TCC selects**.
+
+If that is what happens, it is not a null result. It means the derating is
+**EC-autonomous and thermally driven**, not a host-controllable profile, and the
+feature cannot be driven from any OS. Record it as the answer, not as a failure
+to reproduce.
+
+The result that would overturn it: the target moving while the temperature and
+cycle count are unchanged.
 
 ## Can Windows read what Linux cannot?
 
@@ -184,11 +212,14 @@ derating table's own inputs live:
 - `0x0A54` -- threshold as read from the pack
 
 **Test whether the mailbox path reaches further than the MMIO window.** Drive
-`0x8A-0x8E` to read `0x0A5C` and `0x09C9:0x09CA`. If they answer under Windows,
-the two gates this project could never observe become readable, and the derating
-decision can be checked directly rather than inferred. If they read `0xFF` there
-too, the limit is the EC's own window and not the door -- worth knowing either
-way, and it is a five-minute test.
+`0x8A-0x8E` to read `0x0A5C` and `0x09C9:0x09CA`.
+
+Expect `0xFF`. The mailbox drives the same extended window `ECRR` already
+cannot reach, and these look like EC-internal scratch rather than mapped
+registers. Worth the five minutes anyway: a clean `0xFF` from the mailbox
+closes "can these gates ever be observed" definitively, and a real value opens
+the only route to checking the derating decision directly instead of inferring
+it.
 
 ## Is it the EC or the service? Five minutes, and do it second
 

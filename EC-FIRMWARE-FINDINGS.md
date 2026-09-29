@@ -429,6 +429,46 @@ changes nothing any readable register reflects.** Both mechanisms are inert --
 the ceiling because `0x07C3` reads `0x0D`, and the profile for a reason not yet
 distinguished.
 
+## Which EC address ranges ECRR can actually read
+
+Established by measurement, and written down because this project has now built
+three separate probes on registers that turned out to be invisible.
+
+| range | reads | evidence |
+|---|---|---|
+| `0x03xx` | **yes** | `0x030E:0x030F` = 17800 |
+| `0x04xx` | **yes** | live telemetry window, used throughout |
+| `0x05xx` | **yes** | `0x0522:0x0523` = 16800 |
+| `0x07xx` | **yes** | the settings window |
+| `0x0Fxx` | **yes** | fan tables |
+| `0x08xx` | **no** | `0x087F` reads `0xFF` (DESIGN.md 3.2) |
+| `0x09xx` | **no** | `0x09C0-0x09CF` all `0xFF` |
+| `0x0Axx` | **no** | `0x0A50-0x0A5F` all `0xFF` |
+
+`0xFF` across a whole 16-byte range is unmapped space, not data. Before adding a
+register to a probe, check it is in a readable range -- `shadow_probe.py` was
+built entirely on `0x087F` and reported a verdict about the EC from a register
+it could not see.
+
+### What that costs the charge-voltage decode
+
+The decision tree's inputs live almost entirely in the invisible ranges, so the
+tree cannot be run by hand and checked against the measured constant. What
+survives is what gets copied in from readable space:
+
+| tree input | readable? | via |
+|---|---|---|
+| `0x0A5A:0x0A5B` (`hw_base`) | yes | copied from `0x030E:0x030F` at `0x1BCF8` = 17800 |
+| `0x0A56:0x0A57` (cycle count) | yes | copied from `0x04A6:0x04A7` at `0x1BC1F` = **132** |
+| `0x0A51` (cell count) | indirectly | derived from `0x0491 & 0xC0`, and `0x04xx` is readable |
+| `0x0A5C` | **no** | SMBus-filled, no readable source found |
+| `0x09C9:0x09CA` | **no** | no readable source found |
+
+So the cycle-count gate is eliminated by measurement -- 132 against a threshold
+of 550 -- and the other two cannot currently be observed at all. Finding a
+readable source for either, the way `0x0A56` turned out to be a copy of
+`0x04A6`, is the only route to checking them without a Windows capture.
+
 ## What is not established
 
 **A fleet-wide dead feature is implausible on its face.** `117.ELUK` is what

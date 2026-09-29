@@ -370,6 +370,22 @@ def cell_count() -> int:
     return max(1, round(vmin / 1e6 / 3.7))
 
 
+def be16(hi, lo):
+    """A 16-bit big-endian pair. 0x03xx is stored high byte first.
+
+    The firmware's own compare proves it: testing 0x0A5A:0x0A5B against
+    500 (0x01F4) does SUBB A,#F4 on 0x0A5B and SUBB A,#01 on 0x0A5A, so
+    0x0A5A holds the high byte -- and 0x0A5A:0x0A5B is copied verbatim from
+    0x030E:0x030F at 0x1BCF8.
+
+    The output at 0x0522:0x0523 is the other way round, low byte first. Reading
+    both with le16 made hw_base 0x8845 = 34885 instead of 0x4588 = 17800, and
+    an offset measured against that baseline is meaningless. Caught by
+    DeepSeek; the mixed endianness within one computation is the trap.
+    """
+    return le16(lo, hi)
+
+
 def le16(lo, hi):
     """A 16-bit little-endian pair, or None when the window does not answer.
 
@@ -481,7 +497,8 @@ def sample(cells: int) -> dict:
         "erm_reached": None if oem6 is None else int(bool(oem6 & BATTERY_ERM_STATUS_REACHED)),
         "full_24h": None if oem6 is None else int(bool(oem6 & BATTERY_CHARGE_FULL_OVER_24H)),
         "chg_target": le16(tgt_lo, tgt_hi),
-        "hw_base": le16(base_lo, base_hi),
+        # big-endian: 0x030E is the high byte
+        "hw_base": be16(base_lo, base_hi),
         "gate": None if gate is None else f"0x{gate:02X}",
         # The whole question in one column.
         "gate_armed": None if gate is None else int(gate == 4),

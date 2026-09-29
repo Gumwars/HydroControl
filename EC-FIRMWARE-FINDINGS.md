@@ -380,15 +380,41 @@ The write landed -- the profile register really does read 2 then 0 -- and the
 charge target did not move by a millivolt. `hw_base` stayed far above 500, so
 the "constant forced to 0" branch does not explain it, and the rate held.
 
-Two readings survive.
+**Correction: `hw_base` was read with the wrong byte order.** The two 16-bit
+values in this computation are stored opposite ways, which the probe did not
+account for:
 
-**The profile path does not reach the target**, which is the ceiling's answer
-one layer further out. Or **`0x0522:0x0523` is not the output**, which the
-arithmetic rather supports: the value is perfectly static across 238 samples,
-which is not how a per-pass computation behaves, and
-`34885 - 16800 = 18085` while the largest possible `constant x rate` is
-`250 x 4 = 1000`. The formula cannot produce the observed pair, so
-`0x030E:0x030F` is probably not the seed for `0x0A5A:0x0A5B`.
+- `0x030E:0x030F` is **big-endian**. The firmware's compare against 500
+  (`0x01F4`) does `SUBB A,#F4` on `0x0A5B` and `SUBB A,#01` on `0x0A5A`, so
+  `0x0A5A` -- copied verbatim from `0x030E` at `0x1BCF8` -- is the high byte.
+- `0x0522:0x0523` is **little-endian**; `0x0522` takes the low-byte result.
+
+So `hw_base` is `0x4588` = **17800**, not `0x8845` = 34885. Caught by DeepSeek.
+With that fixed the picture is coherent:
+
+| | pack | per cell |
+|---|---|---|
+| `hw_base` | 17800 mV | **4450** |
+| `chg_target` | 16800 mV | **4200** |
+| offset | 1000 mV | **250** |
+
+The charger's 4.45 V/cell maximum, reduced by 250 mV/cell to the 4.20 V/cell
+Li-ion standard. Both of the register assignments were right; only the reading
+was wrong, and `18085` being impossible for any `constant x multiplier` was the
+tell.
+
+**The experimental result is unchanged.** The offset was exactly 1000 in both
+phases. Switching Stationary to High Capacity did not move it.
+
+Two things remain unsettled in the formula. The offset `1000` is read as
+`250 x 4` with 4 as the charge-rate code from `0x0A51` -- but the capture
+measured ~2006 mA throughout, which is rate 2, not 4. A reading that needs no
+rate at all fits the per-cell figures better: **250 mV per cell x 4 cells**,
+which would make `0x0A51` the cell count rather than a rate. And whichever it
+is, the constant did not change with the profile, so either the telemetry gates
+routed both phases to the same branch without consulting `0x07A6` -- which the
+decision tree at `0x1BD07` allows -- or the profile bits do not reach this
+computation on this machine.
 
 What `chg_target` almost certainly *is*: **16800 mV = 4.200 V/cell on a 4S
 pack**, the charge termination voltage, held as configuration rather than

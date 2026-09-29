@@ -1011,3 +1011,42 @@ class HeaderSchemaTest(unittest.TestCase):
         with self.assertRaises(SystemExit) as cm:
             self.m.Log(p)
         self.assertIn("ghost", str(cm.exception))
+
+
+class EndiannessTest(unittest.TestCase):
+    """0x030E:0x030F is big-endian; 0x0522:0x0523 is little-endian.
+
+    Two 16-bit values in one computation, stored opposite ways. Reading the
+    input with le16 gave hw_base = 0x8845 = 34885 instead of 0x4588 = 17800,
+    which made the offset 18085 instead of 1000 and looked like proof the
+    formula was wrong.
+
+    The firmware settles it: the compare against 500 = 0x01F4 subtracts 0xF4
+    from 0x0A5B and 0x01 from 0x0A5A, so 0x0A5A -- copied from 0x030E -- is
+    the high byte.
+    """
+
+    def setUp(self):
+        self.m = load()
+
+    def test_the_input_pair_is_big_endian(self):
+        """0x030E=0x45, 0x030F=0x88 is 17800, not 34885."""
+        self.assertEqual(self.m.be16(0x45, 0x88), 0x4588)
+        self.assertEqual(self.m.be16(0x45, 0x88), 17800)
+
+    def test_the_output_pair_stays_little_endian(self):
+        """0x0522=0xA0, 0x0523=0x41 is 16800 = 4.200 V/cell on a 4S pack."""
+        self.assertEqual(self.m.le16(0xA0, 0x41), 16800)
+
+    def test_the_two_orders_disagree_which_is_the_whole_point(self):
+        self.assertNotEqual(self.m.be16(0x45, 0x88), self.m.le16(0x45, 0x88))
+
+    def test_be16_keeps_the_unmapped_marker(self):
+        self.assertIsNone(self.m.be16(0xFF, 0xFF))
+        self.assertIsNone(self.m.be16(None, 0x88))
+
+    def test_the_measured_pair_gives_a_reachable_offset(self):
+        """17800 - 16800 = 1000, which is inside the range a constant times a
+        multiplier can produce. 34885 - 16800 = 18085 is not, and that
+        impossibility was the tell."""
+        self.assertEqual(self.m.be16(0x45, 0x88) - self.m.le16(0xA0, 0x41), 1000)

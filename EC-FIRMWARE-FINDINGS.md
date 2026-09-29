@@ -361,6 +361,48 @@ the profile path actually runs here is answered by `chg_target` and `hw_base` in
 never been read on this machine. Empty columns would mean the wrong door, not a
 null result.
 
+## The profile does not move the charge target either (measured)
+
+`switch1.csv`, 2026-09-28. 238 samples across a mid-charge profile switch --
+Stationary for 126 samples from 74% to 80%, then High Capacity for 112 more.
+The single-switch design holds the telemetry and the rate still, which two
+separate runs cannot do, because the constant-selection tree forks on
+registers that are unmapped.
+
+| | Stationary | High Capacity |
+|---|---|---|
+| `profile` | `2` | `0` |
+| `chg_target` (`0x0522:0x0523`) | **16800** | **16800** |
+| `hw_base` (`0x030E:0x030F`) | 34885 | 34885 |
+| `rate` | 2 | 2 |
+
+The write landed -- the profile register really does read 2 then 0 -- and the
+charge target did not move by a millivolt. `hw_base` stayed far above 500, so
+the "constant forced to 0" branch does not explain it, and the rate held.
+
+Two readings survive.
+
+**The profile path does not reach the target**, which is the ceiling's answer
+one layer further out. Or **`0x0522:0x0523` is not the output**, which the
+arithmetic rather supports: the value is perfectly static across 238 samples,
+which is not how a per-pass computation behaves, and
+`34885 - 16800 = 18085` while the largest possible `constant x rate` is
+`250 x 4 = 1000`. The formula cannot produce the observed pair, so
+`0x030E:0x030F` is probably not the seed for `0x0A5A:0x0A5B`.
+
+What `chg_target` almost certainly *is*: **16800 mV = 4.200 V/cell on a 4S
+pack**, the charge termination voltage, held as configuration rather than
+computed. The pack climbed 4.03 -> 4.09 V/cell during the capture, heading for
+exactly that. It also pins the units question -- the profile constants
+(200/150/100/250) are millivolts, so Stationary would target 4.10 V/cell if it
+ever applied.
+
+Either way the practical answer is the same, and it is now measured under
+control rather than inferred: **on this machine, selecting a charging profile
+changes nothing any readable register reflects.** Both mechanisms are inert --
+the ceiling because `0x07C3` reads `0x0D`, and the profile for a reason not yet
+distinguished.
+
 ## What is not established
 
 **A fleet-wide dead feature is implausible on its face.** `117.ELUK` is what

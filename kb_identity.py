@@ -30,8 +30,34 @@ from __future__ import annotations
 
 import sys
 
-# Type 21 is HIDKeyboard3, the one CHEAT_RGB was read from.
-HIDKEYBOARD3_VER_HIGH = 0x20
+# Ver_High -> panel type family, from ILM_RGBKB_Init's ConfirmStart overload.
+# Where a family is keyed further, KBID is EC 0x073C.
+#
+# The trap here cost a wrong table: the notes said "Ver_High == 0x20 gives
+# type 21", and this panel reports 0x22 -- which looks adjacent and is not.
+# 0x20 is 32 decimal and 0x22 is 34, and they are separate branches.
+VER_HIGH_TYPES = {
+    0x12: ((5, 6), {}),
+    0x13: ((11, 12, 13, 14), {25: 11, 17: 12, 73: 13, 65: 14}),
+    0x16: ((11, 12, 13, 14), {25: 11, 17: 12, 73: 13, 65: 14}),
+    0x14: ((17, 18, 19, 20), {}),
+    0x20: ((21, 22), {}),                       # HIDKeyboard3
+    0x22: ((7, 8, 9, 10), {24: 7, 16: 8, 72: 9, 64: 10}),
+}
+
+# The types CHEAT_RGB (cheatRGB_HIDKeyboard3) is the table for.
+HIDKEYBOARD3_TYPES = (21, 22)
+
+REG_KBID = 0x073C
+
+
+def _read_kbid() -> int | None:
+    """EC 0x073C, which sub-selects within a Ver_High family. Read-only."""
+    try:
+        from hydroc.ec import EC
+        return EC().read(REG_KBID)
+    except Exception:
+        return None
 
 
 def main() -> int:
@@ -63,24 +89,34 @@ def main() -> int:
 
     high, low, test, customer = ver
     print(f"firmware  {high}.{low}.{test}.{customer}"
-          f"   (high = 0x{high:02X})")
+          f"   (high = 0x{high:02X} = {high})")
 
-    if high == HIDKEYBOARD3_VER_HIGH:
-        print("\n  Type 21 (HIDKeyboard3).")
-        print("  The vendor's white balance APPLIES to this panel, and")
-        print("  hydroc.rgb.CHEAT_RGB is the right table for it.")
-        print("  If white still looks wrong, the table is not the problem.")
+    family, by_kbid = VER_HIGH_TYPES.get(high, ((), {}))
+    if not family:
+        print(f"\n  Ver_High 0x{high:02X} is not in the known mapping.")
+        print("  hydroc.rgb.CHEAT_RGB is for types 21/22 and should stay off.")
+        return 0
+
+    kbid = _read_kbid()
+    resolved = by_kbid.get(kbid) if (by_kbid and kbid is not None) else None
+    shown = resolved if resolved else "/".join(str(t) for t in family)
+    print(f"panel type {shown}"
+          + (f"   (KBID 0x{kbid:02X})" if kbid is not None else
+             "   (KBID unread -- needs EC access)"))
+
+    types = (resolved,) if resolved else family
+    if set(types) & set(HIDKEYBOARD3_TYPES):
+        print("\n  HIDKeyboard3. hydroc.rgb.CHEAT_RGB is the table for this")
+        print("  panel; pass correct=True to apply it.")
     else:
-        print(f"\n  Not the 0x20 that selects HIDKeyboard3 (this is "
-              f"0x{high:02X}).")
-        print("  What 0x22 selects is not recorded: the notes describe the")
-        print("  table as covering 'type 21/22' but only say 0x20 gives 21.")
-        print("  And there is more than one table -- the service picks by")
-        print("  LED vendor (Liteon glossy/cloudy/CIE, Everlight/CIE) from")
-        print("  EC 0x073D, 0x0742, 0x078E or device firmware -- and we have")
-        print("  one variant.")
-        print("\n  So hydroc.rgb.CHEAT_RGB is off by default. Turn it on")
-        print("  per call with correct=True if you want to compare.")
+        print(f"\n  NOT HIDKeyboard3 (that is types "
+              f"{'/'.join(str(t) for t in HIDKEYBOARD3_TYPES)}).")
+        print("  hydroc.rgb.CHEAT_RGB is cheatRGB_HIDKeyboard3 and is the")
+        print("  wrong table for this panel. It is off by default; leave it.")
+        print("\n  The right one is whichever cheatRGB_* the service maps")
+        print("  this type to -- five keyboard tables exist (_2ndME,")
+        print("  _2p1ndME, _2p2ndME, _4Zone, _HIDKeyboard3) and the")
+        print("  dispatcher has not been extracted yet.")
     return 0
 
 

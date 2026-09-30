@@ -25,7 +25,8 @@ import os
 import time
 from dataclasses import dataclass, field
 
-from . import fancurve, gpumode
+from . import fancurve
+from . import nativemode, gpumode
 from .ec import EC, ECUnavailable, ECWriteRejected
 
 PLATFORM = "/sys/bus/platform/devices/INOU0000:00"
@@ -225,6 +226,12 @@ class Hardware:
         ec_ok, _ = EC.available()
         if ec_ok:
             try:
+                # A native mode only means anything with the latch clear:
+                # armed, the EC treats the machine as Custom whatever 0x0751
+                # says, so reporting a mode name there would be a lie.
+                nm = nativemode.current(self.ec)
+                state["native_mode"] = None if nm["custom_latched"] else nm["mode"]
+                state["fan_boost"] = nm["boost"]
                 state["custom_profile"] = self.ec.custom_profile_enabled()
                 pl = self.ec.get_power_limits()
                 state["cpu_pl1"] = pl["pl1_setting"]
@@ -295,6 +302,32 @@ class Hardware:
         def differs(key):
             return key in desired and desired[key] is not None \
                 and desired[key] != actual.get(key)
+
+        # 0. Native performance mode, before anything it owns.
+        #
+        #    A native mode owns the latch, the power limits and the fan table.
+        #    The custom-profile keys are not merely redundant beside one, they
+        #    contradict it: left in `desired`, the next reconcile pass would
+        #    re-arm the latch and drop the machine back into Custom -- white
+        #    LED, our numbers, the EC's own limits unused -- with nothing in
+        #    the UI explaining why the mode did not stick.
+        desired = dict(desired)
+        want_native = desired.get("native_mode")
+        if want_native:
+            for k in ("custom_profile", "cpu_pl1", "cpu_pl2", "cpu_pl4",
+                      "cpu_power_limit"):
+                desired.pop(k, None)
+            if want_native != actual.get("native_mode"):
+                ch = Change("native_mode", actual.get("native_mode"),
+                            want_native)
+                if not dry_run:
+                    try:
+                        nativemode.apply(self.ec, want_native)
+                    except (ECUnavailable, ECWriteRejected,
+                            nativemode.NativeModeError,
+                            fancurve.CurveError) as e:
+                        ch.ok, ch.error = False, str(e)
+                changes.append(ch)
 
         # Guard the mutually exclusive pair before touching either.
         if all(desired.get(k) for k in EXCLUSIVE):

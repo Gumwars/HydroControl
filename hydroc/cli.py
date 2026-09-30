@@ -24,6 +24,12 @@ PROFILE_PATHS = ["/etc/hydroc/profile.json",
                  os.path.expanduser("~/.config/hydroc/profile.json")]
 
 DEFAULT_PROFILE = {
+    # None means the custom-profile path below: our numbers, latch armed.
+    # "office" / "balanced" / "beast" hand the machine to the EC instead --
+    # its own power limits, its own fan curve, and the stock LED colour. The
+    # two are mutually exclusive and `Hardware.apply` drops the custom keys
+    # when a native mode is set.
+    "native_mode": None,
     "charge_profile": "stationary",
     "charge_threshold": 100,
     "custom_profile": True,

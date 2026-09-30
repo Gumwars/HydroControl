@@ -206,3 +206,49 @@ class EcLimitsTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ReconcileTest(unittest.TestCase):
+    """The daemon must not fight a native mode.
+
+    This is the failure the integration exists to prevent: set Beast, and on
+    the next reconcile pass the stored `custom_profile: True` re-arms the
+    latch. The EC is back in Custom -- white LED, our numbers, its own limits
+    unused -- and nothing in the UI says why the mode did not stick. It would
+    look like the hardware rejecting the write.
+
+    So a desired native mode drops the keys it owns before they are compared.
+    """
+
+    def setUp(self):
+        from hydroc import hardware
+        self.hw = hardware
+
+    def test_a_native_mode_drops_the_custom_keys(self):
+        src = open(self.hw.__file__, encoding="utf-8").read()
+        block = src.split("want_native = desired.get")[1].split("# Guard the")[0]
+        for k in ("custom_profile", "cpu_pl1", "cpu_pl2", "cpu_pl4",
+                  "cpu_power_limit"):
+            self.assertIn(f'"{k}"', block,
+                          f"{k} would be reconciled against a native mode and "
+                          f"re-arm the latch")
+
+    def test_the_native_step_runs_before_the_latch_step(self):
+        src = open(self.hw.__file__, encoding="utf-8").read()
+        self.assertLess(src.index("want_native = desired.get"),
+                        src.index('if differs("custom_profile")'),
+                        "the native mode must be applied before the latch "
+                        "reconciliation it replaces")
+
+    def test_state_reports_no_mode_while_the_latch_is_armed(self):
+        """With the latch armed the EC is in Custom whatever 0x0751 holds.
+        Reporting a mode name there would be a lie the UI repeats."""
+        src = open(self.hw.__file__, encoding="utf-8").read()
+        self.assertIn('None if nm["custom_latched"] else nm["mode"]', src)
+
+    def test_the_profile_default_is_none_not_a_mode(self):
+        """Defaulting to a native mode would change every existing install's
+        behaviour on upgrade."""
+        from hydroc import cli
+        self.assertIn("native_mode", cli.DEFAULT_PROFILE)
+        self.assertIsNone(cli.DEFAULT_PROFILE["native_mode"])

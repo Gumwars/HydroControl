@@ -135,7 +135,20 @@ class EC:
                 with open(self.path, "w") as fh:
                     fh.write(expr)
                 with open(self.path) as fh:
-                    return fh.read().strip().rstrip("\x00")
+                    # Truncate at the FIRST null, do not strip trailing ones.
+                    #
+                    # /proc/acpi/call hands back a fixed-size buffer, so a
+                    # short reply leaves the tail of a longer previous one
+                    # after the terminator. rstrip("\x00") cannot see that --
+                    # the null is in the middle -- and the reply comes through
+                    # as e.g. '0x3e\x00alled', the remains of "not called".
+                    #
+                    # That is the real source of at least some of the "garbled
+                    # replies" this class has been absorbing as EC flakiness.
+                    # It fails loudly rather than corrupting a value, because
+                    # a residue leaves the string unparseable rather than
+                    # plausibly wrong -- but it fails a read that was fine.
+                    return fh.read().split("\x00", 1)[0].strip()
             except OSError as e:
                 raise ECUnavailable(f"{self.path}: {e}") from e
             finally:

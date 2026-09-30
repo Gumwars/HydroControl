@@ -64,6 +64,8 @@ BASE = {
 # Until the emergency-override question is settled, this is the floor. It is a
 # safety limit, not a preference: a curve that can command zero is a fan-stop
 # waiting for the wrong temperature.
+UNUSED = 0xFF                      # end-of-table marker, the vendor's own
+MIN_REAL_POINTS = 3                # off band + at least two real bands
 MIN_DUTY = 25
 MAX_TEMP = 105                     # sanity bound for a table entry
 
@@ -114,30 +116,70 @@ PRESET_CURVES: dict[str, dict[str, list[list[int]]]] = {
 
 
 def validate(curve: list[list[int]], label: str = "curve") -> None:
-    """Raise CurveError unless this is safe to put in front of the fans."""
+    """Raise CurveError unless this is safe to put in front of the fans.
+
+    Two shapes the original rule rejected that the hardware actually uses,
+    found by reading Control Center's own per-mode tables off this machine:
+
+    **The off band.** Point 0 is `up=55, down=0, duty=0` -- fans stopped below
+    the first threshold. DESIGN.md measured that independently: at idle both
+    fans sit at 0 rpm until ~55 C, and that is correct stock behaviour, not a
+    stall. A blanket duty floor makes the machine louder than stock for no
+    thermal benefit, so duty 0 is allowed at index 0 and nowhere else.
+
+    **The end marker.** Unused slots carry `up_t = 0xFF`. The floor still
+    applies to every real band, and a table must keep at least
+    MIN_REAL_POINTS of them -- an all-marker table is the empty table that
+    hands the fans nothing, which is the hazard this function exists for.
+    """
     if len(curve) != TABLE_LEN:
         raise CurveError(f"{label}: need {TABLE_LEN} points, got {len(curve)}")
+
+    real = 0
+    ended = False
     prev_t = prev_d = -1
     for i, pt in enumerate(curve):
         if len(pt) != 3:
             raise CurveError(f"{label}[{i}]: expected [up_t, down_t, duty]")
         up_t, down_t, duty = (int(x) for x in pt)
+
+        if up_t == UNUSED:
+            ended = True
+            continue
+        if ended:
+            raise CurveError(f"{label}[{i}]: a real point after the 0xFF end "
+                             f"marker -- the EC stops reading at the marker, "
+                             f"so this band would never apply")
+
+        real += 1
         if not 0 <= up_t <= MAX_TEMP:
             raise CurveError(f"{label}[{i}]: up_t {up_t} out of range")
         if down_t >= up_t and up_t:
             raise CurveError(f"{label}[{i}]: down_t {down_t} must be below "
                              f"up_t {up_t}, or the point has no hysteresis")
-        if not MIN_DUTY <= duty <= 100:
+
+        # Index 0 is the off band. Everywhere else a duty below the floor is
+        # a fan-stop waiting for the wrong temperature.
+        if i == 0:
+            if duty and duty < MIN_DUTY:
+                raise CurveError(f"{label}[0]: duty {duty}% is neither off (0) "
+                                 f"nor at least {MIN_DUTY}%")
+        elif not MIN_DUTY <= duty <= 100:
             raise CurveError(f"{label}[{i}]: duty {duty}% outside "
                              f"{MIN_DUTY}-100%. A curve that can command less "
                              "than the floor is a fan-stop waiting for the "
                              "wrong temperature.")
+
         if up_t < prev_t:
             raise CurveError(f"{label}[{i}]: temperatures must not decrease")
         if duty < prev_d:
             raise CurveError(f"{label}[{i}]: duty must not decrease with "
                              "temperature")
         prev_t, prev_d = up_t, duty
+
+    if real < MIN_REAL_POINTS:
+        raise CurveError(f"{label}: only {real} real points; an all-marker or "
+                         f"near-empty table hands the fans nothing")
 
 
 def read_curve(ec, fan: str) -> list[list[int]]:

@@ -52,12 +52,22 @@ class ValidateTest(unittest.TestCase):
             for fan, curve in pair.items():
                 fc.validate(curve, f"{name}.{fan}")
 
-    def test_a_zero_duty_point_is_rejected(self):
+    def test_a_zero_duty_point_at_temperature_is_rejected(self):
+        """Index 0 is the off band and may be zero; anywhere else it is a
+        fan-stop waiting for the wrong temperature."""
         bad = [list(p) for p in GOOD]
-        bad[0][2] = 0
+        bad[4][2] = 0
         with self.assertRaises(fc.CurveError) as cm:
             fc.validate(bad)
         self.assertIn("fan-stop", str(cm.exception))
+
+    def test_zero_duty_in_the_off_band_is_allowed(self):
+        """Point 0 is 'below the first threshold'. The vendor's own curves
+        stop the fans there, and DESIGN.md measured that as correct stock
+        behaviour -- 0 rpm until ~55 C, not a stall."""
+        ok = [list(p) for p in GOOD]
+        ok[0] = [ok[0][0], 0, 0]
+        fc.validate(ok)
 
     def test_duty_below_the_floor_is_rejected(self):
         bad = [list(p) for p in GOOD]
@@ -148,7 +158,7 @@ class OrderingTest(unittest.TestCase):
     def test_apply_refuses_an_invalid_curve_before_writing_anything(self):
         ec = FakeEC()
         bad = [list(p) for p in GOOD]
-        bad[0][2] = 0
+        bad[4][2] = 0          # a zero-duty band at temperature, not the off band
         with self.assertRaises(fc.CurveError):
             fc.apply_curves(ec, bad, fc.PRESET_CURVES["balanced"]["gpu"])
         self.assertEqual(ec.log, [])

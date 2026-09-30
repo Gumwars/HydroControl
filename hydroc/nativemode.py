@@ -28,34 +28,37 @@ to say the colour "is not in the EC at all", which was wrong — we never found
 it because we never wrote that register. Clearing the latch and selecting a
 mode gives the stock colour back.
 
-WHAT THIS DOES NOT DO YET
+THE FAN TABLES
 
-*It does not write fan tables.* The vendor loads a per-mode curve into
-`0x0F00-0x0F5F`, and we have all three decoded from the hardware dumps. Two
-things block using them, both real:
+`CURVES` below is Control Center's own per-mode curves, read back off this
+machine in each mode rather than copied from a config file. They are written
+with the mode unless `curve=False`, which is what makes a native mode sound
+like the stock machine and not merely draw the stock power.
 
-  * Their first point is 0 C at 0% duty — fans off when cold, which DESIGN.md
-    separately measured as correct stock behaviour. `fancurve.MIN_DUTY` is 25
-    and would reject it. That floor was added after a fan-stop incident and
-    relaxing it is a deliberate decision, not a detail.
-  * `fancurve.BASE` names `0x0F00` as `down_t` and `0x0F10` as `up_t`, and
-    `validate()` enforces `down_t < up_t`. The vendor writes the *larger*
-    value to `0x0F00` — `0x0F00[i]` equals `0x0F10[i+1]` — so our labels are
-    inverted with respect to the hardware, and every curve this project has
-    written has inverted bands.
+One byte was normalised. Office GPU point 3 reads `up=57, down=58` in the
+vendor's table -- a fall threshold above its own rise, with points 2 and 3
+both rising at 57. Duty is 30% across points 2 to 4 so it changes nothing
+audible, but it violates the hysteresis invariant, and weakening the
+validator to admit malformed vendor data would be the wrong trade. It is
+recorded here as `[57, 56, 30]`, following the pattern of every neighbouring
+point.
 
-Leaving the tables alone means a native mode inherits whatever curve is
-already loaded, which is honest and safe. The EC's power limits and LED work
-regardless.
+OFFICE AND THE FAN-USER BIT
 
-*Office is not offered.* Its encoding is `0xA0`, which sets `0x0751` bit 7 —
-the bit that stopped the fans on this machine once, with the tables empty.
-Control Center only ever sets it with a table already loaded and universal fan
-control on. Balanced (`0x00`) and Beast (`0x10`) do not touch bit 7, which is
-why they come first.
+Office encodes as `0xA0`, which sets `0x0751` bit 7 -- the bit that stopped
+the fans on this machine once. The thing that made that dangerous was setting
+it over *empty* tables; Control Center only ever sets it with a curve already
+loaded and universal fan control on.
+
+So the precondition is checked rather than promised. `apply()` reads the
+tables back and refuses Office unless they hold a real curve. An override
+exists for deliberate testing, but the default path cannot walk into the
+failure by being called in the wrong order.
 """
 
 from __future__ import annotations
+
+from . import fancurve
 
 REG_FAN_MODE = 0x0751           # performance mode; NOT only the manual-fan bits
 BIT_FAN_BOOST = 0x40            # ORs into any mode
@@ -72,6 +75,53 @@ EC_LIMITS = {
     "balanced": {"pl1": 0x0730, "pl2": 0x0731, "pl4": 0x0732, "tcc": 0x07D8},
     "office":   {"pl1": 0x0734, "pl2": 0x0735, "pl4": 0x0736, "tcc": 0x07D9},
     "beast":    {"pl1": 0x07A7, "pl2": 0x07A8, "pl4": 0x07A9, "tcc": 0x07DA},
+}
+
+# Control Center's own curves, read off this machine. [up_t, down_t, duty%],
+# 0xFF marking unused slots, exactly as the hardware stores them.
+CURVES: dict[str, dict[str, list[list[int]]]] = {
+    "office": {
+        "cpu": [
+            [ 55,   0,   0], [ 57,  48,  30], [ 59,  58,  30], [ 61,  60,  30],
+            [ 63,  62,  30], [ 65,  64,  35], [ 67,  66,  35], [ 69,  68,  45],
+            [255,  70,  55], [255, 255,  55], [255, 255,  55], [255, 255,  55],
+            [255, 255,  55], [255, 255,  55], [255, 255,  55], [255, 255,  55],
+        ],
+        "gpu": [
+            [ 55,   0,   0], [ 55,  48,  30], [ 57,  56,  30], [ 57,  56,  30],
+            [ 59,  58,  30], [ 62,  60,  35], [ 64,  63,  35], [ 66,  65,  45],
+            [255,  67,  55], [255, 255,  55], [255, 255,  55], [255, 255,  55],
+            [255, 255,  55], [255, 255,  55], [255, 255,  55], [255, 255,  55],
+        ],
+    },
+    "balanced": {
+        "cpu": [
+            [ 55,   0,   0], [ 58,  48,  30], [ 61,  58,  35], [ 65,  61,  40],
+            [ 69,  65,  50], [ 72,  69,  55], [ 75,  73,  60], [ 78,  76,  65],
+            [ 81,  79,  75], [255,  82,  80], [255, 255,  80], [255, 255,  80],
+            [255, 255,  80], [255, 255,  80], [255, 255,  80], [255, 255,  80],
+        ],
+        "gpu": [
+            [ 65,   0,   0], [ 65,  48,  30], [ 65,  58,  35], [ 65,  58,  40],
+            [ 65,  58,  50], [ 68,  66,  55], [ 71,  69,  60], [ 74,  72,  65],
+            [ 77,  75,  75], [255,  78,  80], [255, 255,  80], [255, 255,  80],
+            [255, 255,  80], [255, 255,  80], [255, 255,  80], [255, 255,  80],
+        ],
+    },
+    "beast": {
+        "cpu": [
+            [ 55,   0,   0], [ 58,  48,  30], [ 61,  58,  35], [ 65,  61,  40],
+            [ 69,  65,  50], [ 72,  69,  55], [ 75,  73,  60], [ 78,  76,  65],
+            [ 81,  79,  75], [ 84,  82,  80], [255,  85,  90], [255, 255,  90],
+            [255, 255,  90], [255, 255,  90], [255, 255,  90], [255, 255,  90],
+        ],
+        "gpu": [
+            [ 65,   0,   0], [ 65,  48,  30], [ 65,  58,  35], [ 65,  58,  40],
+            [ 65,  58,  50], [ 68,  66,  55], [ 71,  69,  60], [ 74,  72,  65],
+            [ 77,  75,  75], [ 80,  78,  80], [255,  81,  90], [255, 255,  90],
+            [255, 255,  90], [255, 255,  90], [255, 255,  90], [255, 255,  90],
+        ],
+    },
 }
 
 MODES = {
@@ -91,14 +141,13 @@ MODES = {
     "office": {
         "name": "Office",
         "value": MODE_OFFICE,
-        "desc": "The machine's own Office mode. Not enabled: its encoding "
-                "sets the fan-user bit.",
+        "desc": "The machine's own Office mode. Quietest, and the only one "
+                "that sets the fan-user bit.",
         "sets_fan_user_bit": True,
     },
 }
 
-# What the button cycles. Office is absent until its bit-7 hazard is tested.
-CYCLE = ["balanced", "beast"]
+CYCLE = ["office", "balanced", "beast"]
 
 
 class NativeModeError(RuntimeError):
@@ -140,27 +189,51 @@ def ec_limits(ec, mode: str) -> dict:
     return out
 
 
-def apply(ec, mode: str, *, boost: bool = False, allow_fan_user_bit: bool = False) -> None:
-    """Select a native mode: zero the limits, clear the latch, write 0x0751.
+def tables_populated(ec) -> bool:
+    """Do the EC's fan tables actually hold a curve right now?
 
-    Order matters. The power limits are zeroed *first*, while the latch may
-    still be armed, because `set_power_limit` writes are silently ignored with
-    it clear -- so zeroing afterwards would leave stale values in
-    `0x0783-0x0785`. They are inert once the latch is down, but leaving a
-    previous preset's numbers sitting there would misreport what the machine
-    is doing.
+    Read back, not remembered. This is the precondition for Office, and the
+    whole point is that it cannot be satisfied by intent -- the tables were
+    empty the time bit 7 stopped the fans, and a flag saying "I promise they
+    are populated" would have been set in exactly that situation too.
+    """
+    for fan in ("cpu", "gpu"):
+        try:
+            fancurve.validate(fancurve.read_curve(ec, fan), fan)
+        except fancurve.CurveError:
+            return False
+    return True
+
+
+def apply(ec, mode: str, *, boost: bool = False, curve: bool = True,
+          allow_fan_user_bit: bool = False) -> None:
+    """Select a native mode, the way Control Center does it.
+
+    Order is the vendor's and matters at two points. The fan table goes first,
+    because HANDOFF.md's rule is populate-then-enable and because Office's
+    precondition is that a table exists. The power limits are zeroed before
+    the latch comes down, because `set_power_limit` is silently ignored with
+    it clear -- zeroing afterwards would leave a previous preset's numbers in
+    0x0783-0x0785 to be read back and reported as what the machine is doing.
+
+    `curve=False` leaves the tables alone and inherits whatever is loaded.
     """
     spec = MODES.get(mode)
     if spec is None:
         raise NativeModeError(f"unknown mode {mode!r}")
+
+    if curve:
+        fancurve.apply_curves(ec, CURVES[mode]["cpu"], CURVES[mode]["gpu"])
+
     if spec["sets_fan_user_bit"] and not allow_fan_user_bit:
-        raise NativeModeError(
-            f"{spec['name']} encodes as 0x{spec['value']:02X}, which sets "
-            f"0x0751 bit 7 -- the bit that stopped the fans on this machine "
-            f"with the tables empty. Control Center only sets it with a fan "
-            f"table already loaded and universal fan control on. Reproduce "
-            f"that state and pass allow_fan_user_bit=True, with a power cycle "
-            f"ready.")
+        if not tables_populated(ec):
+            raise NativeModeError(
+                f"{spec['name']} encodes as 0x{spec['value']:02X}, which sets "
+                f"0x0751 bit 7 -- the bit that stopped the fans on this "
+                f"machine with the tables EMPTY. They are empty or invalid "
+                f"now. Write a curve first (curve=True does it), or pass "
+                f"allow_fan_user_bit=True deliberately, with a power cycle "
+                f"ready.")
 
     for which in ("pl1", "pl2", "pl4"):
         ec.set_power_limit(which, 0)

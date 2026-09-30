@@ -18,20 +18,18 @@ And Office must stay shut. Its encoding sets 0x0751 bit 7, the bit that
 stopped the fans on this machine with the tables empty.
 """
 
-import importlib.util
 import os
 import unittest
 
-_SPEC = importlib.util.spec_from_file_location(
-    "nativemode",
-    os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-                 "hydroc", "nativemode.py"))
+from hydroc import fancurve as fc
+from hydroc import nativemode as _nm
+
+_SRC = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                    "hydroc", "nativemode.py")
 
 
 def load():
-    m = importlib.util.module_from_spec(_SPEC)
-    _SPEC.loader.exec_module(m)
-    return m
+    return _nm
 
 
 class FakeEC:
@@ -99,7 +97,7 @@ class ApplyOrderTest(unittest.TestCase):
 
     def test_limits_are_zeroed_before_the_latch_comes_down(self):
         ec = FakeEC()
-        self.m.apply(ec, "balanced")
+        self.m.apply(ec, "balanced", curve=False)
         kinds = [e[0] for e in ec.log]
         self.assertLess(kinds.index("pl"), kinds.index("latch"),
                         "power limits must be zeroed while the latch still "
@@ -107,31 +105,31 @@ class ApplyOrderTest(unittest.TestCase):
 
     def test_all_three_limits_are_zeroed(self):
         ec = FakeEC()
-        self.m.apply(ec, "beast")
+        self.m.apply(ec, "beast", curve=False)
         self.assertEqual([(e[1], e[2]) for e in ec.log if e[0] == "pl"],
                          [("pl1", 0), ("pl2", 0), ("pl4", 0)])
 
     def test_the_latch_is_cleared_not_armed(self):
         ec = FakeEC()
-        self.m.apply(ec, "balanced")
+        self.m.apply(ec, "balanced", curve=False)
         self.assertIn(("latch", False, None), ec.log)
         self.assertFalse(ec.latched)
 
     def test_the_mode_register_is_written_last(self):
         ec = FakeEC()
-        self.m.apply(ec, "beast")
+        self.m.apply(ec, "beast", curve=False)
         self.assertEqual(ec.log[-1], ("write", 0x0751, 0x10))
 
     def test_balanced_writes_zero_not_something_truthy(self):
         """0x00 is a real encoding, and a falsy one. A writer that skips
         zero would silently leave the previous mode selected."""
         ec = FakeEC({0x0751: 0x10})
-        self.m.apply(ec, "balanced")
+        self.m.apply(ec, "balanced", curve=False)
         self.assertEqual(ec.regs[0x0751], 0x00)
 
     def test_boost_ors_into_the_mode(self):
         ec = FakeEC()
-        self.m.apply(ec, "beast", boost=True)
+        self.m.apply(ec, "beast", boost=True, curve=False)
         self.assertEqual(ec.regs[0x0751], 0x10 | 0x40)
 
 
@@ -143,29 +141,29 @@ class OfficeIsShutTest(unittest.TestCase):
     def test_office_is_refused_by_default(self):
         ec = FakeEC()
         with self.assertRaises(self.m.NativeModeError) as cm:
-            self.m.apply(ec, "office")
+            self.m.apply(ec, "office", curve=False)
         self.assertIn("bit 7", str(cm.exception))
 
     def test_refusing_office_touches_no_register(self):
         """A refusal that has already zeroed the limits is not a refusal."""
         ec = FakeEC()
         with self.assertRaises(self.m.NativeModeError):
-            self.m.apply(ec, "office")
+            self.m.apply(ec, "office", curve=False)
         self.assertEqual(ec.log, [])
 
     def test_office_is_reachable_deliberately(self):
         ec = FakeEC()
-        self.m.apply(ec, "office", allow_fan_user_bit=True)
+        self.m.apply(ec, "office", allow_fan_user_bit=True, curve=False)
         self.assertEqual(ec.regs[0x0751], 0xA0)
 
-    def test_office_is_not_in_the_button_cycle(self):
-        self.assertNotIn("office", self.m.CYCLE)
-        self.assertEqual(self.m.CYCLE, ["balanced", "beast"])
+    def test_office_is_in_the_cycle_now_that_its_guard_is_checked(self):
+        """It was withheld while the guard was a promise. It is checked."""
+        self.assertEqual(self.m.CYCLE, ["office", "balanced", "beast"])
 
     def test_an_unknown_mode_is_refused(self):
         ec = FakeEC()
         with self.assertRaises(self.m.NativeModeError):
-            self.m.apply(ec, "turbo")
+            self.m.apply(ec, "turbo", curve=False)
         self.assertEqual(ec.log, [])
 
 
@@ -190,12 +188,20 @@ class EcLimitsTest(unittest.TestCase):
         self.m.ec_limits(ec, "balanced")
         self.assertEqual(ec.log, [])
 
-    def test_the_module_writes_no_fan_table(self):
-        """Deliberate: the vendor curves need MIN_DUTY relaxed and the
-        0x0F00/0x0F10 inversion resolved first."""
-        with open(_SPEC.origin, encoding="utf-8") as fh:
-            body = fh.read().split('"""', 2)[2]
-        self.assertNotIn("0x0F", body)
+    def test_every_shipped_curve_is_valid(self):
+        """They are the vendor's, read off the hardware -- but one Office GPU
+        point was malformed there, so they are checked rather than trusted."""
+        for mode, fans in self.m.CURVES.items():
+            for fan, curve in fans.items():
+                fc.validate(curve, f"{mode} {fan}")
+
+    def test_the_curves_are_the_measured_ones(self):
+        """Spot values from ec-mode-*.json, so a careless edit shows up."""
+        self.assertEqual(self.m.CURVES["office"]["cpu"][1], [57, 48, 30])
+        self.assertEqual(self.m.CURVES["beast"]["cpu"][3], [65, 61, 40])
+        self.assertEqual(self.m.CURVES["office"]["gpu"][3], [57, 56, 30],
+                         "the normalised point: vendor had down=58 above "
+                         "up=57")
 
 
 if __name__ == "__main__":

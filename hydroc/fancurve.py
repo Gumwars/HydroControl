@@ -34,7 +34,29 @@ ENABLE_UNIVERSAL = 0x04
 TABLE_LEN = 16
 PWM_MAX = 200                      # the register scale; duty% * 2
 
-BASE = {                           # (down_t, up_t, duty) per fan
+# (up_t, down_t, duty) per fan -- IN THAT ORDER, and the order is the point.
+#
+# Corrected 2026-09-30. This tuple was unpacked as (down_t, up_t, duty), which
+# put the rise threshold in the fall register and the fall in the rise. Every
+# curve this project ever wrote had inverted bands.
+#
+# The hardware settles it. Control Center's per-mode tables, read back off this
+# machine in each mode (ec-mode-*.json):
+#
+#     office CPU [1]   0x0F00 = 57   0x0F10 = 48   duty = 60
+#     beast  CPU [3]   0x0F00 = 65   0x0F10 = 61   duty = 80
+#
+# 0x0F00 always holds the LARGER value, and across the whole table
+# 0x0F00[i] equals 0x0F10[i+1] (Beast) or one less (Office) -- so 0x0F10 opens
+# a band and 0x0F00 closes it. That is rise and fall, and it matches what
+# DESIGN.md already documented ("CPU temp start / end | 0x0F10 / 0x0F00",
+# "each point is {UpT, DownT, Duty} -- rise threshold, fall threshold").
+#
+# Stored curves do not change meaning: a point is still [up_t, down_t, duty]
+# and validate() still requires down_t < up_t. Only which register each one
+# lands in is fixed, so saved curves need no editing -- they will simply be
+# written the right way round for the first time.
+BASE = {
     "cpu": (0x0F00, 0x0F10, 0x0F20),
     "gpu": (0x0F30, 0x0F40, 0x0F50),
 }
@@ -119,14 +141,14 @@ def validate(curve: list[list[int]], label: str = "curve") -> None:
 
 
 def read_curve(ec, fan: str) -> list[list[int]]:
-    down_b, up_b, duty_b = BASE[fan]
+    up_b, down_b, duty_b = BASE[fan]
     return [[ec.read(up_b + i), ec.read(down_b + i), ec.read(duty_b + i) // 2]
             for i in range(TABLE_LEN)]
 
 
 def write_curve(ec, fan: str, curve: list[list[int]]) -> None:
     validate(curve, fan)
-    down_b, up_b, duty_b = BASE[fan]
+    up_b, down_b, duty_b = BASE[fan]
     for i, (up_t, down_t, duty) in enumerate(curve):
         ec.write_verify(up_b + i, up_t)
         ec.write_verify(down_b + i, down_t)

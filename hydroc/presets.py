@@ -17,8 +17,34 @@ the same verified path as any other change. Nothing exotic:
 One consequence worth being honest about in the UI: every preset arms the latch,
 because that is what makes power-limit writes take effect. The EC drives the profile
 LED white whenever that latch is armed, so the LED reads "Custom" no matter which
-preset is active. We cannot colour it blue/green/purple -- that was the OEM service
-writing state we have not found, and probing says it is not in the EC at all.
+preset is active.
+
+CORRECTED 2026-09-30. This used to add "we cannot colour it blue/green/purple --
+that was the OEM service writing state we have not found, and probing says it is
+not in the EC at all". Wrong on both counts, established by decompiling Control
+Center and reading the registers back on the hardware:
+
+  * The colour is not written at all. The EC derives it from 0x0751, the same
+    register that selects the mode. Office reads green.
+  * SetPowerLedStatus() writes 0x07A5 bits 1:0 and has no callers in the fan
+    manager, so that register -- the one this project probed -- was never the
+    mechanism.
+
+What the OEM service actually does per mode is: load the fan table, CLEAR the
+custom latch, write 0x0751 (0xA0 Office / 0x00 Gaming / 0x10 Turbo, +0x40 for
+fan boost), and write PL1/PL2/PL4 = 0 meaning "use your own defaults". The EC
+then applies per-mode limits it already holds:
+
+    Gaming  0x0730-0x0733   75 / 75 / 125 W
+    Office  0x0734-0x0737   45 / 45 / 125 W
+    Turbo   0x07A7-0x07AA  205 / 205 / 200 W
+
+So the presets below are not the machine's native modes -- they are Custom with
+chosen numbers, which is a legitimate thing to offer but is not the same thing,
+and it is why the LED never changes. Native mode support is a separate feature;
+see TCC-SERVICE-FINDINGS.md. The hazard there is 0x0751 bit 7, which Office
+sets: it is the bit that stopped the fans once on this machine, and Windows only
+ever sets it with the fan tables already populated.
 """
 
 from __future__ import annotations

@@ -35,11 +35,19 @@ HIDKEYBOARD3_VER_HIGH = 0x20
 
 
 def main() -> int:
+    # kbctrl is a nested package: kbctrl/kbctrl/hardware.py, so the path
+    # entry is the OUTER kbctrl directory, not the repository root. Importing
+    # hydroc.rgb performs that insertion -- it is the same resolution the
+    # daemon uses, including the HYDROC_KBCTRL_PATH override, and duplicating
+    # it here would be a second thing to keep in step.
     try:
+        from hydroc import rgb as _rgb            # noqa: F401  (sys.path)
         from kbctrl.hardware import HardwareDriver
     except ImportError as e:
-        raise SystemExit(f"cannot import kbctrl: {e}\n"
-                         "run from the repository root")
+        raise SystemExit(
+            f"cannot import kbctrl: {e}\n"
+            "run from the repository root, e.g.\n"
+            "  cd /path/to/HydroControl && sudo python3 kb_identity.py")
 
     drv = HardwareDriver()
     if not drv.connected():

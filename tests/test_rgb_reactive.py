@@ -1,0 +1,119 @@
+# SPDX-License-Identifier: MIT
+"""Reactive keyboard effects, and the EC bit they need.
+
+kbctrl has accepted a `reactive` flag since it was written and puts it in the
+keyboard packet. Two things were missing and neither was visible from the UI:
+`hydroc.rgb.apply_effect` did not pass the flag down at all, and nothing in
+either package ever wrote EC 0x0741 bit 3 -- ITE_KBD_EFFECT_REACTIVE, the bit
+that has the EC forward key presses to the keyboard controller.
+
+So the option existed, could be ticked, and did nothing. Control Center sets
+that bit for exactly four effects and clears it for the rest; all four Windows
+mode dumps read 0x0741 = 0x81, bit 3 clear.
+
+The register is shared with ENABLE_MANUAL_CTRL at bit 0, the master switch the
+kernel driver owns. Every write here is read-modify-write for that reason --
+clobbering bit 0 would stop the EC accepting host control at all, which is a
+far worse failure than a keyboard effect not reacting.
+"""
+
+import unittest
+from unittest import mock
+
+from hydroc import rgb
+
+
+class FakeKeyboard:
+    def __init__(self, fail=False):
+        self.calls = []
+        self.fail = fail
+
+    def set_effect(self, name, **kw):
+        if self.fail:
+            raise RuntimeError("device busy")
+        self.calls.append((name, kw))
+
+
+class ReactiveTest(unittest.TestCase):
+
+    def run_effect(self, name, reactive, fail=False):
+        kb = FakeKeyboard(fail=fail)
+        bits = []
+        with mock.patch.object(rgb, "_keyboard", return_value=kb), \
+             mock.patch.object(rgb, "_set_reactive_bit",
+                               side_effect=lambda on: bits.append(on)):
+            res = rgb.apply_effect(name, reactive=reactive)
+        return res, kb, bits
+
+    def test_a_reactive_effect_sets_the_bit(self):
+        res, kb, bits = self.run_effect("ripple", True)
+        self.assertTrue(res["reactive"])
+        self.assertEqual(bits, [True])
+        self.assertTrue(kb.calls[0][1]["reactive"])
+
+    def test_a_non_reactive_effect_clears_the_bit(self):
+        """Control Center clears it too. Leaving it set forwards key presses
+        to a keyboard with no use for them."""
+        res, _kb, bits = self.run_effect("rainbow", False)
+        self.assertFalse(res["reactive"])
+        self.assertEqual(bits, [False])
+
+    def test_asking_for_reactive_on_an_effect_without_it_is_not_silent(self):
+        res, kb, bits = self.run_effect("rainbow", True)
+        self.assertFalse(res["reactive"])
+        self.assertEqual(bits, [False])
+        self.assertIn("no reactive mode", res["note"])
+        self.assertFalse(kb.calls[0][1]["reactive"])
+
+    def test_all_four_vendor_effects_are_covered(self):
+        self.assertEqual(rgb.REACTIVE_EFFECTS,
+                         {"random", "ripple", "aurora", "fireworks"})
+
+    def test_a_failed_effect_leaves_the_ec_alone(self):
+        """Arming key forwarding for a pattern that is not running is worse
+        than doing nothing."""
+        res, _kb, bits = self.run_effect("ripple", True, fail=True)
+        self.assertFalse(res["ok"])
+        self.assertEqual(bits, [])
+
+    def test_the_flag_reaches_the_keyboard_packet(self):
+        """The half that was missing before the EC bit: apply_effect did not
+        pass `reactive` down, so kbctrl never saw it either."""
+        _res, kb, _bits = self.run_effect("aurora", True)
+        self.assertIn("reactive", kb.calls[0][1])
+
+
+class RegisterSafetyTest(unittest.TestCase):
+
+    def test_it_is_a_read_modify_write_on_the_right_bit(self):
+        writes = []
+
+        class FakeEC:
+            _lock = None
+
+            def update_bits(self, addr, mask, value):
+                writes.append((addr, mask, value))
+
+        import hydroc.ec as ec_mod
+        with mock.patch.object(ec_mod, "EC", FakeEC):
+            rgb._set_reactive_bit(True)
+            rgb._set_reactive_bit(False)
+        self.assertEqual(writes, [(0x0741, 0x08, 0x08), (0x0741, 0x08, 0x00)])
+
+    def test_it_never_writes_the_whole_register(self):
+        """Bit 0 is ENABLE_MANUAL_CTRL and the kernel driver owns it."""
+        import inspect
+        src = inspect.getsource(rgb._set_reactive_bit)
+        self.assertIn("update_bits", src)
+        self.assertNotIn(".write(", src)
+
+    def test_an_unavailable_ec_is_reported_not_raised(self):
+        with mock.patch.object(rgb, "_keyboard", return_value=FakeKeyboard()), \
+             mock.patch.object(rgb, "_set_reactive_bit", return_value="no acpi_call"):
+            res = rgb.apply_effect("ripple", reactive=True)
+        self.assertTrue(res["ok"])
+        self.assertEqual(res["reactive_bit_error"], "no acpi_call")
+
+
+if __name__ == "__main__":
+    unittest.main()

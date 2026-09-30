@@ -431,7 +431,8 @@ class Handler(BaseHTTPRequestHandler):
                 brightness=int(payload.get("brightness", 25)),
                 color_idx=int(payload.get("color_idx", 8)),
                 direction_idx=int(payload.get("direction_idx", 1)),
-                save=bool(payload.get("save"))))
+                save=bool(payload.get("save")),
+                reactive=bool(payload.get("reactive"))))
 
         if route == "/api/rgb/chinbar":
             mode = payload.get("mode", "static")

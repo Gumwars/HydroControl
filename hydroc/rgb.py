@@ -138,16 +138,63 @@ def apply_per_key(colors: dict[str, str], brightness: int | None = None,
     return {"ok": True, "keys": len(mapped), "unmapped": unmapped, "saved": save}
 
 
+# EC 0x0741 bit 3 -- ITE_KBD_EFFECT_REACTIVE in the kernel driver. It has the
+# EC forward key presses to the keyboard controller, and without it a reactive
+# effect has nothing to react to.
+#
+# Control Center sets it (Enable_EC_OnkeyPressed) for exactly the effects
+# below and clears it for everything else. kbctrl has always accepted a
+# `reactive` flag and put it in the keyboard packet, but nothing in this
+# project ever wrote the bit -- and hydroc.apply_effect did not even pass the
+# flag down. So reactive mode has never done anything here. All four Windows
+# mode dumps read 0x0741 = 0x81, bit 3 clear.
+#
+# Read-modify-write, always: bit 0 of the same register is ENABLE_MANUAL_CTRL,
+# the master switch the kernel driver owns (HANDOFF.md #1). Clobbering it
+# would stop the EC accepting host control at all.
+REG_AP_OEM = 0x0741
+BIT_REACTIVE = 1 << 3
+
+REACTIVE_EFFECTS = frozenset({"random", "ripple", "aurora", "fireworks"})
+
+
+def _set_reactive_bit(on: bool) -> str | None:
+    """Set or clear EC 0x0741 bit 3. Returns an error string, or None."""
+    from .ec import EC, ECUnavailable, ECWriteRejected
+    try:
+        EC().update_bits(REG_AP_OEM, BIT_REACTIVE, BIT_REACTIVE if on else 0)
+    except (ECUnavailable, ECWriteRejected) as e:
+        return str(e)
+    return None
+
+
 def apply_effect(name: str, speed: int = 5, brightness: int = 25,
                  color_idx: int = 8, direction_idx: int = 1,
-                 save: bool = False) -> dict:
+                 save: bool = False, reactive: bool = False) -> dict:
+    """Apply a keyboard effect, and match EC 0x0741 bit 3 to it.
+
+    The bit is set after the effect lands, so a failed effect leaves EC state
+    untouched rather than arming key forwarding for a pattern that is not
+    running. It is cleared for every non-reactive effect, because Control
+    Center clears it too and leaving it set forwards key presses to a
+    keyboard that has no use for them.
+    """
+    want = bool(reactive) and name in REACTIVE_EFFECTS
     try:
         _keyboard().set_effect(name, speed=speed, brightness=brightness,
                                color_idx=color_idx, direction_idx=direction_idx,
-                               save=save)
+                               save=save, reactive=want)
     except Exception as e:
         return {"ok": False, "error": str(e)}
-    return {"ok": True, "effect": name}
+
+    out = {"ok": True, "effect": name, "reactive": want}
+    if reactive and not want:
+        out["note"] = (f"{name} has no reactive mode; "
+                       f"supported: {sorted(REACTIVE_EFFECTS)}")
+    err = _set_reactive_bit(want)
+    if err:
+        out["reactive_bit_error"] = err
+    return out
 
 
 def set_brightness(value: int) -> dict:

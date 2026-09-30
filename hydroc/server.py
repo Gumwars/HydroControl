@@ -422,7 +422,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(rgb.apply_per_key(
                 payload.get("colors") or {},
                 brightness=payload.get("brightness"),
-                save=bool(payload.get("save"))))
+                save=bool(payload.get("save")),
+                correct=bool(payload.get("correct", True))))
 
         if route == "/api/rgb/effect":
             return self._json(rgb.apply_effect(

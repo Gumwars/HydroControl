@@ -121,8 +121,42 @@ def keyboard_available() -> tuple[bool, str]:
         return False, f"{e} (ite8291r3-ctl {ver})"
 
 
+# Keyboard white balance.
+#
+# Control Center runs requested colours through WKDColor.cheatRGB_* before
+# sending them, for HIDKeyboard3-type panels. Read off the service, verified
+# against the owner's own observation that our colours look wrong:
+#
+#     white   FF FF FF  ->  7D FF B9      pinkish uncorrected
+#     orange  FF A5 00  ->  FF 7D 00
+#     red     FF 00 00  ->  FF 00 00      unchanged, so no entry
+#     yellow  FF FF 00  ->  D2 FF ??      blue byte not recovered
+#
+# It is an exact-match lookup, not a transform, and the entries disagree with
+# each other on purpose: white scales red to 0.49 while orange leaves red at
+# 1.00. So it cannot be extrapolated -- these are hand-tuned per colour for
+# appearance, not a colorimetric correction. A colour that is not in the table
+# goes through untouched, which is what Windows does too.
+#
+# Yellow is deliberately absent rather than guessed. Its blue byte was not
+# recovered from the service, and inventing one would make yellow wrong in a
+# new way while looking authoritative.
+#
+# The chin bar is a different device type and gets NO correction -- raw RGB,
+# as we already send it. This applies to the keyboard only.
+CHEAT_RGB: dict[tuple[int, int, int], tuple[int, int, int]] = {
+    (0xFF, 0xFF, 0xFF): (0x7D, 0xFF, 0xB9),
+    (0xFF, 0xA5, 0x00): (0xFF, 0x7D, 0x00),
+}
+
+
+def correct_rgb(rgb: tuple[int, int, int]) -> tuple[int, int, int]:
+    """Vendor white balance for an exact preset colour, or the colour as-is."""
+    return CHEAT_RGB.get(tuple(rgb), tuple(rgb))
+
+
 def apply_per_key(colors: dict[str, str], brightness: int | None = None,
-                  save: bool = False) -> dict:
+                  save: bool = False, correct: bool = True) -> dict:
     """colors: {visual_key_id: '#RRGGBB'}"""
     mapped, unmapped = {}, []
     for kid, hexcol in colors.items():
@@ -130,12 +164,14 @@ def apply_per_key(colors: dict[str, str], brightness: int | None = None,
         if pos is None:
             unmapped.append(kid)
             continue
-        mapped[pos] = hex_to_rgb(hexcol)
+        rgb = hex_to_rgb(hexcol)
+        mapped[pos] = correct_rgb(rgb) if correct else tuple(rgb)
     try:
         _keyboard().apply_per_key(mapped, brightness=brightness, save=save)
     except Exception as e:
         return {"ok": False, "error": str(e), "keys": len(mapped)}
-    return {"ok": True, "keys": len(mapped), "unmapped": unmapped, "saved": save}
+    return {"ok": True, "keys": len(mapped), "unmapped": unmapped,
+            "saved": save, "corrected": correct}
 
 
 # EC 0x0741 bit 3 -- ITE_KBD_EFFECT_REACTIVE in the kernel driver. It has the

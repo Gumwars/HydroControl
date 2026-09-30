@@ -252,3 +252,65 @@ class ReconcileTest(unittest.TestCase):
         from hydroc import cli
         self.assertIn("native_mode", cli.DEFAULT_PROFILE)
         self.assertIsNone(cli.DEFAULT_PROFILE["native_mode"])
+
+
+class ButtonCycleTest(unittest.TestCase):
+    """What the physical button does.
+
+    It now walks the machine's own modes, which is what the same button does
+    under Windows -- and the LED follows, which it never could before. Every
+    preset arms the custom latch, and the EC drives the LED white for the
+    whole time that bit is up, so no preset cycle could ever change it.
+    """
+
+    def setUp(self):
+        self.m = load()
+
+    def test_the_cycle_is_the_vendor_order(self):
+        self.assertEqual(self.m.CYCLE, ["office", "balanced", "beast"])
+
+    def test_it_advances_and_wraps(self):
+        self.assertEqual(self.m.next_in_cycle("office"), "balanced")
+        self.assertEqual(self.m.next_in_cycle("balanced"), "beast")
+        self.assertEqual(self.m.next_in_cycle("beast"), "office")
+
+    def test_anything_unrecognised_starts_over(self):
+        """A press after the EC reverted at power-on, or while a custom
+        preset is active, has to land somewhere defined."""
+        for start in (None, "custom", "performance", ""):
+            self.assertEqual(self.m.next_in_cycle(start), "office")
+
+    def test_describe_is_in_cycle_order(self):
+        self.assertEqual([d["id"] for d in self.m.describe()], self.m.CYCLE)
+
+
+class PresetExclusionTest(unittest.TestCase):
+    """A preset and a native mode cannot both be the answer.
+
+    Applying a preset arms the latch, which takes the machine out of native
+    mode immediately -- but the SAVED profile would still carry the native
+    name, and on the next boot apply() strips the custom keys and puts the
+    machine back where the user just left. The stale value has to be cleared
+    at the point the preset is chosen.
+    """
+
+    def test_applying_a_preset_clears_the_saved_native_mode(self):
+        from hydroc import server
+        src = open(server.__file__, encoding="utf-8").read()
+        body = src.split("def apply_preset")[1].split("\ndef ")[0]
+        self.assertIn('profile["native_mode"] = None', body)
+
+    def test_applying_a_native_mode_saves_it(self):
+        from hydroc import server
+        src = open(server.__file__, encoding="utf-8").read()
+        body = src.split("def apply_native")[1].split("\ndef ")[0]
+        self.assertIn('profile["native_mode"] = name', body)
+
+    def test_the_button_default_is_native(self):
+        from hydroc import cli
+        self.assertEqual(cli.DEFAULT_PROFILE["button_cycle"], "native")
+
+    def test_the_old_behaviour_is_still_reachable(self):
+        from hydroc import server
+        src = open(server.__file__, encoding="utf-8").read()
+        self.assertIn('button_cycle") == "presets"', src)

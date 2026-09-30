@@ -30,6 +30,10 @@ DEFAULT_PROFILE = {
     # two are mutually exclusive and `Hardware.apply` drops the custom keys
     # when a native mode is set.
     "native_mode": None,
+    # What the physical profile button cycles. "native" walks the machine's
+    # own Office/Balanced/Beast, as it does under Windows, and the LED
+    # follows. "presets" keeps the old behaviour of cycling ours.
+    "button_cycle": "native",
     "charge_profile": "stationary",
     "charge_threshold": 100,
     "custom_profile": True,

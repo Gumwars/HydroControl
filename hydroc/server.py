@@ -29,6 +29,7 @@ from .cli import (PROFILE_PATHS, REPAIR_MODPROBE, REPAIR_MODULE, REPAIR_RELOAD,
                   diagnose, load_profile, save_profile)
 from .hardware import Hardware
 from . import fancurve, found, gpumode, presets, rgb
+from . import nativemode
 from .hotkeys import ProfileButton
 
 # The LPP dock lives behind a sidecar daemon (hydroc.lppd) because BLE is async
@@ -92,6 +93,10 @@ def apply_preset(name: str) -> dict:
     changes = _hw.apply(settings)
     failed = {c.setting for c in changes if not c.ok}
     profile, _ = load_profile()
+    # A preset is Custom, and Custom is the opposite of a native mode. Leaving
+    # a stale native_mode in the profile would have apply() strip these very
+    # keys on the next boot and put the machine back where the user just left.
+    profile["native_mode"] = None
     for k, v in _hw.normalize(settings).items():
         if k not in failed:
             profile[k] = v
@@ -104,14 +109,42 @@ def apply_preset(name: str) -> dict:
             "changes": [c.__dict__ for c in changes], "state": state}
 
 
-def _on_profile_button() -> None:
-    """Physical button: advance to the next preset in the cycle.
+def apply_native(name: str) -> dict:
+    """Hand the machine to the EC in one of its own modes."""
+    changes = _hw.apply({"native_mode": name})
+    failed = {c.setting for c in changes if not c.ok}
+    profile, _ = load_profile()
+    if "native_mode" not in failed:
+        profile["native_mode"] = name
+    try:
+        save_profile(profile)
+    except OSError:
+        pass
+    state = _hw.read_state()
+    return {"ok": not failed, "native_mode": name,
+            "active": state.get("native_mode"),
+            "changes": [c.__dict__ for c in changes], "state": state}
 
-    Resolved from live hardware rather than a remembered name, so a press after
-    the EC reverted at power-on moves from where the machine actually is.
+
+def _on_profile_button() -> None:
+    """Physical button: advance to the next of the machine's own modes.
+
+    Resolved from live hardware rather than a remembered name, so a press
+    after the EC reverted at power-on moves from where the machine actually
+    is.
+
+    This cycles native modes rather than our presets, which is what the same
+    button does under Windows -- and the LED follows it, which it never could
+    before: every preset arms the custom latch, and the EC drives the LED
+    white for the whole time that bit is up. `button_cycle: "presets"` in the
+    profile keeps the old behaviour.
     """
-    current = presets.match(_hw.read_state())
-    apply_preset(presets.next_in_cycle(current))
+    state = _hw.read_state()
+    profile, _ = load_profile()
+    if profile.get("button_cycle") == "presets":
+        apply_preset(presets.next_in_cycle(presets.match(state)))
+    else:
+        apply_native(nativemode.next_in_cycle(state.get("native_mode")))
 
 
 _button = ProfileButton(_on_profile_button)
@@ -187,9 +220,17 @@ class Handler(BaseHTTPRequestHandler):
             })
         if route == "/api/presets":
             state = _hw.read_state()
-            return self._json({"presets": presets.describe(),
-                               "active": presets.match(state),
-                               "button": _button.status()})
+            profile, _ = load_profile()
+            return self._json({
+                "presets": presets.describe(),
+                "active": presets.match(state),
+                # The machine's own modes, listed beside ours because they
+                # are a different kind of thing: these hand control to the
+                # EC, the presets above keep it here.
+                "native": nativemode.describe(),
+                "native_active": state.get("native_mode"),
+                "button_cycle": profile.get("button_cycle", "native"),
+                "button": _button.status()})
         if route == "/api/found":
             # What the hardware was holding before hydroc-apply wrote to it.
             # None until the first boot after this shipped.
@@ -369,6 +410,13 @@ class Handler(BaseHTTPRequestHandler):
 
         if route == "/api/preset":
             return self._json(apply_preset(payload.get("preset", "")))
+
+        if route == "/api/native":
+            name = payload.get("mode", "")
+            if name not in nativemode.MODES:
+                return self._json(
+                    {"ok": False, "error": f"unknown mode {name!r}"}, 400)
+            return self._json(apply_native(name))
 
         if route == "/api/rgb/perkey":
             return self._json(rgb.apply_per_key(

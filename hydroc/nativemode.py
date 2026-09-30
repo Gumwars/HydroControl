@@ -150,6 +150,26 @@ MODES = {
 CYCLE = ["office", "balanced", "beast"]
 
 
+def next_in_cycle(current: str | None) -> str:
+    """Advance the profile button. Anything else starts the cycle over.
+
+    Matches Control Center's order -- Office, Gaming, Turbo -- so a press does
+    what the same press does under Windows, including the LED colour. The
+    vendor's cycle has a fourth position for Custom on some paths and skips it
+    on others; this skips it, because Custom here means one of several presets
+    and "which one" has no answer the button could give.
+    """
+    if current not in CYCLE:
+        return CYCLE[0]
+    return CYCLE[(CYCLE.index(current) + 1) % len(CYCLE)]
+
+
+def describe() -> list[dict]:
+    """Mode list for the UI, in cycle order, with the EC's own limits."""
+    return [{"id": k, "name": MODES[k]["name"], "desc": MODES[k]["desc"],
+             "value": MODES[k]["value"]} for k in CYCLE]
+
+
 class NativeModeError(RuntimeError):
     """A native mode that must not reach the hardware as asked."""
 

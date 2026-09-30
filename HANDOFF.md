@@ -98,8 +98,20 @@ chin bar all live in volatile RAM and revert on **every power cycle**.
 `hydroc-apply.service` and `hydroc-resume.service` are our `UniwillService`.
 
 Useful safety consequence: **a full power cycle always restores factory
-defaults.** Nothing this app writes can be permanently wedged, and no code path
-here has ever written flash.
+defaults.** Nothing this app writes can be permanently wedged.
+
+**Corrected 2026-09-30:** the claim "no code path here has ever written flash"
+was wrong. Byte 7 of the `08h`/`14h`/`1Ah` HID packets is `save`, and `save=1`
+writes the device's flash -- Control Center's own layout, read off the service.
+`lb_off()` sent `1A 00 00 00 00 00 00 01` on **every** chin-bar off, and the
+probe scripts' "commit" sent `1A 00 01 04 00 00 00 01`, which additionally
+saved a 4-unit idle timeout. Harmless in effect but a flash write per call,
+and a saved idle timeout is the first thing to suspect if a bar or keyboard
+ever goes dark by itself.
+
+All of them now send `save=0`, and `tests/test_no_flash_writes.py` keeps it
+that way. Deliberate "save to onboard flash" from the keyboard UI is the one
+place `save=1` belongs.
 
 ### 6. Intent and state are different things
 

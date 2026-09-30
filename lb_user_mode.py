@@ -33,7 +33,7 @@ import os
 import time
 
 HIDIOCSFEATURE_9 = 0xC0094806
-LB_COMMIT = bytes([0x1A, 0x00, 0x01, 0x04, 0x00, 0x00, 0x00, 0x01])
+LB_COMMIT = bytes([0x1A, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
 LOG = "/home/gumwars/HydroControl/lb_user_mode_log.json"
 
 N_LEDS = 21  # matches the keyboard's 21 columns; 1 + 3*21 = 64 bytes

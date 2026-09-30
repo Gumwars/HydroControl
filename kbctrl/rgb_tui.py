@@ -81,7 +81,7 @@ HIDIOCSFEATURE_9 = 0xC0094806
 LIGHTBAR_DEVICE = "/dev/hidraw1"
 
 # Commit packet — required by ITE 8233 to latch staged changes
-_LB_COMMIT = bytes([0x1A, 0x00, 0x01, 0x04, 0x00, 0x00, 0x00, 0x01])
+_LB_COMMIT = bytes([0x1A, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
 
 def lightbar_send(pkt8: bytes, commit: bool = True) -> str:
     """

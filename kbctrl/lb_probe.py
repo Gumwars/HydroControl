@@ -27,7 +27,7 @@ from pathlib import Path
 DEVICE = "/dev/hidraw1"
 LOG_PATH = Path("lb_probe_log.json")
 HIDIOCSFEATURE_9 = 0xC0094806
-_COMMIT = bytes([0x1A, 0x00, 0x01, 0x04, 0x00, 0x00, 0x00, 0x01])
+_COMMIT = bytes([0x1A, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
 
 
 # ── low-level send ─────────────────────────────────────────────────────────────

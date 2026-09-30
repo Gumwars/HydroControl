@@ -29,7 +29,7 @@ import os
 import time
 
 HIDIOCSFEATURE_9 = 0xC0094806
-LB_COMMIT = bytes([0x1A, 0x00, 0x01, 0x04, 0x00, 0x00, 0x00, 0x01])
+LB_COMMIT = bytes([0x1A, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
 LOG = "/home/gumwars/HydroControl/lb_effect_sweep2_log.json"
 
 # save_effect values that Control Center actually persists for the lightbar.

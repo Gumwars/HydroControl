@@ -49,7 +49,7 @@ def send(fd, pkt, label=""):
     fcntl.ioctl(fd, HIDIOCSFEATURE, buf, True)
 
 def commit(fd):
-    send(fd, [0x1A, 0x00, 0x01, 0x04, 0x00, 0x00, 0x00, 0x01], "commit 0x1A")
+    send(fd, [0x1A, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00], "commit 0x1A")
 
 # ── Candidate sequences ────────────────────────────────────────────────────────
 #

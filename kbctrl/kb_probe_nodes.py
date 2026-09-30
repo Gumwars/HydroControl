@@ -30,7 +30,7 @@ def send(fd, pkt, label):
     fcntl.ioctl(fd, HIDIOCSFEATURE, buf, True)
 
 def commit(fd):
-    send(fd, [0x1A, 0x00, 0x01, 0x04, 0x00, 0x00, 0x00, 0x01], "Commit")
+    send(fd, [0x1A, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00], "Commit")
 
 def pause(msg):
     input(f"\n  >> {msg}\n     Press Enter to continue...")

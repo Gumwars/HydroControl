@@ -71,12 +71,16 @@ def main() -> int:
         print("  hydroc.rgb.CHEAT_RGB is the right table for it.")
         print("  If white still looks wrong, the table is not the problem.")
     else:
-        print(f"\n  NOT type 21 (high byte is 0x{high:02X}, not 0x20).")
-        print("  The vendor selects a different table, or none, for this")
-        print("  panel. hydroc.rgb.CHEAT_RGB is HIDKeyboard3's and should")
-        print("  be turned off here -- applying another panel's white")
-        print("  balance makes colours worse, which is consistent with")
-        print("  white reading purplish after it was enabled.")
+        print(f"\n  Not the 0x20 that selects HIDKeyboard3 (this is "
+              f"0x{high:02X}).")
+        print("  What 0x22 selects is not recorded: the notes describe the")
+        print("  table as covering 'type 21/22' but only say 0x20 gives 21.")
+        print("  And there is more than one table -- the service picks by")
+        print("  LED vendor (Liteon glossy/cloudy/CIE, Everlight/CIE) from")
+        print("  EC 0x073D, 0x0742, 0x078E or device firmware -- and we have")
+        print("  one variant.")
+        print("\n  So hydroc.rgb.CHEAT_RGB is off by default. Turn it on")
+        print("  per call with correct=True if you want to compare.")
     return 0
 
 

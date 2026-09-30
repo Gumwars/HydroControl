@@ -167,7 +167,17 @@ class ColourCorrectionTest(unittest.TestCase):
         self.assertNotAlmostEqual(w_out[0] / w_in[0], o_out[0] / o_in[0],
                                   places=2)
 
-    def test_correction_can_be_turned_off(self):
+    def test_correction_is_off_by_default_on_this_panel(self):
+        """This keyboard reports firmware high byte 0x22; the service selects
+        HIDKeyboard3 on 0x20, and there are several tables chosen by LED
+        vendor. We have one and cannot show it is this panel's -- and white
+        read purplish with it applied, which is what the wrong table looks
+        like."""
+        import inspect
+        sig = inspect.signature(rgb.apply_per_key)
+        self.assertFalse(sig.parameters["correct"].default)
+
+    def test_correction_can_be_turned_on(self):
         kb = FakeKeyboard()
         with mock.patch.object(rgb, "_keyboard", return_value=kb), \
              mock.patch.object(rgb, "key_id_to_matrix", return_value=(0, 0)):

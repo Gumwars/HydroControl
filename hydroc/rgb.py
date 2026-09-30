@@ -121,11 +121,10 @@ def keyboard_available() -> tuple[bool, str]:
         return False, f"{e} (ite8291r3-ctl {ver})"
 
 
-# Keyboard white balance.
+# Keyboard white balance. OFF by default on this hardware -- see below.
 #
 # Control Center runs requested colours through WKDColor.cheatRGB_* before
-# sending them, for HIDKeyboard3-type panels. Read off the service, verified
-# against the owner's own observation that our colours look wrong:
+# sending them, for HIDKeyboard3-type panels. Read off the service:
 #
 #     white   FF FF FF  ->  7D FF B9      pinkish uncorrected
 #     orange  FF A5 00  ->  FF 7D 00
@@ -144,6 +143,25 @@ def keyboard_available() -> tuple[bool, str]:
 #
 # The chin bar is a different device type and gets NO correction -- raw RGB,
 # as we already send it. This applies to the keyboard only.
+#
+# WHY IT IS OFF BY DEFAULT
+#
+# This panel reports firmware 34.3.0.0, high byte 0x22. The service selects
+# HIDKeyboard3 on Ver_High == 0x20, and the table above is the one it uses
+# there. 0x22 is not that, and although the notes describe the table as
+# covering "type 21/22" they do not say what produces 22 -- so whether this
+# panel is in scope is unknown, not merely unconfirmed.
+#
+# Worse, there is more than one table. The service picks between them by LED
+# vendor (Liteon glossy / cloudy / CIE, Everlight / CIE), read from EC support
+# bytes 0x073D, 0x0742, 0x078E or from device firmware. We have exactly one
+# variant, and no way yet to tell whether it is this panel's.
+#
+# White read purplish with it applied, which is consistent with the wrong
+# table. So the default is off: sending FF FF FF unchanged is at least
+# faithful and predictable, where applying another panel's balance is a guess
+# that happens to be testable and failed its test. `correct=True` still works
+# for anyone who wants it, and kb_identity.py reports the byte.
 CHEAT_RGB: dict[tuple[int, int, int], tuple[int, int, int]] = {
     (0xFF, 0xFF, 0xFF): (0x7D, 0xFF, 0xB9),
     (0xFF, 0xA5, 0x00): (0xFF, 0x7D, 0x00),
@@ -156,7 +174,7 @@ def correct_rgb(rgb: tuple[int, int, int]) -> tuple[int, int, int]:
 
 
 def apply_per_key(colors: dict[str, str], brightness: int | None = None,
-                  save: bool = False, correct: bool = True) -> dict:
+                  save: bool = False, correct: bool = False) -> dict:
     """colors: {visual_key_id: '#RRGGBB'}"""
     mapped, unmapped = {}, []
     for kid, hexcol in colors.items():

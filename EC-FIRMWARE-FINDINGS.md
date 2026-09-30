@@ -469,6 +469,65 @@ of 550 -- and the other two cannot currently be observed at all. Finding a
 readable source for either, the way `0x0A56` turned out to be a copy of
 `0x04A6`, is the only route to checking them without a Windows capture.
 
+## RESOLVED 2026-09-30: the protection is active, and stricter than the profile
+
+A Windows capture with Control Center running, plus a decompilation of the
+service itself, closes this. See `TCC-SERVICE-FINDINGS.md`.
+
+**Control Center writes `0x07A6` bits 5:4 and nothing else.** Traced through
+`GCUService.MySystem.BatteryProtection2` across the whole assembly: no
+keepalive, no software ceiling, no commit or handshake write, no write to
+`0x07B9`, none to `0x07D0` or the NVRAM charge fields. It writes at service
+start, at resume, and on a user change. Byte for byte what
+`charge_profile_probe.py` has been doing since August.
+
+So "Windows drives it differently" is closed at the source level rather than
+by inference, and a full charge under Windows confirms it: `0x07C3` = `0x0D`
+for all 137 samples, `0x0742` = `0x22`, `chg_target` = 16800, terminating at
+4.1810 V/cell.
+
+### The framing this project had wrong
+
+The conclusion was repeatedly written as "the feature does not work". That is
+not what the evidence says. The accurate statement:
+
+> The EC's battery protection **is active and at its strictest step**. This
+> pack charges to 16800 mV against a 17800 mV rating -- 250 mV per cell below
+> maximum. Stationary asks for 200 mV and Balanced for 100 mV. **Both are
+> milder than what this pack already gets**, so the profile has nothing to
+> add, and the selector looks inert because it can only ask for *less*
+> protection than the EC has already chosen.
+
+That reconciles every measurement without a broken EC, and it explains the
+outside report without anyone being mistaken: a pack with a cooler history and
+fewer cycles lands on a milder step, where Stationary's 200 mV *is* the binding
+limit. That owner sees charging stop early, and the gauge then declares full
+and walks the percentage up. Same firmware, different pack.
+
+It also retires the wear question. `charge_full` 5800 against a 6400 design is
+90.6%, which is what a 250 mV/cell reduction produces. This project has been
+reading the protection as degradation.
+
+### Temperature is not what selects the step
+
+Worth recording because the thermal reading looked strong. The Linux baseline
+was taken charging at **24.85 C**, below the 3030 breakpoint; the Windows
+charge ran at **27.85-34.85 C**, above it for most of its length. Both report
+16800. Across roughly 400 samples spanning two operating systems, three battery
+states and a 10 C range, `chg_target` has never been anything else.
+
+So the temperature comparison exists in the code but is not what pins this
+machine. The accumulated stress counter at `0x09C9:0x09CA` remains the leading
+candidate, and it is unreadable from either OS.
+
+### What HydroControl should do with this
+
+Show the real number instead of implying a protection the selector does not
+provide: **"charge target 4.20 V/cell, 250 mV below the pack's rating"** is
+true, readable from Linux today (`0x0522` little-endian, `0x030E` big-endian),
+and more informative than a profile name. Keep the profile selector, described
+as a secondary setting that applies only when the EC's own protection is mild.
+
 ## What is not established
 
 **A fleet-wide dead feature is implausible on its face.** `117.ELUK` is what

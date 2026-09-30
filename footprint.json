@@ -1,0 +1,53 @@
+{
+  "when": "2026-09-28T12:50:04",
+  "cells": 4,
+  "charge_full": 5800000,
+  "charge_full_design": 6400000,
+  "set_via": "ecrw",
+  "order": [
+    "stationary"
+  ],
+  "arming_warning": null,
+  "profile_reasserts": [],
+  "results": [],
+  "oem6": {
+    "register": "0x07C6",
+    "values_seen": {
+      "0x04": 637
+    },
+    "erm_first_armed": null,
+    "full_24h_first_set": null
+  },
+  "footprint": {
+    "enable_register": "0x0741 bit 0",
+    "profile_enabled_seen": [
+      1
+    ],
+    "enable_reading": "0x0741 bit 0 is set, so the profile is enabled and the cause lies further in.",
+    "register": "0x0742",
+    "samples": 638,
+    "values_seen": [
+      "0x22"
+    ],
+    "bit2_moved": false,
+    "bit2_values": [
+      0
+    ],
+    "guards_always_passed": false,
+    "guard_values_seen": [
+      [
+        0,
+        1
+      ],
+      [
+        1,
+        1
+      ]
+    ],
+    "reading": "0x0742 never changed across this capture. That is consistent with the subsystem never running, which would put the cause upstream of the EC's own logic. One capture is not proof; it is a reason to repeat it."
+  },
+  "verdict": {
+    "conclusion": "inconclusive",
+    "detail": "fewer than two profiles produced a settled reading"
+  }
+}

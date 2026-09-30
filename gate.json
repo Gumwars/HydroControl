@@ -1,0 +1,55 @@
+{
+  "when": "2026-09-28T16:43:03",
+  "cells": 4,
+  "charge_full": 5800000,
+  "charge_full_design": 6400000,
+  "set_via": "ecrw",
+  "order": [
+    "stationary"
+  ],
+  "arming_warning": null,
+  "profile_reasserts": [],
+  "results": [],
+  "oem6": {
+    "register": "0x07C6",
+    "values_seen": {
+      "0x04": 17
+    },
+    "erm_first_armed": null,
+    "full_24h_first_set": null
+  },
+  "footprint": {
+    "gate_register": "0x07C3",
+    "gate_values_seen": [
+      "0x0D"
+    ],
+    "gate_ever_armed": false,
+    "gate_reading": "0x07C3 never reached 0x04 (saw ['0x0D']). The gate stayed shut for every sample, which is consistent with 0x0742 bit 2 reading clear throughout.",
+    "ap_oem_register": "0x0741",
+    "ap_oem_values_seen": [
+      "0x01"
+    ],
+    "ap_oem_reading": "0x0741 bit 0 is ENABLE_MANUAL_CTRL -- manual fan control, not a charging enable. Recorded as context, not as a verdict on the profiles.",
+    "register": "0x0742",
+    "samples": 17,
+    "values_seen": [
+      "0x22"
+    ],
+    "bit2_moved": false,
+    "bit2_values": [
+      0
+    ],
+    "guards_always_passed": false,
+    "guard_values_seen": [
+      [
+        0,
+        1
+      ]
+    ],
+    "reading": "0x0742 never changed across this capture. That is consistent with the subsystem never running, which would put the cause upstream of the EC's own logic. One capture is not proof; it is a reason to repeat it."
+  },
+  "verdict": {
+    "conclusion": "inconclusive",
+    "detail": "fewer than two profiles produced a settled reading"
+  }
+}

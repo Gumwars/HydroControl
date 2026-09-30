@@ -1,0 +1,76 @@
+# Linux baseline  2026-09-29T12:02:27
+# kernel 7.2.8-1-cachyos
+
+## battery
+  capacity                         93
+  status                           Charging
+  current_now                      1292000
+  voltage_now                      16748000
+  charge_now                       5394000
+  charge_full                      5800000
+  charge_full_design               6400000
+  cycle_count                      0
+  charge_types                     [Trickle] Standard Long_Life
+  charge_control_end_threshold     80
+  volts per cell (4S)              4.1870
+
+## charging: True
+
+## 0x0300-0x030F   hw_base 0x030E:0x030F (BIG-endian) = pack max mV
+0300  47 46 2D 47 46 00 00 00 04 59 04 01 0E 11 45 88  |GF-GF....Y....E.|
+
+--- named registers ---
+
+## 0x0490-0x0497   0x0490 guards, 0x0491 cell-count selector, 0x0497
+0490  0F C1 00 00 00 00 00 45                          |.......E|
+
+--- named registers ---
+
+## 0x04A0-0x04AF   0x04A2:0x04A3 temp copy, 0x04A6:7 cycles, 0x04AB capacity
+04A0  00 00 A4 0B 0C 05 85 00 0E 59 0A 5D 5D 07 03 00  |.........Y.]]...|
+
+--- named registers ---
+
+## 0x0500-0x0523   battery block; 0x0502:3 temperature, 0x0522:3 chg_target
+0500  00 00 A4 0B A4 0B 6C 41 6C 41 0C 05 0C 05 0C 05  |......lAlA......|
+0510  0C 05 0A 00 5D 00 5D 00 12 15 12 15 A8 16 A8 16  |....].].........|
+0520  9C 18 A0 41                                      |...A|
+
+--- named registers ---
+
+## 0x0740-0x0747   PROJECT_ID, AP_OEM, SUPPORT_5
+0740  19 01 22 07 0A FF 19 00                          |..".....|
+
+--- named registers ---
+0743  07  0b00000111  CTGP_DB_CTRL
+0744  0A  0b00001010  CTGP_DB_CTGP_OFFSET
+0745  FF  0b11111111  CTGP_DB_TPP_OFFSET
+0746  19  0b00011001  CTGP_DB_DB_OFFSET
+
+## 0x07A0-0x07C7   0x07A6 profile, 0x07B9 threshold, 0x07C3 ceiling gate
+07A0  00 00 00 00 80 00 20 CD CD C8 01 00 00 00 00 00  |...... .........|
+07B0  00 00 00 00 00 00 00 00 00 50 00 00 00 00 00 00  |.........P......|
+07C0  00 00 00 0D 18 A0 04 10                          |........|
+
+--- named registers ---
+07A3  00  0b00000000  BIOS_OEM_3
+07A4  80  0b10000000  BIOS_OEM_BYTE
+07A5  00  0b00000000  OEM_3              <-- FAN_QUIET/OVERBOOST/HIGH_POWER
+07A6  20  0b00100000  OEM_4              <-- charging profile, touchpad toggle
+07B9  50  0b01010000  CHARGE_CTRL
+
+## 0x08F0-0x08FF   expected 0xFF -- outside the ECRR window
+08F0  FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF  |................|
+
+--- named registers ---
+
+## 0x09C0-0x09CF   expected 0xFF -- stress accumulator lives here
+09C0  FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF  |................|
+
+--- named registers ---
+
+## 0x0A50-0x0A5F   expected 0xFF -- derating table inputs live here
+0A50  FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF  |................|
+
+--- named registers ---
+

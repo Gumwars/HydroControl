@@ -156,3 +156,50 @@ in the project's register map.
 | `0x0A54/55` | r/w | charge-current value (rate × 1040) |
 | `0x0522/23` | write | charge-control output of the profile path |
 | `0x0A5A/5B`, `0x0A56/57` | read | 16-bit telemetry accumulators |
+
+## Vendor corroboration (2026-10-01, Eluktronics support call)
+
+First-party confirmation that this is not one unit misbehaving. From the call:
+
+- **A second HYDROC-16 owner has reported the same thing.** Independent of us,
+  and the first evidence that the behaviour is not specific to this machine or
+  this 9%-worn pack.
+- **The support engineer has observed it himself**, and described it in the
+  same terms we arrived at: it does not do what it is advertised to do, but it
+  is clearly doing *something*. That is the conclusion of this document,
+  reached separately from the EC image.
+- **Since the feature shipped in 2019, warranty claims and battery
+  replacements have declined.** Weak evidence, and confounded — the fleet,
+  the cell suppliers and the model mix all changed over the same seven years —
+  but it points the same way as the register findings.
+- **Tongfang/Uniwill do not share EC internals with their vendors.** So no
+  authoritative description of this mechanism is coming. The reverse
+  engineering in this repository is the only account of it that exists outside
+  Uniwill.
+
+### What this does and does not settle
+
+Settled: the mechanism is real, it is shipping as designed rather than broken,
+and the labels in Control Center misdescribe it. The earlier hypothesis that
+this laptop was faulty — reasonable, and the reason the Windows trip happened —
+is closed.
+
+Not settled: what the EC actually decides. Nothing in the call touched the
+voltage derating, `0x07C3`, or the profile constants. That remains ours.
+
+### The 2019 date suggests a testable hypothesis
+
+The feature shipped in 2019. The owner also has a **Mech 15 G3R** — an older
+Uniwill machine, likely this one's predecessor — on which the same feature
+*does* behave as advertised, as a percentage ceiling.
+
+If both are true, the mechanism changed between generations while the UI labels
+did not: a hard percentage stop on the earlier EC, adaptive voltage derating on
+this one, same three profile names in front of both. That would account for
+every observation at once — the advertising mismatch, "it's doing something",
+and why the older machine looks correct.
+
+It is testable with hardware already on hand. On the G3R, check whether
+`0x07B9` holds a threshold that is actually enforced as a stop, and whether
+anything resembling the `0x0522:0x0523` derating output exists. A percentage
+stop there and derating here settles it.

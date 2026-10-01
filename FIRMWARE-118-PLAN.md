@@ -237,3 +237,51 @@ Two things to confirm with Eluktronics before flashing:
    split.
 2. Confirm the ESRT GUID above matches HYDROC-16 G1, and ask which DMI tool
    set to re-stamp with afterwards, given Prema overwrote the board name.
+
+## BIOS verified, and it is a one-way trip
+
+ESRT `entry0` on this machine:
+
+```
+fw_class                     72047706-dd0b-5a80-94f1-510302d18b7a
+fw_version                   105
+lowest_supported_fw_version  105
+```
+
+The `fw_class` is an **exact match** for the GUID in the capsule's `.inf`, so
+the BIOS is for this board. That was the last open safety question and it is
+answered. The capsule is version `108`, above the current `105`, so the update
+is permitted.
+
+**`lowest_supported_fw_version` equals the current version.** The firmware
+already refuses any capsule older than what is installed, so downgrades are
+blocked as policy, not as an accident. After flashing, that floor becomes
+`108` — and **Prema's `N.1.09ELUK` can never be capsule-flashed back.** We do
+not hold a Prema image, and the package contains only stock ROMs. Losing the
+Prema tuning is not reversible; it is permanent.
+
+Note that DMI and ESRT disagree about the current version: DMI says
+`N.1.09ELUK`, ESRT says `105`. The capsule gate compares against ESRT, so the
+`105 -> 108` comparison is the one that governs. The likeliest reading is that
+Prema changed the DMI strings and left the ESRT version at its stock base.
+
+### Before starting, ask for the recovery procedure
+
+The package ships `BIOS/GM6IX8B/FlashUtil/Recovery_rom/GMxIX9x.BIN` and does
+not document how to invoke recovery — the filename and key combination are
+model-specific. That is the one piece of information which is useless to
+obtain after it is needed. Ask Eluktronics for it while the conversation is
+still open, and put the recovery image on a FAT32 USB stick first.
+
+### Which flash path
+
+The vendor SOP (`OemFirmwareUpdateSOP.txt`) is the Windows capsule route, and
+step 1 — disable Secure Boot — is already satisfied, since this machine is in
+Setup Mode with its keys cleared.
+
+The SOP's own path installs a certificate and enables testsigning to load an
+unsigned driver package, which is more ceremony than needed.
+`FlashUtil/AfuWin64/GMxIX9xN111ELU08.EXE` does the same job directly, and
+`AfuEfi64/` does it from an EFI shell with no Windows at all. The Windows
+drive is the pragmatic choice regardless, because `AMIDEWINx64.EXE` is needed
+afterwards to re-stamp DMI and exists only for Windows.

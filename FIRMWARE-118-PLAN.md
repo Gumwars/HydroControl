@@ -357,6 +357,60 @@ because it was the old default. The 0x12B-and-later microcode already lowers
 the voltage the CPU requests of itself, so the offset is being subtracted from
 an already-reduced target.
 
+## Prema unhid pages; it did not write them
+
+Confirmed from the stock image, before flashing. The 32 MB ROM holds four LZMA
+streams (17 MB decompressed); the setup volume carries 12890 UTF-16LE strings,
+and among them:
+
+```
+Core Voltage Offset            Offset Prefix               Core Voltage Mode
+Cluster 0/1/2/3 Voltage Offset P-core Voltage Override     Uncore Voltage Offset
+VF Point 1..13 Offset Prefix   E-core L2 Voltage Mode      Ring Voltage Mode
+Per Core Ratio Override        Core Ratio Extension Mode   CEP Disable
+Overclocking Lock (BIT 20 in FLEX_RATIO MSR)
+```
+
+So the entire Intel overclocking and undervolting menu tree ships in the stock
+Eluktronics BIOS. Prema authored none of it — the pages are suppressed by the
+OEM and the mod exposes them. That is the standard shape of these mods: patch
+the AMI IFR to drop `suppress-if` on forms the vendor hid.
+
+The stock tree is in fact **richer** than the -40 mV default suggests:
+per-cluster offsets, a full 13-point VF curve, a P-core override and a CEP
+disable menu are all present.
+
+### The gate has a name, and its help text is explicit
+
+```
+UnderVolt Protection
+  "When UnderVolt Protection is enabled, user will not be able to program
+   under voltage in OS runtime. Recommended to keep it enabled by default."
+```
+
+That is almost certainly why `intel-undervolt` read `-0.00 mV` on every plane
+while `0xCE` bit 28 reported an unlocked part: reads answer, OS-runtime
+*programming* is refused, and the BIOS applies its own per-core offsets by a
+path that does not show up in the package-level mailbox. It also means a write
+test would have been rejected or stacked — a second reason that test was right
+to withdraw.
+
+### Getting them back without reflashing
+
+Hidden questions still read their values from the AMI varstores (`Setup`,
+`CpuSetup`, and friends), so the settings are reachable without modifying the
+BIOS at all: write the varstore offset directly with `setup_var.efi` from an
+EFI shell. Most AMI setup variables are NV+BS without a runtime attribute, so
+Linux cannot see them at runtime — this is a pre-boot operation.
+
+What that needs is the **exact varstore and offset per question**, which means
+extracting the IFR from this image rather than guessing. A wrong offset writes
+an unrelated setting, and some of the neighbours here are CEP and the
+overclocking lock. Extract first.
+
+First, though: boot the stock BIOS and look. Eluktronics may leave some of
+these pages visible, in which case none of this is necessary.
+
 ## BIOS verified, and it is a one-way trip
 
 ESRT `entry0` on this machine:

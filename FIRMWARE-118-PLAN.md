@@ -103,3 +103,137 @@ a live human on the other end:
 
 `*.ELUK` and `*_EC[0-9][0-9][0-9].zip` are gitignored. They are Eluktronics'
 copyrighted material and this is a public repository.
+
+---
+
+# Results of the static analysis (2026-10-01)
+
+Package: `intel_RPL_R_GMxIXxB_xN_BIOS_N.1.11ELU08_EC_1.18.00_20260918`.
+BIOS **N.1.11ELU08**, EC **1.18.00**. Nothing has been flashed.
+
+## The EC image is verifiably ours
+
+The archive ships the EC as `EC/GMxIXxx_12L_1.18.00/GMxIXxx_11.800`, not as a
+`.ELUK` file — Eluktronics renames Tongfang's image. The vendor readme quotes a
+checksum per release, and it is a plain byte sum:
+
+| image | bytes | byte sum | readme says |
+|---|---|---|---|
+| our installed `117.ELUK` | 262144 | `0x21788A7` | `GMxIXxx_11.700` = `0x21788A7` ✓ |
+| new `GMxIXxx_11.800` | 262144 | `0x2178461` | `GMxIXxx_11.800` = `0x2178461` ✓ |
+| G2 `125.ELUK` | 262144 | `0x1F2353A` | (different family) |
+
+Two things follow. The new file is intact and genuine. And **our installed EC
+is bit-for-bit Tongfang's `GMxIXxx` 12L build** — which retroactively confirms
+that every disassembly in this repository was done against the authentic
+vendor image, not a repackaged derivative.
+
+## 1.18 changes nothing we care about
+
+The readme is the full release history. In its entirety:
+
+```
+2025/5/27   EC Version 1.18.00     [Change item]: 1.Support copilot long press
+2024/8/21   EC Version 1.17.00     [Change item]: 1.Modify MCJ USB power
+```
+
+No battery, charge, thermal or performance item. The fan tables cite the
+*same* source documents in both releases (`R04_20240401`, MCJ `R07`,
+`GM6IX9B R03_20240105`), so fan semantics are unchanged by the vendor's own
+account.
+
+**This answers the question we were going to put to Eluktronics.** 118 does
+not change charge behaviour. The mechanism this project documented is still
+the current one.
+
+## ROMID: vendor-confirmed, and the "dead" branch named
+
+The readme lists the ROMID each OEM is stamped with:
+
+| ROMID byte 0 | OEM |
+|---|---|
+| `0xFF` | **STD (default)** |
+| `0x04` | MCJ |
+| `0x08` | Thirdwave |
+| `0x09` | Monster German, DreamMachine |
+| `0x0C` | XMG German |
+
+Two corrections to the record:
+
+- `0x0770` reading `0xFF` is the **STD ROMID**, documented by the vendor. The
+  reading of it as a mode flag was wrong; `ROMID_START` was right.
+- `CHARGE-CEILING-TRIGGER-CHAIN.md` calls the `0x0770 == 4` branch dead. It is
+  the **MCJ** variant — dead on this machine because we are STD, live on an
+  MCJ unit. Not dead code, OEM-conditional code.
+
+It also shows why the EC image is shared across OEMs while the BIOS is not:
+one `GMxIXxx` build serves XMG, Monster, Thirdwave and the rest, branching on
+ROMID. That does not make their *BIOS* images interchangeable, and the refusal
+to cross-flash the XMG BIOS stands.
+
+## The register map survives; the code map does not transfer
+
+Every one of the 44 EC addresses the daemon touches, searched as
+`MOV DPTR,#addr` (`90 hi lo`):
+
+```
+44 addresses checked, 1.17 -> 1.18
+  identical reference count : 44
+  reference count changed   :  0
+  disappeared in 1.18       :  0
+```
+
+Including the fan tables, `0x0751`, the latch at `0x0727`, and all the
+per-mode limits. **HydroControl's register dependencies look intact.**
+
+The image itself is another matter: 27909 of 262144 bytes differ (10.6%),
+concentrated in the upper halves of banks 1 and 2.
+
+```
+bank1:0xC000  7795    bank2:0xC000  7851
+bank1:0xE000  3156    bank2:0xE000  4419
+bank1:0xA000  1858    bank2:0xA000  2693
+```
+
+`bank2:0xC000` is where the charge-ceiling chain lives, and none of the four
+traced entry points (`0xC88C`, `0xC86D`, `0xC81E`, `0xC7F9`) has a
+byte-identical 24-byte signature anywhere in 1.18.
+
+**That is not evidence the logic changed.** Recompilation moves every absolute
+address embedded in `90/02/12 hi lo` operands, so any window containing a
+reference differs even when the source is identical — and a one-item changelog
+plus 44 unchanged register counts both argue for churn. What it does mean is
+that the *code* addresses in our notes are specific to 1.17 and would have to
+be re-derived against 1.18. Nothing in the daemon depends on them.
+
+## Still unverified: the BIOS
+
+The capsule `.inf` targets ESRT firmware GUID
+`{72047706-dd0b-5a80-94f1-510302d18b7a}`, version `108`. This machine exposes
+seven ESRT entries but their attributes need root:
+
+```
+sudo sh -c 'for e in /sys/firmware/efi/esrt/entries/entry*; do echo "--- $e"; \
+  for f in fw_class fw_version lowest_supported_fw_version; do \
+    printf "  %-28s %s\n" "$f" "$(cat $e/$f 2>/dev/null)"; done; done'
+```
+
+A matching `fw_class` is proof the capsule is for this board. Prema rewrote
+`board_name` to "HYDROC-16 powered by premamod.com", so DMI cannot answer it —
+and the archive covers three families (IDX `GM6IX8X/9X`, IDN `GM7IX8N/9N`,
+IDB `GM6IX9B`) with DMI re-stamping tools for two of them, which is itself a
+hint that DMI needs restoring after the flash.
+
+## Recommendation
+
+**Take the BIOS, and do not bother with the EC.** The EC update buys one
+Copilot-key behaviour, and spends the only firmware baseline this project has
+ever verified against. There is no charge, fan or performance change in it.
+
+Two things to confirm with Eluktronics before flashing:
+
+1. Does BIOS `N.1.11ELU08` require EC 1.18, or is it supported against the
+   installed 1.17? Vendors usually ship them as a pair and may not qualify a
+   split.
+2. Confirm the ESRT GUID above matches HYDROC-16 G1, and ask which DMI tool
+   set to re-stamp with afterwards, given Prema overwrote the board name.

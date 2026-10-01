@@ -55,3 +55,11 @@ gpu-mode-backup-*.json
 # these, but they are Eluktronics' binaries and are not ours to redistribute.
 *.ELUK
 *_EC[0-9][0-9][0-9].zip
+# Eluktronics shipped 1.18 as intel_RPL_R_..._EC_1.18.00_...zip, which the
+# pattern above does not match: the version is dotted, not three digits. These
+# are vendor BIOS/EC payloads and must never reach a public repository.
+*BIOS_N.*.zip
+*_EC_[0-9]*.zip
+GMxIX*
+*.rom
+*.BIN

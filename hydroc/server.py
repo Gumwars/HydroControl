@@ -418,6 +418,22 @@ class Handler(BaseHTTPRequestHandler):
                     {"ok": False, "error": f"unknown mode {name!r}"}, 400)
             return self._json(apply_native(name))
 
+        if route == "/api/button-cycle":
+            # Which of the two the physical button advances. A merge, not a
+            # whole-profile write: /api/profile replaces the document, and
+            # the UI does not hold the other keys to put back.
+            cycle = payload.get("cycle")
+            if cycle not in ("native", "presets"):
+                return self._json(
+                    {"ok": False, "error": f"unknown cycle {cycle!r}"}, 400)
+            profile, _ = load_profile()
+            profile["button_cycle"] = cycle
+            try:
+                save_profile(profile)
+            except OSError as e:
+                return self._json({"ok": False, "error": str(e)}, 500)
+            return self._json({"ok": True, "cycle": cycle})
+
         if route == "/api/rgb/perkey":
             return self._json(rgb.apply_per_key(
                 payload.get("colors") or {},

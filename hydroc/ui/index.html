@@ -290,7 +290,7 @@ function lum(hex){const n=parseInt(hex.slice(1),16);
 const S={section:'overview',status:{},state:{},profile:{},drift:{},tel:{},
   kbColors:{},sel:[],cur:'#37D6D6',kbBri:34,kbSave:true,kbCorrect:true,kbTab:'effect',applyResult:null,hist:{pkg:[],cpu:[],gpu:[]},eff:'rainbow',effColor:4,
   chin:{mode:'static',color:'#8CBF73',bri:100,speed:5},lpp:{running:false},lppFan:null,
-  effParams:{},kbSpeed:5,presets:[],activePreset:null,button:{},health:null,repair:null};
+  effParams:{},kbSpeed:5,presets:[],activePreset:null,button:{},health:null,repair:null,native:[],nativeActive:null,buttonCycle:'native'};
 KEYS.forEach(k=>S.kbColors[k.id]=k.region==='wasd'?'#FFE000':'#8CBF73');
 
 const $=(s,r=document)=>r.querySelector(s);
@@ -350,7 +350,9 @@ async function refreshState(){
   S.state=d.state||{};S.profile=d.profile||{};S.drift=d.drift||{};S.status=d.status||{};
   S.health=await api('/api/health');
   const pz=await api('/api/presets');
-  if(pz){S.presets=pz.presets||[];S.activePreset=pz.active;S.button=pz.button||{};}
+  if(pz){S.presets=pz.presets||[];S.activePreset=pz.active;S.button=pz.button||{};
+    S.native=pz.native||[];S.nativeActive=pz.native_active||null;
+    S.buttonCycle=pz.button_cycle||'native';}
   if(!Object.keys(S.effParams).length){
     const ep=await api('/api/rgb/effects'); if(ep)S.effParams=ep;
   }
@@ -773,24 +775,51 @@ function vPerf(){
   const armed=!!S.state.custom_profile, pl=S.state.cpu_power_limit;
   const warn=pl&&pl<25;
   const b=S.button||{};
+  // Exactly one of these two is in charge. native_mode is null whenever the
+  // custom-profile latch is up, so the state itself is the exclusion -- the
+  // UI only has to show it rather than track it.
+  const nat=S.nativeActive||null;
+  const natM=S.native.find(m=>m.id===nat)||{};
+  const pre=S.presets.find(p=>p.id===S.activePreset)||{};
+  const cyc=S.buttonCycle==='presets'?'presets':'native';
   return `<div class="card">
-    <div class="row"><div class="kick">Performance preset</div>
-      <span class="kv">${esc((S.presets.find(p=>p.id===S.activePreset)||{}).name||'Custom')}</span></div>
+    <div class="row"><div class="kick">The machine's own modes</div>
+      <span class="kv">${nat?esc(natM.name||nat):'not in use'}</span></div>
+    <div class="seg wrap" id="native" style="align-self:flex-start;margin-top:var(--space-3)">${
+      S.native.map(m=>`<button data-v="${m.id}" aria-pressed="${nat===m.id}">${esc(m.name)}</button>`).join('')}</div>
+    <div class="lbl" style="margin-top:var(--space-2)">${nat
+      ? esc(natM.desc||'')
+      : 'The EC holds its own power limits and fan curves for these. Picking one '
+        +'hands the machine to it and releases your custom limits below.'}</div>
+    ${nat&&S.state.fan_boost?'<div class="lbl"><span class="tag">fan boost on</span></div>':''}
+    <div class="lbl" id="nativemsg"></div>
+  </div>
+  <div class="card" style="margin-top:var(--space-4)${nat?';opacity:.72':''}">
+    <div class="row"><div class="kick">Your presets</div>
+      <span class="kv">${nat?'released':esc(pre.name||'Custom')}</span></div>
     <div class="seg wrap" id="preset" style="align-self:flex-start;margin-top:var(--space-3)">${
-      S.presets.map(p=>`<button data-v="${p.id}" aria-pressed="${S.activePreset===p.id}">${esc(p.name)}</button>`).join('')}
-      <button data-v="custom" aria-pressed="${S.activePreset==='custom'}" disabled>Custom</button></div>
-    <div class="lbl" style="margin-top:var(--space-2)">${
-      esc((S.presets.find(p=>p.id===S.activePreset)||{}).desc
-          ||'Your own limits. Move any slider below and you land here.')}</div>
-    <div class="lbl" style="margin-top:var(--space-3)">${b.listening
-      ? 'The profile button beside the power key cycles these.'
-      : `Profile button inactive — ${esc(b.error||'not listening')}. `
+      S.presets.map(p=>`<button data-v="${p.id}" aria-pressed="${!nat&&S.activePreset===p.id}">${esc(p.name)}</button>`).join('')}
+      <button data-v="custom" aria-pressed="${!nat&&S.activePreset==='custom'}" disabled>Custom</button></div>
+    <div class="lbl" style="margin-top:var(--space-2)">${nat
+      ? `Held while ${esc(natM.name||'a native mode')} is active. Picking one here takes `
+        +'the machine back off the EC and re-arms the custom-profile latch.'
+      : esc(pre.desc||'Your own limits. Move any slider below and you land here.')}</div>
+    <div class="lbl" id="presetmsg"></div>
+  </div>
+  <div class="card" style="margin-top:var(--space-4)">
+    <div class="row"><div class="kick">Profile button</div></div>
+    <div class="lbl" style="margin-top:var(--space-2)">${b.listening
+      ? 'The button beside the power key cycles whichever of the two you pick here.'
+      : `Inactive — ${esc(b.error||'not listening')}. `
         +'It only emits an event when the BIOS has it set to performance modes '
         +'rather than fan profiles.'}</div>
-    <div class="lbl">The EC has no performance modes of its own — these are applied
-      as power limits. The profile LED stays white because every preset arms the
-      custom-profile latch.</div>
-    <div class="lbl" id="presetmsg"></div>
+    <div class="seg" id="bcycle" style="align-self:flex-start;margin-top:var(--space-3)">
+      <button data-v="native" aria-pressed="${cyc==='native'}">The machine's modes</button>
+      <button data-v="presets" aria-pressed="${cyc==='presets'}">My presets</button></div>
+    <div class="lbl" style="margin-top:var(--space-2)">The LED follows the EC in its own
+      modes — green for Office, white for Balanced, purple for Beast. It stays white on
+      a preset, because every preset arms the custom-profile latch.</div>
+    <div class="lbl" id="bcyclemsg"></div>
   </div>
   <div class="card" style="margin-top:var(--space-4)">
     <div class="row"><div><div class="card-title" style="font-size:15px">Custom profile mode</div>
@@ -1081,10 +1110,30 @@ function bind(){
     msg('#presetmsg','applying '+b.textContent+'…');
     const d=await api('/api/preset',{method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({preset:b.dataset.v})});
-    if(d&&d.state){S.state=d.state;S.activePreset=d.active;}
+    // A preset takes the machine back off the EC, so the native row has
+    // to clear here too or both rows show a selection at once.
+    if(d&&d.state){S.state=d.state;S.activePreset=d.active;S.nativeActive=null;}
     msg('#presetmsg',d&&d.ok?`applied ${b.textContent}`
         :'failed: '+((d&&d.error)||'no response'),!(d&&d.ok));
     refreshState();};
+
+  const native=$('#native');
+  if(native)native.onclick=async e=>{const b=e.target.closest('[data-v]');
+    if(!b||b.disabled)return;
+    msg('#nativemsg','applying '+b.textContent+'…');
+    const d=await api('/api/native',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({mode:b.dataset.v})});
+    if(d&&d.state){S.state=d.state;S.nativeActive=d.active||null;}
+    msg('#nativemsg',d&&d.ok?`applied ${b.textContent}`
+        :'failed: '+((d&&d.error)||'no response'),!(d&&d.ok));
+    refreshState();};
+
+  const bcycle=$('#bcycle');
+  if(bcycle)bcycle.onclick=async e=>{const b=e.target.closest('[data-v]');if(!b)return;
+    const d=await api('/api/button-cycle',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({cycle:b.dataset.v})});
+    if(d&&d.ok){S.buttonCycle=d.cycle;render();}
+    else msg('#bcyclemsg','failed: '+((d&&d.error)||'no response'),true);};
 
   const pmode=$('#pmode');
   if(pmode)pmode.onclick=e=>{const b=e.target.closest('[data-v]');if(!b)return;

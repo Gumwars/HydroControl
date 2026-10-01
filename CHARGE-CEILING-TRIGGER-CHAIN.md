@@ -203,3 +203,66 @@ It is testable with hardware already on hand. On the G3R, check whether
 `0x07B9` holds a threshold that is actually enforced as a stop, and whether
 anything resembling the `0x0522:0x0523` derating output exists. A percentage
 stop there and derating here settles it.
+
+## Outcome evidence: two Uniwill machines, same era (owner-reported)
+
+Everything above is mechanism — what the EC decides, read out of its own
+firmware. This is the first evidence about whether any of it *works*.
+
+| machine | span | charge mode | wear |
+|---|---|---|---|
+| Mech 15 G3R (owner) | ~2 years | Stationary, almost exclusively | **3%** |
+| Prometheus G2 (friend) | slightly under 2 years | unaware of the setting, so default | **~15%** |
+
+A five-fold difference over a comparable span, on sibling Uniwill hardware. And
+it is the direction theory predicts: holding a Li-ion pack off full is the
+best-established intervention against calendar aging, so this is a predicted
+effect turning up, not a correlation in search of a story.
+
+### What would make a vendor engineer dismiss it
+
+Named honestly, because this is going into a report:
+
+- **n = 2.** Two machines, two owners, two usage patterns.
+- **Different chassis.** G3R and Prometheus G2 differ in pack capacity, cell
+  supplier and thermal design.
+- **Usage pattern is the serious one.** "Stationary, almost exclusively" means
+  a desk-bound machine on AC. Such a laptop barely cycles, and cycle count is
+  a dominant wear term alongside time-at-high-SoC and temperature. If the
+  Prometheus was cycled daily, that alone could account for the gap with no
+  help from the feature.
+- **Wear is a gauge estimate**, not a measurement — `charge_full` against
+  `charge_full_design`, learned by the fuel gauge, and subject to drift and
+  recalibration.
+
+### Cycle count is what discriminates
+
+The confound and the hypothesis make opposite predictions, and one number
+separates them:
+
+- **High cycle count on the G3R with low wear** → the machine *was* being
+  cycled and still barely aged. Usage pattern is ruled out and the feature is
+  doing the work.
+- **Low cycle count** → the pack was simply held at a desk and rarely
+  discharged. The confound stands and this evidence is weak.
+
+The G3R is on hand and now ~5 years old, which makes its *current* numbers a
+far better data point than a two-year recollection. Worth capturing alongside
+the `compat_probe.py` run, since both want the same trip to that machine:
+
+```
+cat /sys/class/power_supply/BAT*/{charge_full_design,charge_full,cycle_count} \
+    /sys/class/power_supply/BAT*/{energy_full_design,energy_full} 2>/dev/null
+sudo python3 compat_probe.py
+```
+
+(`charge_*` or `energy_*` depending on which the G3R's driver exposes — hence
+both, with errors suppressed.)
+
+### How this bears on the current machine
+
+This pack reads 9% wear at 135 cycles — worse, on its face, than the G3R's 3%
+over two years of Stationary use. That is consistent with the generational
+hypothesis above: whatever the earlier EC did, this one's voltage derating is
+not reproducing it. It is not conclusive, because this pack is being RMA'd and
+its gauge is the thing under suspicion.

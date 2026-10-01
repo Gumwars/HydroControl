@@ -276,8 +276,30 @@ still open, and put the recovery image on a FAT32 USB stick first.
 ### Which flash path
 
 The vendor SOP (`OemFirmwareUpdateSOP.txt`) is the Windows capsule route, and
-step 1 — disable Secure Boot — is already satisfied, since this machine is in
-Setup Mode with its keys cleared.
+step 1 — disable Secure Boot — is **not** already satisfied. Enabling Secure
+Boot in the firmware menu caused it to enroll its own factory defaults from
+`PKDefault`/`KEKDefault`/`dbDefault` and leave Setup Mode. As of 2026-10-01
+this machine reads:
+
+```
+SecureBoot 1   SetupMode 0   PK/KEK/db populated   dbx absent
+bootctl: Secure Boot: enabled (user)
+```
+
+So Secure Boot must be turned off before the flash.
+
+Two consequences. **The enrolled keys are the factory set, not the local sbctl
+keys** — every signature `sbctl verify` reports as good was made with a key
+the firmware does not trust, so it is currently buying nothing. And
+`/boot/EFI/BOOT/BOOTX64.EFI` is unsigned yet this machine booted Limine under
+active Secure Boot, which means the Prema BIOS is not enforcing it.
+
+**That is the hazard in the flash.** A stock BIOS may enforce properly. With
+factory keys enrolled and an unsigned bootloader, re-enabling Secure Boot
+after the flash could leave the machine unbootable. Do not re-enable it until
+Limine is signed with a key the firmware actually trusts. The flash clears
+NVRAM and returns the machine to Setup Mode, which is the right moment to run
+the `sbctl` sequence properly.
 
 The SOP's own path installs a certificate and enables testsigning to load an
 unsigned driver package, which is more ceremony than needed.

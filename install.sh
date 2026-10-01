@@ -26,14 +26,25 @@ die()    { printf '\n\033[31mAborted:\033[0m %s\n' "$1" >&2; exit 1; }
 # different board could set anything at all, so this is a hard stop.
 step "Checking hardware"
 VENDOR="$(cat /sys/class/dmi/id/sys_vendor 2>/dev/null || echo unknown)"
-BOARD="$(cat /sys/class/dmi/id/board_name 2>/dev/null || echo unknown)"
-if [[ "$VENDOR" == "ELUKTRONICS" && "$BOARD" == HYDROC-16* ]]; then
+# Not board_name alone. Prema Mod rewrites it, and a BIOS flash clears the DMI
+# strings until they are stamped back -- the vendor package ships AMIDEWIN
+# tools for exactly that. Any of the three identifiers will do; the vendor
+# check is what keeps this off another chassis.
+BOARD="unknown"
+for f in board_name product_name product_sku; do
+  V="$(cat "/sys/class/dmi/id/$f" 2>/dev/null || true)"
+  [[ "$BOARD" == unknown && -n "$V" ]] && BOARD="$V"
+  if [[ "$V" == HYDROC-16* ]]; then BOARD="$V"; MATCHED=1; break; fi
+done
+if [[ "$VENDOR" == "ELUKTRONICS" && -n "${MATCHED:-}" ]]; then
   c_ok "$VENDOR / $BOARD"
 else
   c_bad "$VENDOR / $BOARD"
   die "HydroControl is only validated on the Eluktronics HYDROC-16 G1.
        Its EC register map is specific to this chassis — running it elsewhere
-       could write unknown values to your embedded controller. Not proceeding."
+       could write unknown values to your embedded controller. Not proceeding.
+       If you have just flashed firmware, the DMI strings may need re-stamping
+       with the vendor's DMI tool first."
 fi
 
 # ── 2. Prerequisites ─────────────────────────────────────────────────────────

@@ -146,14 +146,30 @@ def diagnose(hw) -> list[dict]:
                     "needs_root": bool(needs_root)})
 
     # 1. right machine?
-    board = _first_line("/sys/class/dmi/id/board_name")
+    #
+    # board_name is the WRONG field to rely on alone. Prema Mod rewrites it
+    # ("HYDROC-16 powered by premamod.com"), and a BIOS flash clears the DMI
+    # strings -- the vendor package ships AMIDEWIN tools precisely to stamp
+    # them back. So the one field most likely to be missing or vendor-specific
+    # was the only one this checked, and a legitimate firmware update would
+    # have refused to run the daemon on its own machine.
+    #
+    # Any of the three identifying fields will do. sys_vendor still has to be
+    # ELUKTRONICS, so this does not open the guard to another chassis -- the
+    # hard stop it exists for is unchanged.
     vendor = _first_line("/sys/class/dmi/id/sys_vendor")
-    supported = vendor == "ELUKTRONICS" and board.startswith("HYDROC-16")
+    ids = {f: _first_line(f"/sys/class/dmi/id/{f}")
+           for f in ("board_name", "product_name", "product_sku")}
+    named = [v for v in ids.values() if v.startswith("HYDROC-16")]
+    supported = vendor == "ELUKTRONICS" and bool(named)
+    shown = named[0] if named else (ids["board_name"] or "unknown")
     add("supported model", supported,
-        f"{vendor} / {board}" if supported else f"this is {vendor} / {board}",
+        f"{vendor} / {shown}" if supported else f"this is {vendor} / {shown}",
         None if supported else
         "HydroControl is only validated on the Eluktronics HYDROC-16 G1. EC "
-        "register layouts differ between chassis; do not run it here.")
+        "register layouts differ between chassis; do not run it here. If you "
+        "have just flashed firmware, the DMI strings may need re-stamping "
+        "with the vendor's DMI tool before this passes.")
 
     # 2. kernel module built for the RUNNING kernel
     running = os.uname().release

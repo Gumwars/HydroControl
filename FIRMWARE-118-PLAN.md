@@ -318,29 +318,44 @@ Some distributions force `lockdown=integrity` when Secure Boot is active,
 which blocks MSR writes outright. CachyOS does not, which is why this is worth
 trying at all.
 
-**Measure it before the flash**, while a known-good -40 mV is applied. This is
-the baseline that makes the post-flash reading interpretable:
+**But `intel-undervolt` is not the same instrument.** Measured on this machine
+with Prema's -40 mV configured, it reports zero on every plane:
 
 ```
-sudo pacman -S --needed msr-tools intel-undervolt
-sudo intel-undervolt read            # read-only; should report Prema's offset
-sudo rdmsr -f 28:28 0xCE             # 1 = programmable ratio limit, i.e. unlocked part
+CPU (0) -0.00 mV   GPU (1) -0.00 mV   CPU Cache (2) -0.00 mV
+System Agent (3) -0.00 mV   Analog I/O (4) -0.00 mV
+rdmsr -f 28:28 0xCE  ->  1
 ```
 
-If `intel-undervolt read` reports the offset, the OC mailbox is reachable from
-Linux and the only open question is whether the stock BIOS leaves it that way.
+Bit 28 confirms an unlocked part and all five domains answered, so the mailbox
+is reachable. The zeros are not a failed read and not a reset setting: the OC
+mailbox exposes five **package-level** domains, while Prema's setup pages set
+offsets **per P-core and per E-core** individually. Those are different
+interfaces. The tool is reading a register that really is zero while the
+per-core offsets sit somewhere it never looks.
 
-**After the flash**, re-read both. If `0xCE` bit 28 is still `1` and
-`intel-undervolt read` still answers, the offset can be re-applied from Linux
-with `/etc/intel-undervolt.conf` and `intel-undervolt apply`, persisted by
-`intel-undervolt.service`. Set the CPU and cache planes together — they are
-linked on Intel — and treat -40 mV as a starting point to validate under load,
-not a setting to trust because it was the old default.
+Two consequences.
 
-One caveat worth stating: on a Raptor Lake part that has taken any Vmin shift,
-subtracting voltage eats stability margin rather than buying headroom, and the
-0x12B-and-later microcode already lowers the voltage the CPU requests of
-itself. Re-applying -40 mV is reasonable; assuming it is free is not.
+**Do not probe it by writing.** A domain-0 offset may sum with the per-core
+offsets rather than replace them, which would stack a test value on top of the
+-40 mV already in effect. Which of those the silicon does is not established
+here, and a 14900HX that may have taken some Vmin shift is the wrong place to
+find out by experiment. The BIOS page is the authority on what is applied;
+Linux has no reliable per-core reader.
+
+**What survives the flash is coarser than what is being lost.** If the stock
+BIOS exposes no undervolt page, `intel-undervolt` can still set a global core
+offset, because the mailbox stays open on unlocked parts. That approximates
+Prema's arrangement but is not equivalent — per-core offsets let the stronger
+cores take a deeper cut than the weakest one tolerates, and a single global
+value is bounded by the worst core. Treat it as a replacement with real, if
+modest, loss rather than a like-for-like restore.
+
+If it is re-applied globally, set the CPU and cache planes together — they are
+linked on Intel — and validate under sustained load rather than trusting -40
+because it was the old default. The 0x12B-and-later microcode already lowers
+the voltage the CPU requests of itself, so the offset is being subtracted from
+an already-reduced target.
 
 ## BIOS verified, and it is a one-way trip
 

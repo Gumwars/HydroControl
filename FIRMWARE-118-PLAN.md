@@ -292,6 +292,56 @@ Two things to confirm with Eluktronics before flashing:
 2. Confirm the ESRT GUID above matches HYDROC-16 G1, and ask which DMI tool
    set to re-stamp with afterwards, given Prema overwrote the board name.
 
+## The undervolt: measure it before, and it may be restorable after
+
+Prema exposes dedicated undervolt pages in its setup menu, defaulting to
+**-40 mV on the performance cores**. That is a BIOS setting, not something
+compiled in, and losing the menu is not the same as losing the capability.
+
+Undervolting is gated on whether the part is overclockable, not disabled
+outright. Plundervolt (CVE-2019-11157) led Intel to close the OC mailbox
+(`MSR 0x150`) on locked parts; it stays functional on unlocked ones, and the
+i9-14900HX is an HX-series flagship, which is overclockable. So the interface
+should survive the flash even if the stock Eluktronics menu does not expose a
+page for it.
+
+This machine is set up to reach it:
+
+```
+msr driver        builtin      (no module to load)
+kernel lockdown   [none]       (MSR writes permitted, even with Secure Boot active)
+intel-undervolt   extra/1.7-3  (packaged, not installed)
+msr-tools         extra/1.3-4  (packaged, not installed)
+```
+
+Some distributions force `lockdown=integrity` when Secure Boot is active,
+which blocks MSR writes outright. CachyOS does not, which is why this is worth
+trying at all.
+
+**Measure it before the flash**, while a known-good -40 mV is applied. This is
+the baseline that makes the post-flash reading interpretable:
+
+```
+sudo pacman -S --needed msr-tools intel-undervolt
+sudo intel-undervolt read            # read-only; should report Prema's offset
+sudo rdmsr -f 28:28 0xCE             # 1 = programmable ratio limit, i.e. unlocked part
+```
+
+If `intel-undervolt read` reports the offset, the OC mailbox is reachable from
+Linux and the only open question is whether the stock BIOS leaves it that way.
+
+**After the flash**, re-read both. If `0xCE` bit 28 is still `1` and
+`intel-undervolt read` still answers, the offset can be re-applied from Linux
+with `/etc/intel-undervolt.conf` and `intel-undervolt apply`, persisted by
+`intel-undervolt.service`. Set the CPU and cache planes together — they are
+linked on Intel — and treat -40 mV as a starting point to validate under load,
+not a setting to trust because it was the old default.
+
+One caveat worth stating: on a Raptor Lake part that has taken any Vmin shift,
+subtracting voltage eats stability margin rather than buying headroom, and the
+0x12B-and-later microcode already lowers the voltage the CPU requests of
+itself. Re-applying -40 mV is reasonable; assuming it is free is not.
+
 ## BIOS verified, and it is a one-way trip
 
 ESRT `entry0` on this machine:

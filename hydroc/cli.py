@@ -161,15 +161,34 @@ def diagnose(hw) -> list[dict]:
     ids = {f: _first_line(f"/sys/class/dmi/id/{f}")
            for f in ("board_name", "product_name", "product_sku")}
     named = [v for v in ids.values() if v.startswith("HYDROC-16")]
-    supported = vendor == "ELUKTRONICS" and bool(named)
+    matched = vendor == "ELUKTRONICS" and bool(named)
+
+    # An escape hatch for the one case the three fields cannot cover: DMI
+    # comes back blank after a firmware flash and has not been stamped yet.
+    # Deliberately an environment variable and not a default -- the guard
+    # must not open on its own, because "ELUKTRONICS" alone also describes
+    # the owner's Mech 15 G3R, a different chassis with a different EC map.
+    #
+    # It stays visible when used. A check that reads as a clean pass while an
+    # override is holding it up is how someone later believes the hardware was
+    # verified when it was asserted.
+    override = os.environ.get("HYDROC_ASSUME_SUPPORTED") == "1"
+    supported = matched or override
     shown = named[0] if named else (ids["board_name"] or "unknown")
-    add("supported model", supported,
-        f"{vendor} / {shown}" if supported else f"this is {vendor} / {shown}",
+    if matched:
+        detail = f"{vendor} / {shown}"
+    elif override:
+        detail = (f"{vendor} / {shown} — NOT identified as a HYDROC-16; "
+                  f"running on HYDROC_ASSUME_SUPPORTED=1")
+    else:
+        detail = f"this is {vendor} / {shown}"
+    add("supported model", supported, detail,
         None if supported else
         "HydroControl is only validated on the Eluktronics HYDROC-16 G1. EC "
         "register layouts differ between chassis; do not run it here. If you "
-        "have just flashed firmware, the DMI strings may need re-stamping "
-        "with the vendor's DMI tool before this passes.")
+        "have just flashed firmware and DMI is blank, re-stamp it with the "
+        "vendor's DMI tool, or set HYDROC_ASSUME_SUPPORTED=1 if you are "
+        "certain this is the right machine.")
 
     # 2. kernel module built for the RUNNING kernel
     running = os.uname().release

@@ -38,6 +38,12 @@ for f in board_name product_name product_sku; do
 done
 if [[ "$VENDOR" == "ELUKTRONICS" && -n "${MATCHED:-}" ]]; then
   c_ok "$VENDOR / $BOARD"
+elif [[ "${HYDROC_ASSUME_SUPPORTED:-}" == "1" ]]; then
+  # Same escape hatch as the daemon, and just as loud. For blank DMI after a
+  # firmware flash -- not for another chassis.
+  c_warn "$VENDOR / $BOARD — NOT identified as a HYDROC-16; proceeding on
+       HYDROC_ASSUME_SUPPORTED=1. If this is not a HYDROC-16, stop now: its EC
+       register map is specific to this chassis."
 else
   c_bad "$VENDOR / $BOARD"
   die "HydroControl is only validated on the Eluktronics HYDROC-16 G1.

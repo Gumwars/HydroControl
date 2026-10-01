@@ -31,13 +31,16 @@ def dmi(**fields):
     return mock.patch.object(cli, "_first_line", side_effect=read)
 
 
-def supported(**fields):
+def row(**fields):
     """diagnose() runs every check; only the model row is under test here,
     and a MagicMock satisfies the hardware the others ask about."""
     with dmi(**fields):
         rows = cli.diagnose(mock.MagicMock())
-    row = next(r for r in rows if r["name"] == "supported model")
-    return row["ok"]
+    return next(r for r in rows if r["name"] == "supported model")
+
+
+def supported(**fields):
+    return row(**fields)["ok"]
 
 
 class GuardTest(unittest.TestCase):
@@ -108,3 +111,55 @@ class InstallerAgreesTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class OverrideTest(unittest.TestCase):
+    """HYDROC_ASSUME_SUPPORTED exists for blank DMI after a firmware flash.
+
+    It is an environment variable and not a relaxed default on purpose. The
+    guard cannot be reduced to "is this an Eluktronics machine", because that
+    also describes the owner's Mech 15 G3R -- a different chassis, a different
+    EC map, and one we intend to probe. Writing HYDROC-16 fan tables there is
+    exactly the accident the guard prevents.
+    """
+
+    BLANK = dict(sys_vendor="ELUKTRONICS", board_name="",
+                 product_name="", product_sku="")
+
+    def test_blank_dmi_is_refused_without_the_override(self):
+        with mock.patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("HYDROC_ASSUME_SUPPORTED", None)
+            self.assertFalse(supported(**self.BLANK))
+
+    def test_the_override_lets_it_through(self):
+        with mock.patch.dict(os.environ, {"HYDROC_ASSUME_SUPPORTED": "1"}):
+            self.assertTrue(supported(**self.BLANK))
+
+    def test_the_override_stays_visible_in_the_detail(self):
+        """A clean-looking pass under an override is how someone later
+        believes the hardware was verified when it was asserted."""
+        with mock.patch.dict(os.environ, {"HYDROC_ASSUME_SUPPORTED": "1"}):
+            d = row(**self.BLANK)["detail"]
+        self.assertIn("NOT identified", d)
+        self.assertIn("HYDROC_ASSUME_SUPPORTED", d)
+
+    def test_a_real_match_does_not_mention_the_override(self):
+        with mock.patch.dict(os.environ, {"HYDROC_ASSUME_SUPPORTED": "1"}):
+            d = row(sys_vendor="ELUKTRONICS",
+                    board_name="HYDROC-16 powered by premamod.com",
+                    product_name="HYDROC-16",
+                    product_sku="HYDROC-16 G1")["detail"]
+        self.assertNotIn("HYDROC_ASSUME_SUPPORTED", d)
+
+    def test_only_an_exact_1_enables_it(self):
+        for v in ("0", "", "yes", "true"):
+            with mock.patch.dict(os.environ,
+                                 {"HYDROC_ASSUME_SUPPORTED": v}):
+                self.assertFalse(supported(**self.BLANK),
+                                 f"{v!r} should not enable the override")
+
+    def test_the_installer_offers_the_same_hatch(self):
+        with open(os.path.join(_ROOT, "install.sh"), encoding="utf-8") as fh:
+            src = fh.read()
+        self.assertIn("HYDROC_ASSUME_SUPPORTED", src)
+        self.assertIn("NOT identified as a HYDROC-16", src)

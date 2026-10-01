@@ -888,12 +888,35 @@ read-modify-write: bit 0 of the same register is `ENABLE_MANUAL_CTRL`, the
 master switch (HANDOFF.md #1). All four mode dumps read `0x0741` = `0x81`,
 with bit 3 clear.
 
-### Colour correction
+### Colour correction -- this keyboard gets none
 
-`HID_Set_Color_14H` passes colours through `WKDColor.cheatRGB_*` for some
-device types. It is a lookup that swaps **exact preset colours** for
-white-balanced ones, not a general transform. For the `HIDKeyboard3` type
-(21/22):
+`HID_Set_Color_14H` (RVA `0x1c73c`) passes colours through
+`WKDColor.cheatRGB_*` before sending them. It is a lookup that swaps **exact
+preset colours** for white-balanced ones, not a general transform, and the
+switch is on `m_ITE_KB_Type` alone. The constructor at `0x167f8` defines the
+`MEZone` series:
+
+| type(s) | series | table |
+|---|---|---|
+| 2, 3 | — | `cheatRGB_4Zone` |
+| 5, 6 | — | `cheatRGB_2ndME` |
+| 11, 12, 13, 14 | `MEZone_2p1ndSeries` | `cheatRGB_2p1ndME` |
+| 16 / 23 / 24 | — | `cheatRGB_HIDLightbar` / `_HIDLightbar2` / `_HIDLightbar3` |
+| 17, 18, 19, 20 | `MEZone_2p2ndSeries` | `cheatRGB_2p2ndME` |
+| 21, 22 | `MEZone_3ndSeries` | `cheatRGB_HIDKeyboard3` |
+| 25 | — | none — raw (the chin bar) |
+| **7, 8, 9, 10** | `MEZone_3p1ndSeries` | **none — raw** |
+
+The last row is the one that matters. The constructor defines
+`MEZone_3p1ndSeries = {7, 8, 9, 10}`, but the dispatcher never tests for it:
+those types fall through the switch to the default and are sent raw.
+
+**This keyboard is type 7** — firmware 34.3.0.0, `Ver_High` `0x22`, KBID at EC
+`0x073C` = `0x18`. So Control Center applies **no** correction to it, and
+HydroControl's raw `FF FF FF` is not a shortfall against Windows, it is the
+same thing Windows sends.
+
+The `HIDKeyboard3` table, for reference, since we recovered it:
 
 | requested | sent |
 |---|---|
@@ -902,19 +925,17 @@ white-balanced ones, not a general transform. For the `HIDKeyboard3` type
 | orange `FF A5 00` | `FF 7D 00` |
 | yellow `FF FF 00` | `D2 FF ..` |
 
-The LED vendor (Liteon glossy / cloudy / CIE, Everlight / CIE) comes from EC
-support bytes `0x073D`, `0x0742`, `0x078E` or from device firmware, and
-selects between tables.
+It lives in `hydroc.rgb.CHEAT_RGB` behind `correct=False`, which is where it
+stays. Applying it here is what made white read purplish.
 
-Which type this keyboard gets depends on its firmware version
-(`ILM_RGBKB_Init` reads `80h`: usage page `0xFF02` with `Ver_High == 0x20`
-gives type 21, i.e. `HIDKeyboard3`). If it is type 21, **HydroControl's
-white is sent as `FF FF FF` and will look pinkish next to Windows' white.**
-Read the firmware version once on Linux (a `80h` get-feature, read-only) to
-settle it.
-
-The chin bar (type 25, below) gets **no correction**: raw RGB, as HydroControl
-sends.
+**Correction to an earlier reading.** This section used to say the LED vendor
+(Liteon glossy / cloudy / CIE, Everlight / CIE) selected between tables, read
+from EC support bytes `0x073D`, `0x0742`, `0x078E`. It does not.
+`m_bitLiteon_glossy`, `_cloudy`, `_CIE_JP`, `_CIE_USUK`, `_CIE_FromFW` and
+`m_bitEverlight` are declared fields with **zero reads or writes anywhere in
+GCUService.exe** — vestigial. Of the four bytes we dumped
+(`0x073C = 0x18`, `0x073D = 0x00`, `0x0742 = 0x22`, `0x078E = 0xFC`), only
+`0x073C` feeds anything, and it is the KBID that resolves the type.
 
 ### The chin bar (`0x7001`)
 

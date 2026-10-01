@@ -144,24 +144,38 @@ def keyboard_available() -> tuple[bool, str]:
 # The chin bar is a different device type and gets NO correction -- raw RGB,
 # as we already send it. This applies to the keyboard only.
 #
-# WHY IT IS OFF BY DEFAULT
+# WHY IT IS OFF ON THIS MACHINE, AND STAYS OFF
 #
-# This panel reports firmware 34.3.0.0, high byte 0x22. The service selects
-# HIDKeyboard3 on Ver_High == 0x20, and the table above is the one it uses
-# there. 0x22 is not that, and although the notes describe the table as
-# covering "type 21/22" they do not say what produces 22 -- so whether this
-# panel is in scope is unknown, not merely unconfirmed.
+# This panel is type 7: firmware 34.3.0.0 (Ver_High 0x22) with KBID at EC
+# 0x073C = 0x18. `HID_Set_Color_14H` is a switch on `m_ITE_KB_Type`, and the
+# branches are:
 #
-# Worse, there is more than one table. The service picks between them by LED
-# vendor (Liteon glossy / cloudy / CIE, Everlight / CIE), read from EC support
-# bytes 0x073D, 0x0742, 0x078E or from device firmware. We have exactly one
-# variant, and no way yet to tell whether it is this panel's.
+#     5, 6             cheatRGB_2ndME
+#     11, 12, 13, 14   cheatRGB_2p1ndME        MEZone_2p1ndSeries
+#     17, 18, 19, 20   cheatRGB_2p2ndME        MEZone_2p2ndSeries
+#     21, 22           cheatRGB_HIDKeyboard3   MEZone_3ndSeries    <- table below
+#     2, 3             cheatRGB_4Zone
+#     16 / 23 / 24     cheatRGB_HIDLightbar / _HIDLightbar2 / _HIDLightbar3
+#     25               none                                        (the chin bar)
+#     7, 8, 9, 10      none                    MEZone_3p1ndSeries
 #
-# White read purplish with it applied, which is consistent with the wrong
-# table. So the default is off: sending FF FF FF unchanged is at least
-# faithful and predictable, where applying another panel's balance is a guess
-# that happens to be testable and failed its test. `correct=True` still works
-# for anyone who wants it, and kb_identity.py reports the byte.
+# The constructor defines MEZone_3p1ndSeries = {7, 8, 9, 10}, but the
+# dispatcher never tests it: type 7 falls through to the default and goes out
+# raw. Windows applies no correction to this keyboard. Raw RGB -- what we
+# already send -- is the correct behaviour here, not a fallback from it.
+#
+# So the purple was this table, cheatRGB_HIDKeyboard3, in front of a panel
+# that is supposed to get no table at all.
+#
+# An earlier note here had the service choosing between tables by LED vendor
+# (Liteon glossy / cloudy / CIE, Everlight), read from EC support bytes
+# 0x073D, 0x0742 and 0x078E. That was wrong. Those fields are declared and
+# never read anywhere in GCUService: selection is `m_ITE_KB_Type` alone, and
+# of the four bytes we dumped only 0x073C decides anything.
+#
+# The table stays because it is correct for a types 21/22 panel and was
+# expensive to recover. `correct=True` still applies it, and kb_identity.py
+# says which panel is in front of you.
 CHEAT_RGB: dict[tuple[int, int, int], tuple[int, int, int]] = {
     (0xFF, 0xFF, 0xFF): (0x7D, 0xFF, 0xB9),
     (0xFF, 0xA5, 0x00): (0xFF, 0x7D, 0x00),

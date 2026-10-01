@@ -51,8 +51,9 @@ class ReadOnlyTest(unittest.TestCase):
     def test_it_tells_the_reader_what_each_answer_means(self):
         """A probe that prints a number and leaves the interpretation to
         memory is how 0x0741 bit 0 got read as a charging enable."""
-        self.assertIn("is the table for this", self.src)
-        self.assertIn("wrong table for this panel", self.src)
+        self.assertIn("is the table for this", self.src)        # it applies
+        self.assertIn("uncorrected RGB is correct here", self.src)  # none exists
+        self.assertIn("wrong table for this", self.src)         # a different one
 
     def test_it_says_what_to_do_when_the_daemon_holds_the_device(self):
         self.assertIn("hydroc-server", self.src)
@@ -105,3 +106,46 @@ class TypeMappingTest(unittest.TestCase):
         """Without EC access the probe still names the candidates rather
         than guessing one."""
         self.assertIn("KBID unread", self.src)
+
+
+class DispatcherTableTest(unittest.TestCase):
+    """Which types get a cheatRGB_* table, and which get none.
+
+    HID_Set_Color_14H switches on m_ITE_KB_Type. The constructor defines
+    MEZone_3p1ndSeries = {7, 8, 9, 10} and the dispatcher never reads it, so
+    those types fall through to the default and go out raw. This panel is
+    type 7, which makes "no correction" the finished answer rather than a
+    table we have not found yet.
+    """
+
+    def setUp(self):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("kb_identity", _SRC)
+        self.m = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(self.m)
+        with open(_SRC, encoding="utf-8") as fh:
+            self.src = fh.read()
+
+    def test_this_panel_has_no_table(self):
+        for t in (7, 8, 9, 10):
+            self.assertIsNone(self.m.TYPE_TABLE.get(t),
+                              f"type {t} is MEZone_3p1ndSeries, which the "
+                              f"dispatcher never branches on")
+
+    def test_the_table_we_hold_belongs_to_21_and_22(self):
+        self.assertEqual(self.m.TYPE_TABLE[21], "_HIDKeyboard3")
+        self.assertEqual(self.m.TYPE_TABLE[22], "_HIDKeyboard3")
+
+    def test_the_chin_bar_is_uncorrected_too(self):
+        self.assertIsNone(self.m.TYPE_TABLE.get(25))
+
+    def test_it_says_raw_is_correct_rather_than_unfinished(self):
+        """The earlier text sent the reader looking for "the right table",
+        which for this panel does not exist."""
+        self.assertIn("uncorrected RGB is correct here", self.src)
+        self.assertNotIn("has not been extracted yet", self.src)
+
+    def test_the_vendor_flag_theory_is_recorded_as_withdrawn(self):
+        """0x073D/0x0742/0x078E were read as selecting between tables. The
+        fields they would feed are never read in GCUService."""
+        self.assertIn("never read", self.src)

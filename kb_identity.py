@@ -6,12 +6,17 @@ balance apply to it? READ-ONLY.
 
 Control Center runs requested colours through a lookup (WKDColor.cheatRGB_*)
 before sending them, but only for some device types. It picks the type from
-the controller's firmware version: usage page 0xFF02 with the high byte at
-0x20 gives type 21, HIDKeyboard3, which is the table hydroc.rgb.CHEAT_RGB
-carries -- white FF FF FF sent as 7D FF B9.
+the controller's firmware version on usage page 0xFF02, sub-keyed by the EC's
+KBID, and switches on nothing else.
 
-Applying that table to a panel it is not for makes colours worse, not better,
-so the byte decides whether the correction belongs on this machine.
+hydroc.rgb.CHEAT_RGB is one of those tables, cheatRGB_HIDKeyboard3, which
+belongs to types 21/22 -- white FF FF FF sent as 7D FF B9. Applying it to a
+panel it is not for makes colours worse, not better, so these two bytes
+decide whether the correction belongs on this machine.
+
+Several types, including this one, have no branch at all and are sent raw.
+For those the answer is not "we have not found the table yet", it is that
+Windows does not correct them either.
 
     sudo python3 kb_identity.py
 
@@ -47,6 +52,24 @@ VER_HIGH_TYPES = {
 
 # The types CHEAT_RGB (cheatRGB_HIDKeyboard3) is the table for.
 HIDKEYBOARD3_TYPES = (21, 22)
+
+# Which cheatRGB_* table HID_Set_Color_14H runs each type through. The switch
+# is on m_ITE_KB_Type and nothing else -- the LED-vendor fields the notes once
+# credited (Liteon glossy/cloudy/CIE, Everlight) are declared in GCUService
+# and never read.
+#
+# A type that is absent here has no branch and falls through to the default,
+# which sends raw RGB. That includes 7/8/9/10: the constructor defines them as
+# MEZone_3p1ndSeries, and the dispatcher never asks.
+TYPE_TABLE = {
+    2: "_4Zone", 3: "_4Zone",
+    5: "_2ndME", 6: "_2ndME",
+    11: "_2p1ndME", 12: "_2p1ndME", 13: "_2p1ndME", 14: "_2p1ndME",
+    16: "_HIDLightbar",
+    17: "_2p2ndME", 18: "_2p2ndME", 19: "_2p2ndME", 20: "_2p2ndME",
+    21: "_HIDKeyboard3", 22: "_HIDKeyboard3",
+    23: "_HIDLightbar2", 24: "_HIDLightbar3",
+}
 
 REG_KBID = 0x073C
 
@@ -105,18 +128,26 @@ def main() -> int:
              "   (KBID unread -- needs EC access)"))
 
     types = (resolved,) if resolved else family
-    if set(types) & set(HIDKEYBOARD3_TYPES):
+    tables = {TYPE_TABLE.get(t) for t in types}
+
+    if tables == {"_HIDKeyboard3"}:
         print("\n  HIDKeyboard3. hydroc.rgb.CHEAT_RGB is the table for this")
         print("  panel; pass correct=True to apply it.")
+    elif tables == {None}:
+        # The answer for this machine. Raw is not a fallback here, it is what
+        # Control Center does, so "uncorrected" is the finished state.
+        print("\n  This type has no branch in HID_Set_Color_14H: Control")
+        print("  Center sends it raw. There is no table to find, and no")
+        print("  correction to apply -- uncorrected RGB is correct here.")
+        print("  Leave hydroc.rgb.CHEAT_RGB off. It is cheatRGB_HIDKeyboard3,")
+        print("  the types 21/22 table, and is the wrong table for this")
+        print("  panel; applying it is what turns white purple.")
     else:
-        print(f"\n  NOT HIDKeyboard3 (that is types "
-              f"{'/'.join(str(t) for t in HIDKEYBOARD3_TYPES)}).")
-        print("  hydroc.rgb.CHEAT_RGB is cheatRGB_HIDKeyboard3 and is the")
-        print("  wrong table for this panel. It is off by default; leave it.")
-        print("\n  The right one is whichever cheatRGB_* the service maps")
-        print("  this type to -- five keyboard tables exist (_2ndME,")
-        print("  _2p1ndME, _2p2ndME, _4Zone, _HIDKeyboard3) and the")
-        print("  dispatcher has not been extracted yet.")
+        named = "/".join(sorted(t for t in tables if t)) or "?"
+        print(f"\n  This type is corrected through cheatRGB{named}, which we")
+        print("  have not extracted. hydroc.rgb.CHEAT_RGB is")
+        print("  cheatRGB_HIDKeyboard3 and is the wrong table for this")
+        print("  panel. It is off by default; leave it.")
     return 0
 
 

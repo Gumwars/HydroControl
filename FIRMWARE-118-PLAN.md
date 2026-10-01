@@ -76,17 +76,71 @@ Do the static diff against 117 and confirm each one before trusting the daemon
 on 118. **Stop the daemon before first boot on new firmware** rather than
 letting it apply a saved profile into an unverified map.
 
-## After the flash
+## After the flash — runbook
+
+The machine comes back with Secure Boot off and in Setup Mode, because the
+flash clears NVRAM. That is fine for booting: Limine only enforces its config
+checksum when Secure Boot is *active*, so the first boot is unconditional.
+
+**1. Boot, and keep the daemon out of it.** It starts on boot and would apply
+the saved profile into a register map nothing has verified yet.
 
 ```
-sudo systemctl stop hydroc-server.service       # before anything applies a profile
+sudo systemctl stop hydroc-server.service
+sudo systemctl disable --now hydroc-server.service    # survives the next reboot too
+```
+
+**2. Diff the EC against the baseline.**
+
+```
 sudo python3 ec_state_capture.py --compare 117-preflash.json
-sudo python3 kb_identity.py                     # Ver_High and KBID may both move
 ```
 
-Then re-check, in this order: fan table contents, native mode read-back,
-charge registers, `cat /proc/cpuinfo | grep microcode`, and the BIOS version
-and date in DMI. Only start the daemon once the map is confirmed.
+What matters: the fan tables at `0x0F00`–`0x0F5F` still 16 points each, the
+per-mode limits unchanged (office PL1 45 / TCC 15, beast PL1 205 / TCC 5),
+`0x07C3` still `13`, and `0x0522:0x0523` still `160,65` = 16800 mV. Values
+that *should* move: `0x0751` reflects whatever mode the EC boots in, and the
+cycle count at `0x04A6`.
+
+**3. Check identity, and re-stamp DMI if needed.**
+
+```
+cat /sys/class/dmi/id/{bios_vendor,bios_version,board_name,product_name,product_sku}
+hydroc doctor
+```
+
+`bios_vendor` should become American Megatrends and `bios_version`
+`N.1.11ELU08`. If `board_name` comes back blank or as a Tongfang code, the
+guard now accepts `product_name` or `product_sku` instead — and if all three
+are empty, `HYDROC_ASSUME_SUPPORTED=1` gets past it while you re-stamp with
+`AMIDEWINx64.EXE` from Windows, using `~/dmi-preflash.txt`.
+
+**4. Restore Secure Boot.** The sbctl keys and every file signature live on
+disk and survive the flash; only the enrollment is lost. One command:
+
+```
+sudo sbctl enroll-keys --microsoft --firmware-builtin=db,KEK
+sudo sbctl verify          # expect all green, including BOOTX64.EFI
+```
+
+Then enable Secure Boot in the firmware menu. `--microsoft` is not optional
+here: the RTX 4090's option ROM is Microsoft-signed.
+
+Limine's config checksum is baked into `BOOTX64.EFI` on the ESP, which the
+flash does not touch, and all 43 path lines in `limine.conf` already carry
+BLAKE2B hashes — so enforcement coming back on is safe.
+
+**5. Only then start the daemon.**
+
+```
+sudo systemctl enable --now hydroc-server.service
+sudo python3 kb_identity.py      # Ver_High and KBID could both move
+```
+
+Also worth a look: `grep microcode /proc/cpuinfo` (the OS loads 0x137
+regardless, so this is a curiosity rather than a check), and whether the
+profile button still emits events — it depends on a BIOS setting that may not
+exist outside the Prema menus.
 
 ## Ask Eluktronics while you have them
 

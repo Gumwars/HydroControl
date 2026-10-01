@@ -288,7 +288,7 @@ function lum(hex){const n=parseInt(hex.slice(1),16);
 
 // ── app state ──
 const S={section:'overview',status:{},state:{},profile:{},drift:{},tel:{},
-  kbColors:{},sel:[],cur:'#37D6D6',kbBri:34,kbSave:true,kbTab:'effect',applyResult:null,hist:{pkg:[],cpu:[],gpu:[]},eff:'rainbow',effColor:4,
+  kbColors:{},sel:[],cur:'#37D6D6',kbBri:34,kbSave:true,kbCorrect:true,kbTab:'effect',applyResult:null,hist:{pkg:[],cpu:[],gpu:[]},eff:'rainbow',effColor:4,
   chin:{mode:'static',color:'#8CBF73',bri:100,speed:5},lpp:{running:false},lppFan:null,
   effParams:{},kbSpeed:5,presets:[],activePreset:null,button:{},health:null,repair:null};
 KEYS.forEach(k=>S.kbColors[k.id]=k.region==='wasd'?'#FFE000':'#8CBF73');
@@ -953,6 +953,12 @@ function vPerKey(){
         <button class="sw" id="kbsave" aria-pressed="${S.kbSave}"><i></i></button>
         <div style="flex:1;line-height:1.25"><div style="font-size:12.5px">Save to keyboard</div>
           <div class="lbl" style="font-size:10.5px">Writes 8291 onboard flash — survives power loss</div></div>
+      </div>
+      <div class="row" style="margin-top:var(--space-3)">
+        <button class="sw" id="kbcorrect" aria-pressed="${S.kbCorrect}"><i></i></button>
+        <div style="flex:1;line-height:1.25"><div style="font-size:12.5px">White balance</div>
+          <div class="lbl" style="font-size:10.5px">Raw white reads pink on this panel. Corrects
+            white and orange only — other colours are sent as picked</div></div>
       </div></div>
     </div>
   </div>`;
@@ -1147,13 +1153,14 @@ function bind(){
   const cs=$('#clearsel');if(cs)cs.onclick=()=>{S.sel=[];render();};
   const kb=$('#kbbri');if(kb)kb.oninput=()=>{S.kbBri=+kb.value;};
   const ks=$('#kbsave');if(ks)ks.onclick=()=>{S.kbSave=!S.kbSave;render();};
+  const kc=$('#kbcorrect');if(kc)kc.onclick=()=>{S.kbCorrect=!S.kbCorrect;render();};
 
   const msg=(sel,t,bad)=>{const el=$(sel);if(el){el.textContent=t;
     el.style.color=bad?'var(--color-danger)':'var(--color-accent)';}};
   const ak=$('#applykb');
   if(ak)ak.onclick=async()=>{msg('#kbmsg','applying…');
     const d=await api('/api/rgb/perkey',{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({colors:S.kbColors,brightness:S.kbBri,save:S.kbSave})});
+      body:JSON.stringify({colors:S.kbColors,brightness:S.kbBri,save:S.kbSave,correct:S.kbCorrect})});
     msg('#kbmsg',d&&d.ok?`applied ${d.keys} keys${d.saved?' · saved to flash':''}`:
       'failed: '+((d&&d.error)||'no response'),!(d&&d.ok));};
 

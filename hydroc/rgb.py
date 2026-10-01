@@ -144,7 +144,7 @@ def keyboard_available() -> tuple[bool, str]:
 # The chin bar is a different device type and gets NO correction -- raw RGB,
 # as we already send it. This applies to the keyboard only.
 #
-# WHY IT IS OFF ON THIS MACHINE, AND STAYS OFF
+# WHY IT IS ON HERE, THOUGH WINDOWS DOES NOT DO IT
 #
 # This panel is type 7: firmware 34.3.0.0 (Ver_High 0x22) with KBID at EC
 # 0x073C = 0x18. `HID_Set_Color_14H` is a switch on `m_ITE_KB_Type`, and the
@@ -159,23 +159,44 @@ def keyboard_available() -> tuple[bool, str]:
 #     25               none                                        (the chin bar)
 #     7, 8, 9, 10      none                    MEZone_3p1ndSeries
 #
-# The constructor defines MEZone_3p1ndSeries = {7, 8, 9, 10}, but the
-# dispatcher never tests it: type 7 falls through to the default and goes out
-# raw. Windows applies no correction to this keyboard. Raw RGB -- what we
-# already send -- is the correct behaviour here, not a fallback from it.
+# The constructor defines MEZone_3p1ndSeries = {7, 8, 9, 10} and the
+# dispatcher never tests it, so type 7 falls through to the default and goes
+# out raw. Control Center does not correct this keyboard.
 #
-# So the purple was this table, cheatRGB_HIDKeyboard3, in front of a panel
-# that is supposed to get no table at all.
+# We do it anyway, because the two questions are different: what Windows
+# sends, and what looks white. Raw FF FF FF reads pink on this panel. Striped
+# A/B on the hardware -- rows of 7D FF B9 between rows of FF FF FF, same
+# request, same brightness -- the corrected rows are visibly less pink. So
+# Windows' white is pink here too; Control Center simply does not fix it for
+# this type. The table does, and it is the vendor's own measured data.
 #
-# An earlier note here had the service choosing between tables by LED vendor
-# (Liteon glossy / cloudy / CIE, Everlight), read from EC support bytes
-# 0x073D, 0x0742 and 0x078E. That was wrong. Those fields are declared and
-# never read anywhere in GCUService: selection is `m_ITE_KB_Type` alone, and
-# of the four bytes we dumped only 0x073C decides anything.
+# WHAT IT DOES NOT COVER
 #
-# The table stays because it is correct for a types 21/22 panel and was
-# expensive to recover. `correct=True` still applies it, and kb_identity.py
-# says which panel is in front of you.
+# Two entries. Only exact FF FF FF and FF A5 00 change; everything else goes
+# through untouched, so a near-white like F0 F0 F0 still reads pink. That is
+# a real gap and not one to paper over with a derived gain: white scales red
+# to 0.49, orange leaves red at 1.00, and the vendor leaves pure red alone
+# (FF 00 00 -> FF 00 00). Any single set of channel gains contradicts at
+# least one of those. These are hand-tuned per colour for appearance.
+#
+# Yellow is deliberately absent rather than guessed -- its blue byte was not
+# recovered, and inventing one would make yellow wrong in a new way while
+# looking authoritative.
+#
+# CORRECTION TO AN EARLIER NOTE HERE
+#
+# This comment used to say white "read purplish with it applied, which is
+# consistent with the wrong table", and defaulted the correction off on that
+# basis. It had never been applied: the UI sent no `correct` key, so
+# `payload.get("correct", False)` was the only path the request ever took.
+# The judgement was made on uncorrected output, which is the thing the table
+# fixes. The test ran afterwards and came out the other way.
+#
+# An earlier note also had the service choosing between tables by LED vendor
+# (Liteon glossy / cloudy / CIE, Everlight), read from EC 0x073D, 0x0742 and
+# 0x078E. Those fields are declared and never read anywhere in GCUService:
+# selection is `m_ITE_KB_Type` alone, and of the four bytes we dumped only
+# 0x073C decides anything. kb_identity.py reports it.
 CHEAT_RGB: dict[tuple[int, int, int], tuple[int, int, int]] = {
     (0xFF, 0xFF, 0xFF): (0x7D, 0xFF, 0xB9),
     (0xFF, 0xA5, 0x00): (0xFF, 0x7D, 0x00),

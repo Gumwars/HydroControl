@@ -17,6 +17,7 @@ clobbering bit 0 would stop the EC accepting host control at all, which is a
 far worse failure than a keyboard effect not reacting.
 """
 
+import os
 import unittest
 from unittest import mock
 
@@ -26,12 +27,18 @@ from hydroc import rgb
 class FakeKeyboard:
     def __init__(self, fail=False):
         self.calls = []
+        self.per_key = []
         self.fail = fail
 
     def set_effect(self, name, **kw):
         if self.fail:
             raise RuntimeError("device busy")
         self.calls.append((name, kw))
+
+    def apply_per_key(self, mapped, **kw):
+        if self.fail:
+            raise RuntimeError("device busy")
+        self.per_key.append((mapped, kw))
 
 
 class ReactiveTest(unittest.TestCase):
@@ -167,27 +174,74 @@ class ColourCorrectionTest(unittest.TestCase):
         self.assertNotAlmostEqual(w_out[0] / w_in[0], o_out[0] / o_in[0],
                                   places=2)
 
-    def test_correction_is_off_by_default_on_this_panel(self):
-        """This keyboard reports firmware high byte 0x22; the service selects
-        HIDKeyboard3 on 0x20, and there are several tables chosen by LED
-        vendor. We have one and cannot show it is this panel's -- and white
-        read purplish with it applied, which is what the wrong table looks
-        like."""
+    def test_the_library_default_is_off_and_the_caller_decides(self):
+        """Off in the signature is not a verdict on the panel -- the daemon
+        passes the user's toggle. It is off here so that a caller who has not
+        thought about it sends what it was handed."""
         import inspect
         sig = inspect.signature(rgb.apply_per_key)
         self.assertFalse(sig.parameters["correct"].default)
 
-    def test_correction_can_be_turned_on(self):
+    def test_correction_reaches_the_device_when_asked_for(self):
+        """This used to call with correct=False and assert True, so the one
+        path that matters -- a corrected colour arriving at the hardware --
+        was never covered. The flag then shipped unwired for a day."""
+        kb = FakeKeyboard()
+        with mock.patch.object(rgb, "_keyboard", return_value=kb), \
+             mock.patch.object(rgb, "key_id_to_matrix", return_value=(0, 0)):
+            rgb.apply_per_key({"m3_7": "#FFFFFF"}, correct=True)
+        self.assertEqual(kb.per_key[0][0], {(0, 0): (0x7D, 0xFF, 0xB9)})
+
+    def test_no_correction_sends_the_colour_as_picked(self):
         kb = FakeKeyboard()
         with mock.patch.object(rgb, "_keyboard", return_value=kb), \
              mock.patch.object(rgb, "key_id_to_matrix", return_value=(0, 0)):
             rgb.apply_per_key({"m3_7": "#FFFFFF"}, correct=False)
-        # nothing to assert on the fake beyond the call happening; the value
-        # is checked through correct_rgb above
-        self.assertTrue(True)
+        self.assertEqual(kb.per_key[0][0], {(0, 0): (0xFF, 0xFF, 0xFF)})
 
     def test_the_chin_bar_is_not_corrected(self):
         """A different device type. The doc is explicit: raw RGB."""
         import inspect
         src = inspect.getsource(rgb.chinbar)
         self.assertNotIn("correct_rgb", src)
+
+
+class UIWiringTest(unittest.TestCase):
+    """The flag has to leave the browser, not just exist in the server.
+
+    `correct` was added to apply_per_key and to the /api/rgb/perkey route,
+    and the UI never sent the key. `payload.get("correct", False)` then made
+    every request uncorrected, so the feature read as "tried and rejected"
+    when it had never run once. Both ends, or neither.
+    """
+
+    @staticmethod
+    def _ui():
+        here = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        with open(os.path.join(here, "hydroc", "ui", "index.html"),
+                  encoding="utf-8") as fh:
+            return fh.read()
+
+    def test_the_perkey_request_carries_the_flag(self):
+        ui = self._ui()
+        i = ui.index("/api/rgb/perkey")
+        body = ui[i:i + 400]
+        self.assertIn("correct:S.kbCorrect", body,
+                      "the per-key POST does not send the correction flag")
+
+    def test_the_toggle_exists_and_has_a_handler(self):
+        ui = self._ui()
+        self.assertIn('id="kbcorrect"', ui)
+        self.assertIn("S.kbCorrect=!S.kbCorrect", ui)
+
+    def test_it_defaults_on(self):
+        """Measured on the hardware: striped 7D FF B9 against FF FF FF in one
+        request, and the corrected rows read visibly less pink."""
+        self.assertIn("kbCorrect:true", self._ui())
+
+    def test_the_toggle_says_what_it_does_not_cover(self):
+        """Two entries. A user who corrects white and then picks #F0F0F0 gets
+        pink back, and the label is the only place that is visible."""
+        ui = self._ui()
+        i = ui.index('id="kbcorrect"')
+        self.assertIn("white and orange only", ui[i:i + 600])

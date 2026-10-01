@@ -288,18 +288,30 @@ bootctl: Secure Boot: enabled (user)
 
 So Secure Boot must be turned off before the flash.
 
-Two consequences. **The enrolled keys are the factory set, not the local sbctl
-keys** — every signature `sbctl verify` reports as good was made with a key
-the firmware does not trust, so it is currently buying nothing. And
-`/boot/EFI/BOOT/BOOTX64.EFI` is unsigned yet this machine booted Limine under
-active Secure Boot, which means the Prema BIOS is not enforcing it.
+**The enrolled keys are the factory set, not the local sbctl keys.** Every
+signature `sbctl verify` reports as good was made with a key the firmware does
+not currently trust, so the sbctl work is untouched rather than done.
 
-**That is the hazard in the flash.** A stock BIOS may enforce properly. With
-factory keys enrolled and an unsigned bootloader, re-enabling Secure Boot
-after the flash could leave the machine unbootable. Do not re-enable it until
-Limine is signed with a key the firmware actually trusts. The flash clears
-NVRAM and returns the machine to Setup Mode, which is the right moment to run
-the `sbctl` sequence properly.
+`sbctl verify` also reports `/boot/EFI/BOOT/BOOTX64.EFI` as "not signed",
+which means *not signed with sbctl's key* — not unsigned. The PE security
+directory is present (2104 bytes at `0x4e000`), and the machine booted Limine
+under active Secure Boot, so that signature chains to something in the factory
+`db`. The Prema BIOS is enforcing; an earlier note here guessed it was not,
+on the assumption the file had no signature at all.
+
+Which signer that is decides how much care the flash needs:
+
+- **Signed via a certificate in the factory `db`** (Microsoft UEFI CA being
+  the likely one) — the stock BIOS restores the same defaults, so Secure Boot
+  can be re-enabled after the flash without signing anything.
+- **Signed by anything else** — re-enabling Secure Boot after the flash could
+  leave the machine unbootable, and Limine has to be signed with a trusted key
+  first.
+
+Either way the flash itself needs Secure Boot off, and the flash clears NVRAM
+and returns the machine to Setup Mode — which is the right moment to run the
+`sbctl` sequence properly rather than relying on whatever the firmware
+enrolls by itself.
 
 The SOP's own path installs a certificate and enables testsigning to load an
 unsigned driver package, which is more ceremony than needed.

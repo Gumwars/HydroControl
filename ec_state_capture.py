@@ -40,18 +40,61 @@ SINGLES = [
     (0x046F, "PL4_LIVE (half scale)", {}),
     (0x07C5, "UNIVERSAL_FAN_CTRL", {7: "SPLIT_TABLES"}),
     (0x07C6, "AP_OEM_6", {2: "ENABLE_UNIVERSAL_FAN_CTRL"}),
-    (0x0751, "MANUAL_FAN_CTRL", {4: "TURBO", 5: "HIGH", 6: "BOOST", 7: "USER"}),
+    # Not a bitfield of fan flags. 0x0751 is the EC's performance mode:
+    # 0xA0 Office, 0x00 Balanced, 0x10 Beast, +0x40 fan boost. Read through
+    # the old bit labels, this machine's 0xA0 came out as "HIGH + USER",
+    # which is how it was misread for weeks.
+    (0x0751, "FAN_MODE / performance mode "
+             "(0xA0 Office, 0x00 Balanced, 0x10 Beast, |0x40 boost)",
+     {6: "fan boost"}),
     (0x075B, "PWM_1 (of 200)", {}),
     (0x075C, "PWM_2 (of 200)", {}),
     (0x0768, "SWITCH_STATUS", {2: "FAN_BOOST_STATUS"}),
     (0x078E, "FAN_CTRL caps", {3: "charge profiles", 6: "HAS_UW_FAN_CTRL"}),
     (0x07A5, "OEM_3", {2: "FAN_QUIET", 4: "OVERBOOST", 7: "HIGH_POWER"}),
     (0x07A6, "OEM_4", {4: "charge profile", 5: "charge profile"}),
+
+    # --- added for the 1.17 -> 1.18 baseline -------------------------------
+    # Everything the daemon writes, plus the charge chain. The original list
+    # predates native modes and the charge investigation, so a capture taken
+    # for a firmware comparison was missing the per-mode limits, the charge
+    # threshold and the ceiling gate -- the registers this project learned
+    # most recently and would most want to diff.
+    (0x0466, "TURBO", {0: "turbo"}),
+    (0x04A6, "CYCLE_LO (real count; sysfs cycle_count reads 0)", {}),
+    (0x04A7, "CYCLE_HI", {}),
+    (0x04AB, "battery capacity %", {}),
+    (0x0490, "charge guards", {0: "charging active", 2: "guard"}),
+    (0x0497, "battery-read sync gate", {0: "enables 0xC81E sync"}),
+    (0x0502, "temperature hi (0.1 K)", {}),
+    (0x0503, "temperature lo", {}),
+    (0x0522, "charge-control output lo (little-endian pair)", {}),
+    (0x0523, "charge-control output hi", {}),
+    (0x0730, "balanced PL1"), (0x0731, "balanced PL2"), (0x0732, "balanced PL4"),
+    (0x0733, "balanced +3 (unknown)"),
+    (0x0734, "office PL1"), (0x0735, "office PL2"), (0x0736, "office PL4"),
+    (0x0737, "office +3 (unknown)"),
+    (0x073C, "KBID (panel type select)", {}),
+    (0x073D, "LED vendor byte (vestigial -- never read by GCUService)", {}),
+    (0x0742, "panel type / charge-ctrl latch", {2: "charge-ctrl active"}),
+    (0x07A7, "beast PL1"), (0x07A8, "beast PL2"), (0x07A9, "beast PL4"),
+    (0x07AA, "beast +3 (unknown)"),
+    (0x07B9, "CHARGE_CTRL threshold", {7: "CHARGE_CTRL_REACHED"}),
+    (0x07C3, "ceiling master gate (== 4 arms it)", {}),
+    (0x07D8, "balanced TCC"), (0x07D9, "office TCC"), (0x07DA, "beast TCC"),
 ]
 
+# Entries above may omit the bitmap; normalise so the readers can assume it.
+SINGLES = [(e + ({},))[:3] if len(e) == 2 else e for e in SINGLES]
+
+# 0x0F00 holds the RISE threshold and 0x0F10 the FALL. These labels were the
+# other way round, the same inversion fancurve.py carried: the vendor's own
+# tables read 0x0F00 = 57 against 0x0F10 = 48, and 0x0F00[i] == 0x0F10[i+1]
+# across the table, so 0x0F10 opens a band and 0x0F00 closes it. Left wrong,
+# a post-flash comparison would read every curve backwards.
 TABLES = [
-    (0x0F00, "CPU DownT"), (0x0F10, "CPU UpT"), (0x0F20, "CPU Duty"),
-    (0x0F30, "GPU DownT"), (0x0F40, "GPU UpT"), (0x0F50, "GPU Duty"),
+    (0x0F00, "CPU UpT (rise)"), (0x0F10, "CPU DownT (fall)"), (0x0F20, "CPU Duty"),
+    (0x0F30, "GPU UpT (rise)"), (0x0F40, "GPU DownT (fall)"), (0x0F50, "GPU Duty"),
 ]
 
 

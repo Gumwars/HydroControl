@@ -179,15 +179,19 @@ class EC:
         if the custom-profile latch is not armed.
         """
         value &= 0xFF
+        # max(1, ...) so there is always an attempt and `got` is always bound.
+        # With retries < 0 the loop body never ran and the raise below read an
+        # unassigned local -- an UnboundLocalError from the one path whose job
+        # is to raise ECWriteRejected, which every caller catches by type.
         with self._lock:
-          for attempt in range(retries + 1):
-            self.write(addr, value)
-            time.sleep(0.05)
-            got = self.read(addr)
-            if got == value:
-                return
-          raise ECWriteRejected(
-            f"0x{addr:04X}: wrote 0x{value:02X}, reads back 0x{got:02X}")
+            for _attempt in range(max(1, retries + 1)):
+                self.write(addr, value)
+                time.sleep(0.05)
+                got = self.read(addr)
+                if got == value:
+                    return
+            raise ECWriteRejected(
+                f"0x{addr:04X}: wrote 0x{value:02X}, reads back 0x{got:02X}")
 
     def update_bits(self, addr: int, mask: int, value: int) -> None:
         with self._lock:                      # read-modify-write is atomic

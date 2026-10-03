@@ -179,7 +179,15 @@ class Handler(BaseHTTPRequestHandler):
 
     def _file(self, rel: str):
         path = os.path.normpath(os.path.join(UI_DIR, rel.lstrip("/")))
-        if not path.startswith(UI_DIR) or not os.path.isfile(path):
+        # commonpath, not startswith. UI_DIR ends in "ui", so a startswith
+        # check also accepts a sibling named ui_anything -- ../ui_secret/x
+        # normalises to a path that passes. No such directory exists today,
+        # which makes this one mkdir away rather than safe.
+        try:
+            contained = os.path.commonpath([UI_DIR, path]) == UI_DIR
+        except ValueError:                      # different drives, or relative
+            contained = False
+        if not contained or not os.path.isfile(path):
             self.send_error(404)
             return
         ctype = ("text/html" if path.endswith(".html") else
@@ -272,8 +280,55 @@ class Handler(BaseHTTPRequestHandler):
             return self._file("index.html")
         return self._file(route)
 
+    def _allowed(self) -> tuple[frozenset, frozenset]:
+        """Acceptable Host and Origin values, for the port actually bound.
+
+        Not the module's PORT constant: the daemon can be started on another
+        port and the tests bind an ephemeral one. Deriving the check from a
+        constant the server is not listening on rejects every legitimate
+        request while still accepting nothing useful.
+        """
+        try:
+            port = self.server.server_address[1]
+        except Exception:
+            port = PORT
+        hosts = frozenset({f"127.0.0.1:{port}", f"localhost:{port}",
+                           f"[::1]:{port}"})
+        return hosts, frozenset(f"http://{h}" for h in hosts)
+
+    def _cross_site(self) -> str | None:
+        """Why this POST should be refused, or None.
+
+        This daemon runs as root and POST routes write non-volatile EFI
+        variables (/api/gpu/set) and shell out to the installer
+        (/api/repair). Binding to loopback does not protect any of that: a
+        page the owner visits can POST to 127.0.0.1 from their browser, and
+        /api/gpu/set's two-gate design is no obstacle to a page that simply
+        sets both gates.
+
+        A browser always sends Origin on a cross-origin POST and cannot
+        suppress it, so rejecting a foreign Origin stops this. A *missing*
+        Origin is allowed, because curl and the project's own scripts do not
+        send one and locking them out buys nothing -- an attacker who can run
+        curl here does not need the daemon.
+
+        Host is checked too, which is what stops DNS rebinding: a name that
+        resolves to 127.0.0.1 arrives with its own Host.
+        """
+        hosts, origins = self._allowed()
+        origin = self.headers.get("Origin")
+        if origin and origin not in origins:
+            return f"cross-origin POST from {origin}"
+        host = (self.headers.get("Host") or "").lower()
+        if host and host not in hosts:
+            return f"unexpected Host {host!r}"
+        return None
+
     def do_POST(self):
         route = self.path.split("?")[0]
+        bad = self._cross_site()
+        if bad:
+            return self._json({"ok": False, "error": f"refused: {bad}"}, 403)
         payload = self._body()
 
         if route == "/api/gpu/set":

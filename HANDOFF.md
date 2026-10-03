@@ -348,7 +348,7 @@ existing D-Bus object instead.
 ```
 0x0751  MANUAL_FAN_CTRL   b2:0 level, b4 TURBO, b5 HIGH, b6 BOOST, b7 USER
 0x075B/C  PWM_1/2         0..200 (PWM_MAX), hwmon rescales to 0..255
-0x07C5  UNIVERSAL_FAN_CTRL  b7 SPLIT_TABLES
+0x07C5  UNIVERSAL_FAN_CTRL  b7 SPLIT_TABLES  (see below -- the name is right)
 0x07C6  AP_OEM_6            b2 ENABLE_UNIVERSAL_FAN_CTRL
 0x0F00/10/20  CPU DownT / UpT / Duty   16 points each
 0x0F30/40/50  GPU DownT / UpT / Duty
@@ -696,3 +696,61 @@ so the suite goes on testing the mutated code. Run `python3 -B` and clear
 **Write the corrections down.** DESIGN.md carries several entries that say "this
 was wrong and here is why". They are worth more than the entries that were right
 first time.
+
+
+## `0x07C5` bit 7 (SPLIT_TABLES): what it actually does
+
+Raised because the Windows per-mode dumps read `0x07C5 = 0` in all four
+modes while this project sets bit 7, and an unexplained divergence in the fan
+path is worth closing. Traced in EC `117.ELUK`.
+
+**The kernel driver is no help.** `uniwill-acpi.c` defines
+`SPLIT_TABLES BIT(7)` and never references it again -- zero uses outside the
+`#define`. The name is transcribed from Uniwill's header, not derived from
+behaviour.
+
+**The firmware settles it.** At `bank3:0x8F58` there is a three-condition
+gate, and all three must pass:
+
+```
+8F58  MOV DPTR,#0x07C5 / MOVX A / ANL A,#0x80 / JNZ +3 / LJMP 0x9088
+8F63  LCALL 0xD00C  -> reads 0x0741 & 0x01   (ENABLE_MANUAL_CTRL)
+      JNZ +3 / LJMP 0x9088
+8F6B  MOV DPTR,#0x07C6 / MOVX A / ANL A,#0x04 (ENABLE_UNIVERSAL_FAN_CTRL)
+      JNZ +3 / LJMP 0x9088
+8F76  ... reached only with all three set
+```
+
+So bit 7 is not an independent feature flag. It is one of three enables for a
+distinct code path, alongside the kernel driver's master switch and the
+universal-fan-control enable.
+
+**And the two paths differ in exactly the way the name promises.** The
+bit-7-clear path at `0x9088` runs the check once, from `0x0670`, writing one
+target at `0x0672`. The bit-7-set path at `0x8F76` runs it twice, mirrored:
+
+| | first fan | second fan |
+|---|---|---|
+| guard | `0x1804` | `0x1809` |
+| input | `0x0461` | `0x0469` |
+| target | `0x0672` | `0x0673` |
+
+Identical instruction sequence, different registers. With bit 7 clear the EC
+drives one combined result; with it set, the two fans are handled
+independently.
+
+### Conclusion: keep it set
+
+Setting bit 7 is correct for what this project does. We write two different
+tables -- the CPU and GPU curves genuinely differ, in the vendor's own data as
+well as ours -- and independent handling is the only way both are honoured.
+
+That Control Center leaves it clear is interesting rather than alarming: it
+populates both tables too, so on Windows the GPU table may simply not be
+consumed. Worth knowing if a fan question ever comes up, but it is not a
+reason to match.
+
+**Confidence.** The three-condition gate and the mirrored two-fan structure
+are read directly from the instruction stream and are solid. That `0x0461`
+and `0x0469` are the per-fan inputs is inference from position in the live
+`0x04xx` window, not confirmed.

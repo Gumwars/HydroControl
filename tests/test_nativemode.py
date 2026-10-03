@@ -225,13 +225,31 @@ class ReconcileTest(unittest.TestCase):
         self.hw = hardware
 
     def test_a_native_mode_drops_the_custom_keys(self):
-        src = open(self.hw.__file__, encoding="utf-8").read()
-        block = src.split("want_native = desired.get")[1].split("# Guard the")[0]
         for k in ("custom_profile", "cpu_pl1", "cpu_pl2", "cpu_pl4",
                   "cpu_power_limit"):
-            self.assertIn(f'"{k}"', block,
+            self.assertIn(k, self.hw.NATIVE_OWNED,
                           f"{k} would be reconciled against a native mode and "
                           f"re-arm the latch")
+
+    def test_the_fan_keys_are_owned_too(self):
+        """A native mode writes its own tables, so a profile still holding a
+        custom curve disagrees with the hardware forever. Missing these is
+        what kept the drift banner up."""
+        for k in ("fan_mode", "fan_curve_cpu", "fan_curve_gpu"):
+            self.assertIn(k, self.hw.NATIVE_OWNED)
+
+    def test_apply_strips_exactly_that_list(self):
+        src = open(self.hw.__file__, encoding="utf-8").read()
+        block = src.split("want_native = desired.get")[1].split("# Guard the")[0]
+        self.assertIn("for k in NATIVE_OWNED", block)
+
+    def test_drift_strips_it_too(self):
+        """The two must agree: apply() refusing to act on a key while
+        drift() reports it is a banner no button can clear."""
+        import inspect
+        src = inspect.getsource(self.hw.Hardware.drift)
+        self.assertIn("NATIVE_OWNED", src)
+        self.assertIn('desired.get("native_mode")', src)
 
     def test_the_native_step_runs_before_the_latch_step(self):
         src = open(self.hw.__file__, encoding="utf-8").read()

@@ -229,14 +229,44 @@ def read_curve(ec, fan: str, cached: bool = False) -> list[list[int]]:
 
 
 def write_curve(ec, fan: str, curve: list[list[int]]) -> None:
+    """Write a 16-point table, touching only the bytes that are wrong.
+
+    This used to be 48 write_verify calls per fan, and write_verify is a
+    write, a 50 ms settle and a read-back each -- about 60 ms a byte, so
+    roughly 6 s for both fans. That is the whole reason selecting one of the
+    machine's own modes took ten to fifteen seconds here when Control Center
+    does it in about one: not more work, the same work done a byte at a time
+    with a sleep in the middle.
+
+    Two changes. Read first and skip what already matches -- consecutive
+    modes share most of their table, so a switch typically rewrites a third
+    of it. Then verify the bytes actually written in a single pass rather
+    than settling after each one. The guarantee is unchanged: every byte this
+    function writes is read back and confirmed, because ECRW reports success
+    for writes the EC ignores.
+    """
     validate(curve, fan)
     up_b, down_b, duty_b = BASE[fan]
+    want: dict[int, int] = {}
+    for i, (up_t, down_t, duty) in enumerate(curve):
+        want[up_b + i] = up_t
+        want[down_b + i] = down_t
+        want[duty_b + i] = min(PWM_MAX, duty * 2)
+
     invalidate_curves(fan)        # before, so a failed write cannot leave a
     try:                          # stale entry claiming the old table
-        for i, (up_t, down_t, duty) in enumerate(curve):
-            ec.write_verify(up_b + i, up_t)
-            ec.write_verify(down_b + i, down_t)
-            ec.write_verify(duty_b + i, min(PWM_MAX, duty * 2))
+        pending = {a: v for a, v in want.items() if ec.read(a) != v}
+        for addr, value in pending.items():
+            ec.write(addr, value)
+        if pending:
+            time.sleep(0.05)      # one settle for the batch, not per byte
+            wrong = {a: (v, ec.read(a)) for a, v in pending.items()}
+            wrong = {a: pair for a, pair in wrong.items() if pair[0] != pair[1]}
+            if wrong:
+                addr, (want_v, got) = next(iter(sorted(wrong.items())))
+                raise ECWriteRejected(
+                    f"0x{addr:04X}: wrote 0x{want_v:02X}, reads back "
+                    f"0x{got:02X} ({len(wrong)} of {len(pending)} rejected)")
     finally:
         invalidate_curves(fan)
 

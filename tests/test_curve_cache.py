@@ -38,7 +38,11 @@ class CountingEC:
         self.writes += 1
         self.mem[addr] = value
 
-    write = write_verify
+    def write(self, addr, value):
+        # Not `write = write_verify`: that binds the base class's function,
+        # so Failing's override below was never reached and the "failed
+        # write" test silently exercised a successful one.
+        return self.write_verify(addr, value)
 
     def loaded_with(self, curve, fan="cpu"):
         up_b, down_b, duty_b = fc.BASE[fan]

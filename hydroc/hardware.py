@@ -29,6 +29,19 @@ from . import fancurve
 from . import nativemode, gpumode
 from .ec import EC, ECUnavailable, ECWriteRejected
 
+# What a native mode takes over, listed once because apply() and drift() have
+# to agree about it.
+#
+# apply() strips these from the desired settings -- a native mode owns the
+# latch, the power limits and the fan tables, and leaving them in would
+# re-arm Custom on the next reconcile. drift() did not strip them, so a
+# profile holding both native_mode and cpu_pl1: 75 reported drift on every
+# poll, forever, against a value no write would ever change. That is the
+# banner that would not go away.
+NATIVE_OWNED = ("custom_profile", "cpu_pl1", "cpu_pl2", "cpu_pl4",
+                "cpu_power_limit", "fan_mode", "fan_curve_cpu",
+                "fan_curve_gpu")
+
 PLATFORM = "/sys/bus/platform/devices/INOU0000:00"
 RAPL = "/sys/class/powercap/intel-rapl:0"
 BAT = "/sys/class/power_supply/BAT0"
@@ -318,8 +331,7 @@ class Hardware:
         desired = dict(desired)
         want_native = desired.get("native_mode")
         if want_native:
-            for k in ("custom_profile", "cpu_pl1", "cpu_pl2", "cpu_pl4",
-                      "cpu_power_limit"):
+            for k in NATIVE_OWNED:
                 desired.pop(k, None)
             if want_native != actual.get("native_mode"):
                 ch = Change("native_mode", actual.get("native_mode"),
@@ -466,6 +478,12 @@ class Hardware:
         if actual is None:
             actual = self.read_state()
         desired = self.normalize(desired)
+        # The same keys apply() refuses to act on. Reporting drift that no
+        # write will ever clear is how a banner becomes furniture, and then
+        # stops being read when it matters.
+        if desired.get("native_mode"):
+            desired = {k: v for k, v in desired.items()
+                       if k not in NATIVE_OWNED}
         # Only compare settings the hardware actually reports. A stale key left
         # by a rename would otherwise show as drift forever, since no write can
         # ever make it match.

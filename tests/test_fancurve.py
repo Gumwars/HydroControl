@@ -233,6 +233,11 @@ class RegisterDirectionTest(unittest.TestCase):
         def write_verify(self, a, v):
             self.regs[a] = v
 
+        def write(self, a, v):
+            # write_curve writes in bulk and verifies in one pass, so the
+            # double has to offer the same primitive the real EC does.
+            self.regs[a] = v
+
     def flat(self, up0=40, step=3, duty0=30):
         """A valid 16-point curve: rising temps, rising duty, fall below rise."""
         out = []

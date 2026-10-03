@@ -15,6 +15,8 @@ import contextlib
 import importlib.util
 import io
 import os
+import time as _real_time
+import types
 import sys
 import unittest
 
@@ -47,8 +49,25 @@ def run_cycle(caps, thresholds=None, status="Charging", argv=()):
         if st["i"] >= len(caps):
             raise KeyboardInterrupt
 
-    cw.time.sleep = sleep
-    cw.time.monotonic = lambda: st["t"]
+    # A stand-in module object, not `cw.time.sleep = sleep`.
+    #
+    # `cw.time` IS the time module, so assigning through it replaced
+    # time.sleep and time.monotonic for the whole process and never put them
+    # back. hydroc.ec paces every EC access with time.sleep(), so any later
+    # test that reached that path got this function instead and died of a
+    # KeyboardInterrupt raised on another test's behalf. It depended on
+    # ordering and on how fast the machine was, so it passed here and failed
+    # in a clean container -- which is the entire argument for running the
+    # suite somewhere that is not this laptop.
+    #
+    # Rebinding the name inside cw leaves the real module alone.
+    cw.time = types.SimpleNamespace(
+        sleep=sleep,
+        monotonic=lambda: st["t"],
+        time=_real_time.time,
+        strftime=_real_time.strftime,
+        localtime=_real_time.localtime,
+    )
 
     real_euid, real_exists = os.geteuid, os.path.exists
     os.geteuid = lambda: 0

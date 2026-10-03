@@ -1,0 +1,29 @@
+# Metadata and, mainly, a place to record how the tests are run.
+#
+# This project installs with install.sh rather than pip -- it needs a systemd
+# unit, a kernel module and root -- so this is not the install path. It exists
+# so that `python -m unittest discover -s tests -t .` is written down
+# somewhere, and so tooling can find the package root. pytest is deliberately
+# not required: the suite is stdlib unittest and runs on a bare interpreter.
+
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hydrocontrol"
+version = "0.1.0"
+description = "Linux hardware control for the Eluktronics HYDROC-16 G1"
+readme = "README.md"
+# Verified in clean containers on 3.10, 3.11, 3.12, 3.13 and 3.14.
+requires-python = ">=3.10"
+license = { text = "MIT" }
+# Stdlib only, on purpose: the daemon runs as root at boot, and every
+# dependency is something that can fail to import there.
+dependencies = []
+
+[tool.setuptools]
+packages = ["hydroc"]
+
+[tool.setuptools.package-data]
+hydroc = ["ui/*"]

@@ -85,11 +85,39 @@ class NoSourceTest(unittest.TestCase):
 
 
 class CheckoutTest(unittest.TestCase):
+    """How a working checkout answers -- when there is one to ask.
+
+    build_info() reads git, or a stamp left by make-bundle.sh. With neither
+    present it reports "unknown", which is the right answer rather than a
+    defect: an extracted tarball genuinely does not know its commit. A clean
+    container has no git binary, so this asserted a property of the
+    environment and failed there while passing on a developer's machine.
+    """
+
+    @staticmethod
+    def _identifiable() -> bool:
+        import shutil
+        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        if os.path.exists(os.path.join(root, ".git")) and shutil.which("git"):
+            return True
+        return any(os.path.exists(os.path.join(root, n))
+                   for n in ("BUILD-INFO", ".build-info", "build-info.json"))
 
     def test_this_checkout_identifies_itself(self):
+        if not self._identifiable():
+            self.skipTest("no git binary and no bundle stamp: "
+                          "'unknown' is the correct answer here")
         info = version.build_info()
         self.assertIn(info["source"], ("git", "bundle"))
         self.assertNotEqual(info["commit"], "unknown")
+
+    def test_an_unidentifiable_tree_says_so_rather_than_guessing(self):
+        """The other half, and the one that holds everywhere: with no source
+        of truth it must report unknown, not invent a commit."""
+        with mock.patch.object(version, "_from_git", return_value=None), \
+             mock.patch.object(version, "_from_stamp", return_value=None):
+            info = version.build_info()
+        self.assertEqual(info["commit"], "unknown")
 
     def test_build_id_is_a_single_line(self):
         self.assertNotIn("\n", version.build_id())

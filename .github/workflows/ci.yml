@@ -1,0 +1,71 @@
+name: CI
+
+# The suite needs no hardware -- every EC, sysfs and HID access in tests is
+# mocked -- so it runs anywhere. That is worth keeping true, and this is what
+# keeps it true: two bugs were already found by running it somewhere that was
+# not the developer's laptop.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # 3.10 is the floor the code actually meets, verified in clean
+        # containers rather than assumed. 3.14 is what the development
+        # machine runs, so without it CI tests a version nobody uses.
+        python: ["3.10", "3.12", "3.13", "3.14"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Run the suite
+        # No dependencies to install: hydroc is stdlib-only on purpose, so a
+        # pip step here would be the first thing to rot.
+        run: python -m unittest discover -s tests -t . -v
+
+  shell:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Shellcheck the installer
+        # install.sh is the first thing a new machine runs, as root, and it
+        # is the one part of this project with no test coverage.
+        run: shellcheck -S warning install.sh make-bundle.sh
+
+  no-vendor-blobs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Refuse vendor firmware and stray blobs
+        # A 58 MB Eluktronics BIOS/EC package sat untracked-but-unignored in
+        # this working tree because the gitignore pattern expected a
+        # three-digit version and the file had a dotted one. It was one
+        # `git add -A` from a public repository. The gitignore is the fix;
+        # this is the thing that notices when the gitignore is wrong again.
+        run: |
+          set -euo pipefail
+          bad=$(git ls-files | grep -iE '\.(eluk|rom|bin|cap|efi|msi|exe|sys)$' || true)
+          if [ -n "$bad" ]; then
+            echo "::error::vendor firmware or binaries are tracked:"
+            echo "$bad"
+            exit 1
+          fi
+          # Nothing legitimate here approaches 5 MB; the largest tracked file
+          # is a 4.2 MB DSDT listing, which is ours and is text.
+          big=$(git ls-files -z | xargs -0 -r du -b | awk '$1 > 5242880 {print $1" "$2}' || true)
+          if [ -n "$big" ]; then
+            echo "::error::tracked files over 5 MB:"
+            echo "$big"
+            exit 1
+          fi
+          echo "clean: no firmware, nothing oversized"

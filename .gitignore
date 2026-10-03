@@ -53,7 +53,6 @@ gpu-mode-backup-*.json
 
 # Vendor EC firmware images and their update packages. ec_image_scan.py reads
 # these, but they are Eluktronics' binaries and are not ours to redistribute.
-*.ELUK
 *_EC[0-9][0-9][0-9].zip
 # Eluktronics shipped 1.18 as intel_RPL_R_..._EC_1.18.00_...zip, which the
 # pattern above does not match: the version is dotted, not three digits. These

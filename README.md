@@ -1,5 +1,7 @@
 # HydroControl
 
+[![CI](https://github.com/Gumwars/HydroControl/actions/workflows/ci.yml/badge.svg)](https://github.com/Gumwars/HydroControl/actions/workflows/ci.yml)
+
 A Linux replacement for the Eluktronics Control Center, for the **HYDROC-16 G1**
 (i9-14900HX / RTX 4090). Fans, temperatures, CPU power limits, GPU cTGP,
 battery charging policy, keyboard and chin bar RGB — in a browser UI backed by a

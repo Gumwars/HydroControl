@@ -147,6 +147,13 @@ def fmt(s):
             f"{prof:>13} {n(s['thresh'], 4)}")
 
 
+# Written once and compared on every append. The row writer below must
+# produce exactly these columns, in this order.
+CSV_HEADER = ("time,ac,status,capacity,true_pct,charge_now_mah,"
+              "charge_full_mah,current_ma,millivolts,v_per_cell,"
+              "profile,threshold,mode")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("-i", "--interval", type=float, default=10.0)
@@ -163,12 +170,35 @@ def main():
 
     csv = None
     if args.output:
-        new = not os.path.exists(args.output)
+        # Refuse to append under a header that does not match what we write.
+        #
+        # `new = not os.path.exists(...)` only wrote a header for a new file,
+        # so a run against a CSV from an older version of this script
+        # appended 13 columns under an 11-column header. csv.DictReader then
+        # reads by position: current_ma and charge_now_mah survive, but
+        # everything after them shifts one name to the left, so `profile`
+        # becomes the voltage. battery_summary.py segments on profile
+        # changes, and a value that moves every sample turns every sample
+        # into its own segment.
+        #
+        # Silent, and it ruins the run it is collecting rather than the next
+        # one. charge_profile_probe.py was given this guard after the same
+        # thing happened there; this script never got it.
+        existing = None
+        if os.path.exists(args.output) and os.path.getsize(args.output):
+            with open(args.output) as fh:
+                existing = fh.readline().rstrip("\n")
+        if existing is not None and existing != CSV_HEADER:
+            raise SystemExit(
+                f"{args.output} was written by a different version of this "
+                f"script.\n"
+                f"  in the file: {existing}\n"
+                f"  would write: {CSV_HEADER}\n"
+                f"Appending would shift every column after current_ma under "
+                f"the wrong name. Write to a new file instead.")
         csv = open(args.output, "a")
-        if new:
-            csv.write("time,ac,status,capacity,true_pct,charge_now_mah,"
-                      "charge_full_mah,current_ma,millivolts,v_per_cell,"
-                      "profile,threshold,mode\n")
+        if existing is None:
+            csv.write(CSV_HEADER + "\n")
 
     print(HDR)
     print("-" * len(HDR))

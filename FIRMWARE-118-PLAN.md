@@ -42,6 +42,47 @@ Not capturable by script, and gone after the flash:
   `server.py` depends on it emitting an event. If that option is Prema's
   rather than stock, the button may go quiet on 118.
 
+## A second variable arrived: capture the new battery on 117 first
+
+The RMA pack was fitted on 2026-10-02 and reads **0 cycles, 0.0% wear,
+6400/6400 mAh**. The flash is the next day. That is two variables changing
+inside 24 hours, and `117-preflash.json` was taken with the old 9%-worn pack
+— so without another capture, any post-flash difference in the charge
+registers cannot be attributed to the firmware or the battery.
+
+Three points instead of two:
+
+| capture | firmware | battery | isolates |
+|---|---|---|---|
+| `117-preflash.json` | 1.17 | 9% worn | (committed) |
+| **`117-newbatt-*.json`** | 1.17 | **0% worn** | **the battery** |
+| `118-postflash.json` | 1.18 | 0% worn | the firmware |
+
+### And it is the control this project has been missing
+
+The conclusion on record is that the EC's protection is *adaptive*: it holds
+16800 mV against a 17800 mV rating — 250 mV/cell, the strictest of the
+250/200/150/100/50 steps — **because** the pack is worn. That has never been
+tested against an unworn pack, because there wasn't one.
+
+`0x0522:0x0523` now answers it directly:
+
+| reads | meaning |
+|---|---|
+| `16800` (`A0 41`) | the derating is **fixed**, not wear-adaptive. The explanation on record is wrong. |
+| `17600` / `17400` / … | adaptive confirmed, and the step is readable |
+
+**It must be captured while charging.** The derating only computes with
+`0x0490` bit 0 set, so a resting `0x0522:0x0523` may be stale. The pack is at
+69% against an 80% threshold, so plugging in gives a charging window.
+
+```
+sudo python3 ec_state_capture.py -o 117-newbatt-rest.json
+# then on AC, while it is actually charging:
+sudo python3 ec_state_capture.py -o 117-newbatt-charging.json
+sudo python3 baseline_capture.py  -o 117-newbatt-charging.txt
+```
+
 ## Do not enroll Secure Boot keys first
 
 A BIOS flash normally clears NVRAM, which wipes PK/KEK/db again and returns

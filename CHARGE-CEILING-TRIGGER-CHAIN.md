@@ -266,3 +266,60 @@ over two years of Stationary use. That is consistent with the generational
 hypothesis above: whatever the earlier EC did, this one's voltage derating is
 not reproducing it. It is not conclusive, because this pack is being RMA'd and
 its gauge is the thing under suspicion.
+
+
+## Correction: the derating is fixed, not adaptive (2026-10-03)
+
+A replacement pack arrived at **0 cycles, 0.0% wear**, and was captured on EC
+1.17 while charging — `0x0490` bit 0 set, so the value is live rather than a
+stale read.
+
+```
+hw_base     0x030E:0x030F  big-endian      17800 mV   (4450 mV/cell)
+chg_target  0x0522:0x0523  little-endian   16800 mV   (4200 mV/cell)
+derating                                    1000 mV   ( 250 mV/cell)
+```
+
+| pack | cycles | wear | `chg_target` |
+|---|---|---|---|
+| original | 135 | 9% | 16800 mV |
+| replacement | 0 | 0% | **16800 mV** |
+
+**Identical.** The explanation this document carried — that the EC derates to
+its strictest step *because* the pack is worn, and "the EC is aware and
+handles a gently worn battery differently" — is wrong. There is no evidence
+of adaptation to wear, because the only pack available was a worn one and the
+reading was attributed to the wear it happened to have.
+
+### What is true instead, and it is not worse
+
+The EC charges this pack to **4.200 V/cell against a 4.450 V/cell rating**,
+unconditionally. That is a 250 mV/cell reduction held permanently, which is
+the single most effective thing anyone can do for Li-ion calendar life. The
+protection is real, substantial, and always on.
+
+What it is not is the thing the three profile names describe. Stationary,
+Balanced and High Capacity do not select it, and `0x07C3` still reads `13`
+where the percentage-ceiling code arms at `4`. Those labels remain a
+misdescription of a mechanism that is doing something better than they
+promise.
+
+### And it changes what the old pack's wear meant
+
+9% wear in 135 cycles is fast for a cell held at 4.200 V/cell. Under the
+adaptive story that number was evidence of the EC responding to a declining
+pack. Without it, the more parsimonious reading is that the pack was simply
+faulty — which is why it was replaced under warranty.
+
+That also removes a confound from the comparison in the previous section: if
+the derating is fixed, the 3% vs 15% difference between the Mech 15 G3R and
+the Prometheus G2 cannot be explained by one EC derating harder than another
+in response to wear.
+
+### What would still be worth measuring
+
+Whether the derating responds to **temperature** rather than wear. The
+thermal path is separate from and overlaps the charge threshold, and this
+capture was taken at 29.85 °C — one point on a curve nobody has plotted. A
+capture during a hot charge, after a gaming session, would test it for the
+cost of one command.

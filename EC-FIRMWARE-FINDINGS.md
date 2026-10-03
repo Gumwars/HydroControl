@@ -491,12 +491,85 @@ for all 137 samples, `0x0742` = `0x22`, `chg_target` = 16800, terminating at
 The conclusion was repeatedly written as "the feature does not work". That is
 not what the evidence says. The accurate statement:
 
-> The EC's battery protection **is active and at its strictest step**. This
-> pack charges to 16800 mV against a 17800 mV rating -- 250 mV per cell below
-> maximum. Stationary asks for 200 mV and Balanced for 100 mV. **Both are
-> milder than what this pack already gets**, so the profile has nothing to
-> add, and the selector looks inert because it can only ask for *less*
-> protection than the EC has already chosen.
+> The EC's battery protection **is active and at its strictest step**. The
+> charge target computes to 16800 mV against a 17800 mV rating -- 250 mV per
+> cell below maximum. Stationary asks for 200 mV and Balanced for 100 mV.
+> **Both are milder than what this pack already gets**, so the profile has
+> nothing to add, and the selector looks inert because it can only ask for
+> *less* protection than the EC has already chosen.
+
+### Correction: the pack never reaches 16800 (2026-10-03)
+
+The sentence above used to read "this pack charges to 16800 mV". It does not,
+and the evidence against it was already in this document: the line directly
+above records Windows **terminating at 4.1810 V/cell**, which is 16724 mV.
+The two numbers sat one line apart for weeks without the contradiction being
+noticed, because 16800 was the register and 4.1810 was the pack and nobody
+multiplied.
+
+Measured directly on the replacement pack, sampling every 15 s through the
+top of a charge:
+
+```
+volts/cell   4175 / 4181 only        pack 16700 / 16724 mV
+current      1.394 A -> 0.782 A      a 44% fall
+voltage      did not move
+```
+
+In constant-voltage phase the charger *holds terminal voltage at its
+setpoint*. A terminal voltage that stays flat while current collapses by 44%
+means **the setpoint is 16.70 V**, not 16.80. It was never going to rise to
+meet the register.
+
+So `0x0522:0x0523` is a **computed target the charger regulates about 25 mV
+per cell beneath**, not the voltage the pack sees. Everywhere this document
+quotes 16800, read it as the register's value and not as a delivered
+voltage. The real reduction from the 4450 mV/cell rating is **275 mV/cell**,
+which is more protection than claimed, not less.
+
+The same 16700/16724 pair appears under Windows and on both battery packs, so
+the offset is a property of the charger rather than of a reading.
+
+### The current ramp is programmed, not a taper
+
+From the same run: every single decrement was **exactly 34 mA**, eighteen of
+them, fitting a straight line at -1.042 mA/s with R² = 0.993.
+
+A constant-voltage phase decays *exponentially* as the cell's EMF approaches
+the setpoint. A linear ramp in uniform steps is something stepping a
+current limit down on a schedule. That is consistent with the charge-rate
+mechanism found in the firmware -- `0x0A51` holding a rate of 4/3/2 and
+`0x0A54:0x0A55` a current of rate x 1040 -- which has never been observable
+because the whole `0x0Axx` window reads `0xFF` through ECRR.
+
+Extrapolated, the ramp reaches zero around 90-92% charge. The threshold was
+set to 80% throughout.
+
+### Where this leaves the charge investigation
+
+Established:
+
+- The threshold register `0x07B9` is **stored and never enforced**. Confirmed
+  across two operating systems, three packs, and most recently a battery with
+  zero cycles that charged eight points past an 80% setting.
+- The EC **is** doing something, and it is substantial: the pack is held at
+  4.175 V/cell against a 4.450 V/cell rating.
+- It is **not adaptive to reported wear** -- 9% and 0% produced the same
+  target.
+- The percentage-ceiling code exists, is reachable, and is gated off:
+  `0x07C3` reads `13` where it arms at `4`.
+
+Not established, and the shape of it is still unclear:
+
+- Why the delivered regulation sits 25 mV/cell below the computed target.
+- What drives the 34 mA ramp, and whether the rate registers in `0x0Axx` are
+  it.
+- Whether **temperature** modulates any of this. The thermal path is separate
+  from and overlaps the charge threshold, and every capture so far has been
+  near 30 °C -- one point on a curve nobody has plotted.
+- What, if anything, the three profile names select. They can only ask for
+  less derating than is already applied, so an inert selector and a selector
+  whose request is always discarded look identical from outside.
 
 That reconciles every measurement without a broken EC, and it explains the
 outside report without anyone being mistaken: a pack with a cooler history and

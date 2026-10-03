@@ -686,3 +686,80 @@ The same file already refuses to expose `charge_control_end_threshold` for
 exactly this reason — a control that silently does nothing is worse than a
 missing one, because it is why someone leaves a machine plugged in permanently.
 The two claims should now be decided the same way.
+
+
+## The last 10% is fabricated (2026-10-03)
+
+The top of a charge on the zero-cycle replacement pack, 30 s sampling:
+
+```
+15:45:04  Charging      90%  5760 mAh  204 mA  16.724 V  4.181 V/cell
+15:46:34  Charging      92%  5888 mAh    0 mA  16.654 V  4.163
+15:47:04  Charging      94%  6016 mAh    0 mA  16.654 V  4.163
+15:47:34  Charging      96%  6144 mAh    0 mA  16.654 V  4.163
+15:48:04  Charging      98%  6272 mAh    0 mA  16.654 V  4.163
+15:48:34  Not charging 100%  6400 mAh    0 mA  16.631 V  4.158
+```
+
+**640 mAh appears with no current flowing.** Being generous — assuming the
+higher of each interval's two current readings flowed for the whole interval
+— at most **5.1 mAh** could have been delivered. The delivered-to-reported
+ratio is **0.008**, against the 0.85 that `battery_summary.py` was written to
+flag.
+
+Three things make it unambiguous rather than a sampling artefact:
+
+- **The increments are exactly 128 mAh, five times running.** 128 mAh is
+  exactly 2% of 6400. This is a counter, not a measurement.
+- **`charge_now` is `capacity × 64`** at every single row. 6400/100 = 64, so
+  it is computed from the percentage and carries no independent information.
+  There is one number here, not two.
+- **The voltage falls** — 16.724 → 16.654 → 16.631 — while the status still
+  reads `Charging`. A pack under charge does not drop voltage; a pack at rest
+  relaxes downward. Charging had already stopped.
+
+### Charging terminated at 90%, and the gauge walked the rest
+
+The real end of charge is the 15:45:04 row: 204 mA at 16.724 V, the last
+point with current. Everything after is interpolation to a round number.
+
+So this pack, held at **4.175 V/cell against a 4.450 V/cell rating**, fills
+to about **5760 mAh of a 6400 mAh design capacity — roughly 90%** — and is
+then reported as 100%.
+
+### This is what made the protection invisible
+
+It resolves the shape of the thing this investigation kept failing to see:
+
+- **Why the percentage controls look inert.** Every charge ends at a reported
+  100%, so no setting can be observed to cap anything. The cap is real and
+  below the top of the scale the owner is shown.
+- **Why `charge_full` always equals `charge_full_design`.** A gauge that
+  invents the last 10% never measures a shortfall, so it cannot report one.
+- **Why "0% wear" means nothing on this machine.** Capacity fade is measured
+  by `charge_full` drifting below design. That number is not being measured.
+- **Why a previous replacement pack shut the laptop off at a reported 46%.**
+  The reported percentage is decoupled from the charge actually present. On a
+  pack whose real capacity had collapsed, the decoupling is fatal rather than
+  cosmetic.
+
+It also puts the original pack's "9% wear over two years" in doubt in both
+directions, since the same gauge produced it.
+
+### What is not yet established
+
+Whether the fabrication is the gauge IC, the EC, or the `uniwill-laptop`
+driver. The data reaches us through all three, and the exact-2% steps point
+at something computing rather than measuring — but which layer computes is
+unknown.
+
+Whether it happens on every cycle, or whether this was one termination. One
+observation, cleanly measured, is still one observation.
+
+**The measurement that settles the capacity question** is a full discharge
+under coulomb counting: integrate `current_now` from a reported 100% to
+shutdown and compare against 6400 mAh. If the pack delivers about 5760 mAh,
+the 90% reading above is the true state of charge and the design figure is
+simply unreachable by design. `battery_watch.py` logs it and
+`battery_summary.py` already implements the integration -- it has never been
+run across a full cycle on a healthy pack.

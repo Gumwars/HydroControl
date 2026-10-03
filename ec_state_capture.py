@@ -82,6 +82,25 @@ SINGLES = [
     (0x07B9, "CHARGE_CTRL threshold", {7: "CHARGE_CTRL_REACHED"}),
     (0x07C3, "ceiling master gate (== 4 arms it)", {}),
     (0x07D8, "balanced TCC"), (0x07D9, "office TCC"), (0x07DA, "beast TCC"),
+
+    # --- the SBS block, named by uniwill-acpi.c ----------------------------
+    # 0x0402:0x0403 and 0x0404:0x0405 are DESIGN capacity and FULL capacity
+    # as separate registers. sysfs reports both as 6400 mAh, which is either
+    # a gauge that has not learned this pack or a constant that never will.
+    # Capturing both before and after a full discharge-and-recharge answers
+    # it: if full capacity moves off design, the gauge learns and a relearn
+    # cycle on a new pack is real advice. If it never moves, charge_full
+    # carries no information and every wear figure this project has quoted
+    # is a restatement of the design figure.
+    (0x0400, "BAT_POWER_UNIT lo"), (0x0401, "BAT_POWER_UNIT hi"),
+    (0x0402, "BAT_DESIGN_CAPACITY lo"), (0x0403, "BAT_DESIGN_CAPACITY hi"),
+    (0x0404, "BAT_FULL_CAPACITY lo"), (0x0405, "BAT_FULL_CAPACITY hi"),
+    (0x0408, "BAT_DESIGN_VOLTAGE lo"), (0x0409, "BAT_DESIGN_VOLTAGE hi"),
+    (0x0432, "BAT_STATUS lo"), (0x0433, "BAT_STATUS hi"),
+    (0x0434, "BAT_CURRENT lo"), (0x0435, "BAT_CURRENT hi"),
+    (0x0436, "BAT_REMAIN_CAPACITY lo"), (0x0437, "BAT_REMAIN_CAPACITY hi"),
+    (0x0438, "BAT_VOLTAGE lo"), (0x0439, "BAT_VOLTAGE hi"),
+    (0x0494, "BAT_ALERT"),
 ]
 
 # Entries above may omit the bitmap; normalise so the readers can assume it.

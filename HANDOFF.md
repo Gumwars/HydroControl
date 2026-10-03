@@ -493,6 +493,23 @@ anything *there* is unknown to us and is the open question with them.
 > the charger is connected**, and a prior discharge to <5%. One report notes
 > the deep discharge was needed; neither isolates it from the plug-in ordering.
 >
+> **Three runs separate them**, and a discharge to shutdown provides the first
+> for free:
+>
+> | run | deep discharge | profile set before plug-in | isolates |
+> |---|---|---|---|
+> | A | yes | yes | nothing — both conditions met |
+> | B | yes | **no** (plug in first, then select) | the deep discharge alone |
+> | C | **no** (stop around 40%) | yes | the ordering alone |
+>
+> A arming while B and C do not means both are needed. B arming alone means
+> the ordering is irrelevant. C arming alone means the deep discharge is
+> folklore. Running only A — which is what everyone does, because it is what
+> the report describes — can never distinguish them.
+>
+> **And the reporter is on different hardware.** Their board is an XMG NEO 16 /
+> TongFang `X6AR5xxY`. A negative result here does not contradict them.
+>
 > Method note for anyone repeating this: `charge_now` here moves in exact
 > 64000 uAh steps -- exactly 1% of `charge_full` -- so it is derived from
 > `capacity`, not an independent coulomb count. An implied-current figure

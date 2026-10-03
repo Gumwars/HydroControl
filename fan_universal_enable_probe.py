@@ -47,6 +47,10 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from hydroc.ec import EC, ECUnavailable, ECWriteRejected      # noqa: E402
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from hydroc.hardware import (                                    # noqa: E402
+    battery_int, battery_text, find_hwmon, read_int)
+
 REG_AP_OEM = 0x0741
 REG_MANUAL_FAN_CTRL = 0x0751
 REG_PWM_1, REG_PWM_2 = 0x075B, 0x075C
@@ -59,18 +63,24 @@ CURVE = os.path.join(os.path.dirname(os.path.abspath(__file__)),
 
 
 def hwmon():
-    for d in glob.glob("/sys/class/hwmon/hwmon*"):
-        try:
-            if open(os.path.join(d, "name")).read().strip() != "uniwill":
-                continue
-            g = lambda f: int(open(os.path.join(d, f)).read().strip())  # noqa: E731
-            return {"fan1": g("fan1_input"), "fan2": g("fan2_input"),
-                    "pwm1": g("pwm1"), "pwm2": g("pwm2"),
-                    "cpu": g("temp1_input") // 1000,
-                    "gpu": g("temp2_input") // 1000}
-        except OSError:
-            continue
-    return None
+    """Fan, PWM and temperature from the driver, or None.
+
+    Was a byte-identical copy in two probes, and neither sorted the glob --
+    with more than one matching node the answer could change between runs.
+    find_hwmon() resolves by name over a sorted glob.
+    """
+    d = find_hwmon()
+    if d is None:
+        return None
+    g = lambda f: read_int(os.path.join(d, f))                   # noqa: E731
+    out = {"fan1": g("fan1_input"), "fan2": g("fan2_input"),
+           "pwm1": g("pwm1"), "pwm2": g("pwm2"),
+           "cpu": g("temp1_input"), "gpu": g("temp2_input")}
+    if any(v is None for v in out.values()):
+        return None
+    out["cpu"] //= 1000
+    out["gpu"] //= 1000
+    return out
 
 
 def expected_duty(cpu_c):

@@ -45,6 +45,9 @@ from datetime import datetime
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from hydroc.ec import parse_reply                                # noqa: E402
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from hydroc.hardware import battery_int, battery_text      # noqa: E402
+
 CALL = "/proc/acpi/call"
 ECRR = r"\_SB.INOU.ECRR"
 ECRW = r"\_SB.INOU.ECRW"
@@ -91,21 +94,15 @@ def ec_write(addr, val):
     _call(f"{ECRW} 0x{addr:X} 0x{val & 0xFF:X}")
 
 
+# Thin, and kept rather than called directly at the use sites: the tests
+# patch these two names to inject readings, so they are the seam.
 def sysfs(name):
-    try:
-        with open(os.path.join(BAT, name)) as fh:
-            return fh.read().strip()
-    except OSError:
-        return None
+    return battery_text(name, BAT)
 
 
 def sysfs_int(name):
     """None means unreadable, which is NOT the same as zero."""
-    v = sysfs(name)
-    try:
-        return int(v)
-    except (TypeError, ValueError):
-        return None
+    return battery_int(name, BAT)
 
 
 def main():

@@ -41,6 +41,10 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from hydroc.ec import EC, ECUnavailable, ECWriteRejected      # noqa: E402
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from hydroc.hardware import (                                    # noqa: E402
+    battery_int, battery_text, find_hwmon, read_int)
+
 REG_AP_OEM = 0x0741           # bit 0 ENABLE_MANUAL_CTRL
 REG_MANUAL_FAN_CTRL = 0x0751  # bit 7 FAN_MODE_USER -- never written here
 REG_PWM_1 = 0x075B
@@ -62,16 +66,11 @@ SLOTS = [
 
 def hwmon_fans():
     """RPM from the driver path. Never read the tacho registers via ECRR."""
-    import glob
-    for d in glob.glob("/sys/class/hwmon/hwmon*"):
-        try:
-            if open(os.path.join(d, "name")).read().strip() != "uniwill":
-                continue
-            return tuple(int(open(os.path.join(d, f)).read().strip())
-                         for f in ("fan1_input", "fan2_input"))
-        except OSError:
-            continue
-    return (None, None)
+    d = find_hwmon()
+    if d is None:
+        return (None, None)
+    return tuple(read_int(os.path.join(d, f))
+                 for f in ("fan1_input", "fan2_input"))
 
 
 def main() -> int:

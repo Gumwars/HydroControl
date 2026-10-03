@@ -46,6 +46,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from hydroc.ec import EC, ECUnavailable      # noqa: E402
+from hydroc.hardware import find_hwmon
 
 # Identity and capability registers only. No tachos (0x0464/5, 0x046C/D) and
 # nothing in a range we have not already characterised.
@@ -135,15 +136,10 @@ def collect() -> dict:
     info["ec"] = {"reachable": True, "project_id": probe, "rom_id": rom,
                   "registers": regs}
 
-    h = None
-    for p in glob.glob("/sys/class/hwmon/hwmon*"):
-        try:
-            with open(os.path.join(p, "name")) as fh:
-                if fh.read().strip() == "uniwill":
-                    h = p
-        except OSError:
-            pass
-    info["uniwill_hwmon"] = h
+    # find_hwmon() rather than a local loop. This one had no break, so it
+    # kept the LAST match of an unsorted glob where the package takes the
+    # first of a sorted one -- a third answer to the same question.
+    info["uniwill_hwmon"] = find_hwmon()
     info["driver_bound"] = os.path.isdir("/sys/bus/platform/devices/INOU0000:00")
     return info
 

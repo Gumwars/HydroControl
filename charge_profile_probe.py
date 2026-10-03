@@ -60,6 +60,9 @@ from datetime import datetime
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from hydroc.ec import parse_reply                                # noqa: E402
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from hydroc.hardware import battery_int, battery_text      # noqa: E402
+
 CALL = "/proc/acpi/call"
 ECRR = r"\_SB.INOU.ECRR"
 ECRW = r"\_SB.INOU.ECRW"
@@ -346,19 +349,11 @@ def set_profile(value: int) -> bool:
 
 def sysfs_int(name: str, base=BAT):
     """None means unreadable, which is NOT the same as zero."""
-    try:
-        with open(os.path.join(base, name)) as fh:
-            return int(fh.read().strip())
-    except (OSError, ValueError):
-        return None
+    return battery_int(name, base)
 
 
 def sysfs_str(name: str):
-    try:
-        with open(os.path.join(BAT, name)) as fh:
-            return fh.read().strip()
-    except OSError:
-        return None
+    return battery_text(name, BAT)
 
 
 def on_ac() -> bool:

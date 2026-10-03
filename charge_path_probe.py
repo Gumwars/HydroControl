@@ -52,6 +52,9 @@ from datetime import datetime
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from hydroc.ec import parse_reply                                # noqa: E402
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from hydroc.hardware import battery_text      # noqa: E402
+
 CALL = "/proc/acpi/call"
 ECRR = r"\_SB.INOU.ECRR"
 ECRW = r"\_SB.INOU.ECRW"
@@ -180,14 +183,9 @@ def snapshot(tag, settle=0.0):
 
 
 def battery_sysfs():
-    out = {}
-    for f in ("capacity", "charge_control_end_threshold", "status",
-              "current_now", "charge_types"):
-        try:
-            out[f] = open(os.path.join(BAT, f)).read().strip()
-        except OSError:
-            out[f] = None
-    return out
+    return {f: battery_text(f, BAT)
+            for f in ("capacity", "charge_control_end_threshold", "status",
+                      "current_now", "charge_types")}
 
 
 def restore(baseline, settle):

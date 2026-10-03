@@ -78,12 +78,46 @@ class Change:
                 else f"{self.setting}: {arrow} FAILED ({self.error})")
 
 
-def _read(path: str) -> str | None:
+def read_text(path: str) -> str | None:
+    """A sysfs file's contents, or None if it cannot be read.
+
+    None, never "" and never 0. On this machine the difference matters more
+    than usual: an unreadable fan tachometer and a stopped fan are the same
+    number if you let them be, and a stopped fan is a real state here
+    (DESIGN.md 4.2). Callers decide what absence means; this does not decide
+    for them.
+
+    Public because eleven root scripts each wrote their own, with four
+    different spellings and two different failure sentinels.
+    """
     try:
         with open(path) as fh:
             return fh.read().strip()
     except OSError:
         return None
+
+
+def read_int(path: str) -> int | None:
+    """read_text parsed as an integer. Unparseable is None, not zero."""
+    v = read_text(path)
+    try:
+        return int(v)
+    except (TypeError, ValueError):
+        return None
+
+
+def battery_text(name: str, base: str | None = None) -> str | None:
+    """A file under the battery's power_supply directory."""
+    return read_text(os.path.join(base or BAT, name))
+
+
+def battery_int(name: str, base: str | None = None) -> int | None:
+    return read_int(os.path.join(base or BAT, name))
+
+
+# The private spelling the package already used. Kept so internal callers
+# do not churn; new code should use read_text.
+_read = read_text
 
 
 def _write(path: str, value: str) -> str:

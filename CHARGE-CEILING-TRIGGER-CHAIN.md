@@ -304,12 +304,44 @@ where the percentage-ceiling code arms at `4`. Those labels remain a
 misdescription of a mechanism that is doing something better than they
 promise.
 
-### And it changes what the old pack's wear meant
+### What the old pack's wear meant — and a second correction
 
-9% wear in 135 cycles is fast for a cell held at 4.200 V/cell. Under the
-adaptive story that number was evidence of the EC responding to a declining
-pack. Without it, the more parsimonious reading is that the pack was simply
-faulty — which is why it was replaced under warranty.
+The first version of this section called 9% wear in 135 cycles "fast" and
+concluded the pack was faulty. **Both halves are wrong**, and the mistake is
+the denominator: that pack was the **original, two years old**. 135 cycles
+across two years is light, desk-bound use, and 9% calendar aging over that
+span is what a healthy cell does. Cycles were the wrong measure of a pack
+whose life was mostly spent on AC.
+
+So the original pack aged normally, under a fixed 4.200 V/cell charge, which
+is the outcome that derating is for. Nothing about it needs explaining.
+
+### 0% wear is not evidence of a healthy pack
+
+The owner's history makes this concrete. Between the original and the current
+one there was another replacement which **reported 0% wear at 77 cycles and
+shut the laptop off without warning at a reported 46% charge**. A gauge
+claiming full design capacity while the pack collapses under load is a gauge
+that is not measuring anything.
+
+That matters for the control above. The new pack reports `charge_full ==
+charge_full_design` exactly, which is the fuel gauge's *initial assumption*
+and not a measurement — the same reading the known-bad pack gave. So the
+comparison is honestly stated as **reported** wear:
+
+> the EC produced 16800 mV when the SBS data said 9% wear, and 16800 mV when
+> it said 0%.
+
+Since the EC reads the same pack data userspace does, that still rules out
+adaptation to reported wear. What it cannot rule out is adaptation to some
+truth the gauge is not telling either of us.
+
+**Verify this pack's gauge before trusting its numbers.** `battery_watch.py`
+logs charge and current; `battery_summary.py` integrates current over time
+and compares against the `charge_now` delta. A ratio near 1.0–1.1 is an
+honest gauge; below about 0.85 the reported charge is inflated. Running that
+over the first few cycles would catch the previous failure early instead of
+at a reported 46%.
 
 That also removes a confound from the comparison in the previous section: if
 the derating is fixed, the 3% vs 15% difference between the Mech 15 G3R and

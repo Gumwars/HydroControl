@@ -269,11 +269,15 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(lpp_call({"op": "status"}))
         if route == "/api/state":
             profile, src = load_profile()
+            # One reading, used twice. Two calls here meant two passes over
+            # the EC per poll, and a drift report computed against a snapshot
+            # the caller never saw.
+            state = _hw.read_state()
             return self._json({
-                "state": _hw.read_state(),
+                "state": state,
                 "profile": profile,
                 "profile_source": src,
-                "drift": _hw.drift(profile),
+                "drift": _hw.drift(profile, state),
                 "status": _hw.status(),
             })
         if route in ("/", "/index.html"):

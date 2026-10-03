@@ -250,8 +250,12 @@ class Hardware:
                                      else "auto")
                 state["fan_split"] = fancurve.is_split(self.ec)
                 if state["fan_mode"] == "manual":
-                    state["fan_curve_cpu"] = fancurve.read_curve(self.ec, "cpu")
-                    state["fan_curve_gpu"] = fancurve.read_curve(self.ec, "gpu")
+                    # cached: this is the hot path, and the tables only change
+                    # when something writes them (which invalidates).
+                    state["fan_curve_cpu"] = fancurve.read_curve(
+                        self.ec, "cpu", cached=True)
+                    state["fan_curve_gpu"] = fancurve.read_curve(
+                        self.ec, "gpu", cached=True)
             except Exception:
                 # EC is best-effort: a failure here must degrade the reading,
                 # never take down the caller's request thread.
@@ -447,13 +451,20 @@ class Hardware:
 
         return changes
 
-    def drift(self, desired: dict) -> dict:
+    def drift(self, desired: dict, actual: dict | None = None) -> dict:
         """Settings where hardware disagrees with the saved profile.
 
         After a power cycle this is everything volatile -- which is exactly
         what the UI needs to surface rather than hide.
+
+        `actual` lets a caller that has already read the state pass it in.
+        /api/state used to read once for its own reply and again in here, so
+        every poll paid for two full passes over a paced device -- and the
+        two readings were taken at different moments, which is its own small
+        lie when a value is moving.
         """
-        actual = self.read_state()
+        if actual is None:
+            actual = self.read_state()
         desired = self.normalize(desired)
         # Only compare settings the hardware actually reports. A stale key left
         # by a rename would otherwise show as drift forever, since no write can

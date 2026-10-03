@@ -24,6 +24,9 @@ Three facts shape everything here:
 
 from __future__ import annotations
 
+import threading
+import time
+
 from .ec import ECUnavailable, ECWriteRejected
 
 REG_UNIVERSAL_FAN_CTRL = 0x07C5
@@ -182,19 +185,60 @@ def validate(curve: list[list[int]], label: str = "curve") -> None:
                          f"near-empty table hands the fans nothing")
 
 
-def read_curve(ec, fan: str) -> list[list[int]]:
+# Reading one curve is 16 points x 3 registers = 48 ECRR calls, and
+# read_state() reads both. Every EC access waits out a 6 ms inter-access floor
+# behind a class-level lock (ec.py: the EC is one device), so a pair of curves
+# costs roughly 0.6 s of pure pacing. The UI polls every 10 s across several
+# routes, which had the EC spending much of its life answering a question
+# whose answer cannot have changed: a fan table only changes when something
+# writes it.
+#
+# Opt-in, not the default. Scripts and tests that call read_curve() directly
+# want the registers, not a memory of them; only read_state() asks for the
+# cached value. Writes invalidate, so the daemon always sees its own changes
+# immediately, and the TTL bounds how long an outside writer -- fan_curve.py,
+# fan_recover.py -- can stay invisible.
+CURVE_TTL_S = 5.0
+_curve_cache: dict[str, tuple[float, list[list[int]]]] = {}
+_curve_lock = threading.Lock()
+
+
+def invalidate_curves(fan: str | None = None) -> None:
+    """Drop cached curves. Called on every write; safe to call otherwise."""
+    with _curve_lock:
+        if fan is None:
+            _curve_cache.clear()
+        else:
+            _curve_cache.pop(fan, None)
+
+
+def read_curve(ec, fan: str, cached: bool = False) -> list[list[int]]:
+    if cached:
+        with _curve_lock:
+            hit = _curve_cache.get(fan)
+            if hit and time.monotonic() - hit[0] < CURVE_TTL_S:
+                # A copy. Handing out the cached lists lets one caller's
+                # mutation become every later caller's reading.
+                return [p[:] for p in hit[1]]
     up_b, down_b, duty_b = BASE[fan]
-    return [[ec.read(up_b + i), ec.read(down_b + i), ec.read(duty_b + i) // 2]
-            for i in range(TABLE_LEN)]
+    curve = [[ec.read(up_b + i), ec.read(down_b + i), ec.read(duty_b + i) // 2]
+             for i in range(TABLE_LEN)]
+    with _curve_lock:
+        _curve_cache[fan] = (time.monotonic(), [p[:] for p in curve])
+    return curve
 
 
 def write_curve(ec, fan: str, curve: list[list[int]]) -> None:
     validate(curve, fan)
     up_b, down_b, duty_b = BASE[fan]
-    for i, (up_t, down_t, duty) in enumerate(curve):
-        ec.write_verify(up_b + i, up_t)
-        ec.write_verify(down_b + i, down_t)
-        ec.write_verify(duty_b + i, min(PWM_MAX, duty * 2))
+    invalidate_curves(fan)        # before, so a failed write cannot leave a
+    try:                          # stale entry claiming the old table
+        for i, (up_t, down_t, duty) in enumerate(curve):
+            ec.write_verify(up_b + i, up_t)
+            ec.write_verify(down_b + i, down_t)
+            ec.write_verify(duty_b + i, min(PWM_MAX, duty * 2))
+    finally:
+        invalidate_curves(fan)
 
 
 def is_enabled(ec) -> bool:

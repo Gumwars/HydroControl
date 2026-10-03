@@ -887,18 +887,22 @@ function vBatt(){
     <div class="lbl">These are usage patterns, not percentage caps — no mode was observed to limit
       charging on this firmware.</div>
   </div>
-  ${S.state.charge_threshold==null?`
   <div class="card" style="margin-top:var(--space-4)">
-    <div class="row"><div class="kick">Charge threshold</div><span class="kv">not available</span></div>
-    <div class="lbl">This firmware stores a charge threshold and never acts on it. Measured over a
-      full cycle: the register held 80% while the pack charged straight through to 100%, and the
-      EC's own "threshold reached" bit never armed. The driver no longer claims the feature, so
-      nothing on this system — here, GNOME or TLP — reports a limit that is not real.</div>
-  </div>` : `
-  <div class="card" style="margin-top:var(--space-4)">
-    <div class="row"><div class="kick">Charge threshold</div><span class="kv">${num(S.state.charge_threshold)} %</span></div>
-    <input type="range" id="thr" min="1" max="100" value="${S.state.charge_threshold||100}">
-  </div>`}
+    <div class="row"><div class="kick">Charge threshold</div>
+      <span class="kv">${S.state.charge_threshold==null
+        ? 'not available' : num(S.state.charge_threshold)+' % — not enforced'}</span></div>
+    <div class="lbl">No control here, because there is nothing to control. This firmware
+      stores a charge threshold and never acts on it: the register held 80% while a pack
+      charged straight past it, the EC's own "threshold reached" bit never armed, and the
+      most recent test was a battery with <em>zero</em> cycles that went eight points
+      beyond an 80% setting while still reporting Charging. Two operating systems, three
+      packs, same answer.</div>
+    <div class="lbl" style="margin-top:var(--space-2)">The protection that <em>is</em> real
+      is a voltage one, and it needs no setting: this pack is held at about
+      <span class="kv">4.175 V</span> per cell against a <span class="kv">4.450 V</span>
+      rating. That is a permanent 275 mV per cell reduction and the single most effective
+      thing available for calendar life. It applies whatever the threshold says.</div>
+  </div>
   <div class="grid g3" style="margin-top:var(--space-4)">
     <div class="card"><div class="kick">Health</div>
       <div class="row"><span class="lbl">Cycles</span><span class="kv">${num(S.state.charge_cycles)}</span></div>
@@ -1093,8 +1097,6 @@ function bind(){
   if(ctgp)ctgp.onchange=()=>applySettings({gpu_ctgp_offset:+ctgp.value});
   const ch=$('#charge');
   if(ch)ch.onclick=e=>{const b=e.target.closest('[data-v]');if(b)applySettings({charge_profile:b.dataset.v});};
-  const thr=$('#thr');
-  if(thr)thr.onchange=()=>applySettings({charge_threshold:+thr.value});
 
   document.querySelectorAll('[data-toggle]').forEach(b=>b.onclick=()=>
     applySettings({[b.dataset.toggle]:b.getAttribute('aria-pressed')!=='true'}));

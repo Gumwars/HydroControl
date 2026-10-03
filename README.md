@@ -205,20 +205,13 @@ Two standalone scripts ship alongside the app. Neither is needed for normal use
 trusting what was observed on the development one. Both write only to the chin
 bar, and the chin bar is volatile: a full power cycle clears anything they do.
 
-### `lb_mode_probe.py` — which chin bar effects does your bar actually run?
+### Chin bar effects — what this bar actually runs
 
-```bash
-sudo python3 lb_mode_probe.py
-```
-
-It runs each mode twice, red then blue, holding each for about four seconds, and
-asks you two questions after each: did it **animate**, and did the **colour
-change** between the two. At the end it prints a table to paste back.
-
-This matters because the chin bar controller (ITE 8233, `048d:7001`) has no
-published effect support — `tuxedo-drivers` implements static for it and returns
-`-ENOSYS` for everything else. Every other mode in the UI was confirmed by
-running exactly this probe. On the development machine:
+The chin bar controller (ITE 8233, `048d:7001`) has no published effect
+support: `tuxedo-drivers` implements static for it and returns `-ENOSYS` for
+everything else. Every mode this app offers was confirmed by running each one
+twice, red then blue, and recording whether it animated and whether the colour
+followed:
 
 ```
   static     static,   colour follows palette
@@ -228,19 +221,15 @@ running exactly this probe. On the development machine:
   catchup    animated, colour IGNORED
 ```
 
-If your bar disagrees, that is a firmware difference worth reporting — it is the
-single most useful thing a second machine can tell us about this device.
+Flash was ruled out — it switches the bar off at every colour source and
+direction byte. Breathing only animates when driven from the 8-entry colour
+list, not from a single palette slot, which is why it is driven that way.
 
-There is also a second pass for modes that misbehave, which re-tries them with a
-different colour source and direction byte:
-
-```bash
-sudo python3 lb_mode_probe.py --variants
-```
-
-That is how Flash was ruled out (it switches the bar off at every source and
-direction) and how Breathing was fixed — it only animates when driven from the
-8-entry colour list, not from a single palette slot.
+The probe that established this (`lb_mode_probe.py`, with a `--variants` pass
+for modes that misbehaved) was retired once the protocol moved into
+`kbctrl/hardware.py`. It is in git history if you want to re-run it on another
+machine; a bar that disagrees with the table above would be a firmware
+difference worth reporting.
 
 ### `compat_probe.py` — is a different Uniwill laptop close enough?
 
@@ -319,8 +308,10 @@ Three modes:
 > `/dev/dri/card*` — those stop being true the moment the dGPU leaves the bus.
 >
 > The app now checks for this before writing and lists what it finds. From the
-> command line, `sudo python3 gpu_mode.py --set igpu` refuses unless you pass
-> `--accept-risks`.
+> command line there are two gates, for two different mistakes:
+> `sudo python3 gpu_mode.py --set igpu` asks you to type the mode name before
+> it writes anything — pass `--yes` to skip that — and refuses outright unless
+> you also pass `--accept-risks` when the pre-flight found something.
 >
 > **Recovery: enter the BIOS setup at power-on and set the graphics mode back
 > there.** The BIOS writes the same two variables and needs no working Linux.
@@ -485,7 +476,7 @@ uname -r
 Plus what you expected versus what happened. If a control did nothing, the
 server's terminal output matters — it logs the per-setting result of every
 apply. For anything involving the chin bar, include the table from
-`lb_mode_probe.py` (see [Diagnostic scripts](#diagnostic-scripts)).
+the chin bar effect table under [Diagnostic scripts](#diagnostic-scripts).
 
 Particularly interested in:
 

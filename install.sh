@@ -276,10 +276,6 @@ $(printf '\033[1mNext:\033[0m')
 
 then open  http://127.0.0.1:8781
 
-To check the chin bar effects on your machine (and report back):
-
-  sudo python3 lb_mode_probe.py
-
 EOF
 
 if (( DOCTOR_OK )); then

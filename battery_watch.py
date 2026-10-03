@@ -40,6 +40,14 @@ import os
 import sys
 import time
 
+# One correct reader, not nine. Each of these scripts hand-rolled the
+# /proc/acpi/call read as fh.read().strip().rstrip("\x00"), which cannot see
+# a null in the MIDDLE of the buffer -- so a short reply followed by the tail
+# of a longer previous one came through as e.g. '0x3e\x00alled'. hydroc.ec
+# was fixed for this; these were the copies that were not.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from hydroc.ec import parse_reply                                # noqa: E402
+
 B = "/sys/class/power_supply/BAT0"
 AC = "/sys/class/power_supply/AC0/online"
 CALL = "/proc/acpi/call"
@@ -70,7 +78,7 @@ def ec(addr):
         with open(CALL, "w") as fh:
             fh.write(f"{ECRR} 0x{addr:X}")
         with open(CALL) as fh:
-            raw = fh.read().strip().rstrip("\x00")
+            raw = parse_reply(fh.read())
         if raw.startswith("Error"):
             return None
         return int(raw, 16) & 0xFF

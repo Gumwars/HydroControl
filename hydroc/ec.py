@@ -73,6 +73,28 @@ BIT_HAS_CHARGE_PROFILE = 1 << 3
 BIT_HAS_FAN_CTRL = 1 << 6
 
 
+def parse_reply(raw: str) -> str:
+    """One /proc/acpi/call reply, with the buffer residue removed.
+
+    Truncate at the FIRST null. Do not strip trailing ones.
+
+    /proc/acpi/call hands back a fixed-size buffer, so a short reply leaves
+    the tail of a longer previous one after the terminator. `rstrip("\\x00")`
+    cannot see that -- the null is in the middle -- and the reply arrives as
+    e.g. '0x3e\\x00alled', the remains of "not called".
+
+    That is the real source of at least some of the "garbled replies" this
+    project absorbed as EC flakiness. Truncating fails loudly rather than
+    corrupting a value: a residue leaves the string unparseable instead of
+    plausibly wrong.
+
+    Public because nine root probe scripts each hand-rolled this read and
+    each got it wrong the same way. Importing one correct version is the
+    only form of this fix that stays fixed.
+    """
+    return raw.split("\x00", 1)[0].strip()
+
+
 class ECUnavailable(RuntimeError):
     """acpi_call is missing, or we are not root."""
 
@@ -135,20 +157,7 @@ class EC:
                 with open(self.path, "w") as fh:
                     fh.write(expr)
                 with open(self.path) as fh:
-                    # Truncate at the FIRST null, do not strip trailing ones.
-                    #
-                    # /proc/acpi/call hands back a fixed-size buffer, so a
-                    # short reply leaves the tail of a longer previous one
-                    # after the terminator. rstrip("\x00") cannot see that --
-                    # the null is in the middle -- and the reply comes through
-                    # as e.g. '0x3e\x00alled', the remains of "not called".
-                    #
-                    # That is the real source of at least some of the "garbled
-                    # replies" this class has been absorbing as EC flakiness.
-                    # It fails loudly rather than corrupting a value, because
-                    # a residue leaves the string unparseable rather than
-                    # plausibly wrong -- but it fails a read that was fine.
-                    return fh.read().split("\x00", 1)[0].strip()
+                    return parse_reply(fh.read())
             except OSError as e:
                 raise ECUnavailable(f"{self.path}: {e}") from e
             finally:

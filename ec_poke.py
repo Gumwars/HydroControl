@@ -14,6 +14,15 @@ poking /dev/mem, which would bypass that lock.
 """
 import os, sys
 
+import sys
+# One correct reader, not nine. Each of these scripts hand-rolled the
+# /proc/acpi/call read as fh.read().strip().rstrip("\x00"), which cannot see
+# a null in the MIDDLE of the buffer -- so a short reply followed by the tail
+# of a longer previous one came through as e.g. '0x3e\x00alled'. hydroc.ec
+# was fixed for this; these were the copies that were not.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from hydroc.ec import parse_reply                                # noqa: E402
+
 CALL = "/proc/acpi/call"
 ECRR = r"\_SB.INOU.ECRR"
 ECRW = r"\_SB.INOU.ECRW"
@@ -27,7 +36,7 @@ def _call(expr):
     with open(CALL, "w") as fh:
         fh.write(expr)
     with open(CALL) as fh:
-        return fh.read().strip().rstrip("\x00")
+        return parse_reply(fh.read())
 
 
 def read(addr):

@@ -109,13 +109,24 @@ def apply_preset(name: str) -> dict:
             "changes": [c.__dict__ for c in changes], "state": state}
 
 
-def apply_native(name: str) -> dict:
-    """Hand the machine to the EC in one of its own modes."""
-    changes = _hw.apply({"native_mode": name})
+def apply_native(name: str, boost: bool | None = None) -> dict:
+    """Hand the machine to the EC in one of its own modes.
+
+    `boost` rides along so that selecting a mode and setting boost is one
+    reconcile rather than two: apply() passes it to nativemode.apply() when
+    the mode is changing, and does a read-modify-write of bit 6 when it is
+    not. Left None, the current setting is untouched.
+    """
+    settings = {"native_mode": name}
+    if boost is not None:
+        settings["fan_boost"] = bool(boost)
+    changes = _hw.apply(settings)
     failed = {c.setting for c in changes if not c.ok}
     profile, _ = load_profile()
     if "native_mode" not in failed:
         profile["native_mode"] = name
+    if boost is not None and "fan_boost" not in failed:
+        profile["fan_boost"] = bool(boost)
     try:
         save_profile(profile)
     except OSError:
@@ -123,6 +134,7 @@ def apply_native(name: str) -> dict:
     state = _hw.read_state()
     return {"ok": not failed, "native_mode": name,
             "active": state.get("native_mode"),
+            "boost": state.get("fan_boost"),
             "changes": [c.__dict__ for c in changes], "state": state}
 
 
@@ -144,6 +156,8 @@ def _on_profile_button() -> None:
     if profile.get("button_cycle") == "presets":
         apply_preset(presets.next_in_cycle(presets.match(state)))
     else:
+        # Mode only: the button cycles modes, and carrying boost here would
+        # make a mode change silently also change the fan setting.
         apply_native(nativemode.next_in_cycle(state.get("native_mode")))
 
 
@@ -475,7 +489,9 @@ class Handler(BaseHTTPRequestHandler):
             if name not in nativemode.MODES:
                 return self._json(
                     {"ok": False, "error": f"unknown mode {name!r}"}, 400)
-            return self._json(apply_native(name))
+            boost = payload.get("boost")
+            return self._json(apply_native(
+                name, None if boost is None else bool(boost)))
 
         if route == "/api/button-cycle":
             # Which of the two the physical button advances. A merge, not a

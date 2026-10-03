@@ -791,7 +791,14 @@ function vPerf(){
       ? esc(natM.desc||'')
       : 'The EC holds its own power limits and fan curves for these. Picking one '
         +'hands the machine to it and releases your custom limits below.'}</div>
-    ${nat&&S.state.fan_boost?'<div class="lbl"><span class="tag">fan boost on</span></div>':''}
+    <div class="row" style="margin-top:var(--space-3)${nat?'':';opacity:.5'}">
+      <button class="sw" id="fanboost" aria-pressed="${!!S.state.fan_boost}"
+        ${nat?'':'disabled'}><i></i></button>
+      <div style="flex:1;line-height:1.25"><div style="font-size:12.5px">Fan boost</div>
+        <div class="lbl" style="font-size:10.5px">${nat
+          ? 'EC <span class="kv">0x0751</span> bit 6, on top of the mode — the fans run harder for the same temperature'
+          : 'Belongs to the machine\'s own modes. Pick one above first.'}</div></div>
+    </div>
     <div class="lbl" id="nativemsg"></div>
   </div>
   <div class="card" style="margin-top:var(--space-4)${nat?';opacity:.72':''}">
@@ -1125,6 +1132,17 @@ function bind(){
       body:JSON.stringify({mode:b.dataset.v})});
     if(d&&d.state){S.state=d.state;S.nativeActive=d.active||null;}
     msg('#nativemsg',d&&d.ok?`applied ${b.textContent}`
+        :'failed: '+((d&&d.error)||'no response'),!(d&&d.ok));
+    refreshState();};
+
+  const fb=$('#fanboost');
+  if(fb)fb.onclick=async()=>{
+    if(!S.nativeActive)return;
+    msg('#nativemsg','applying…');
+    const d=await api('/api/native',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({mode:S.nativeActive,boost:!S.state.fan_boost})});
+    if(d&&d.state)S.state=d.state;
+    msg('#nativemsg',d&&d.ok?`fan boost ${d.boost?'on':'off'}`
         :'failed: '+((d&&d.error)||'no response'),!(d&&d.ok));
     refreshState();};
 

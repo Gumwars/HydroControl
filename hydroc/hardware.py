@@ -330,6 +330,8 @@ class Hardware:
         #    the UI explaining why the mode did not stick.
         desired = dict(desired)
         want_native = desired.get("native_mode")
+        want_boost = desired.get("fan_boost")
+        mode_applied = False
         if want_native:
             for k in NATIVE_OWNED:
                 desired.pop(k, None)
@@ -338,12 +340,30 @@ class Hardware:
                             want_native)
                 if not dry_run:
                     try:
-                        nativemode.apply(self.ec, want_native)
+                        nativemode.apply(self.ec, want_native,
+                                         boost=bool(want_boost))
                     except (ECUnavailable, ECWriteRejected,
                             nativemode.NativeModeError,
                             fancurve.CurveError) as e:
                         ch.ok, ch.error = False, str(e)
+                    else:
+                        mode_applied = True
                 changes.append(ch)
+
+        # Boost on its own. Bit 6 is disjoint from the mode bits, so this is a
+        # read-modify-write -- not a mode re-apply, which would rewrite both
+        # fan tables to move one bit. Skipped when the mode change above
+        # already carried the boost value, so one request makes one change.
+        if (want_boost is not None and not mode_applied
+                and bool(want_boost) != bool(actual.get("fan_boost"))):
+            ch = Change("fan_boost", actual.get("fan_boost"), bool(want_boost))
+            if not dry_run:
+                try:
+                    nativemode.set_boost(self.ec, bool(want_boost))
+                except (ECUnavailable, ECWriteRejected) as e:
+                    ch.ok, ch.error = False, str(e)
+            changes.append(ch)
+        desired.pop("fan_boost", None)
 
         # Guard the mutually exclusive pair before touching either.
         if all(desired.get(k) for k in EXCLUSIVE):

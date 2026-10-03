@@ -196,6 +196,23 @@ def current(ec) -> dict:
     }
 
 
+def set_boost(ec, on: bool) -> None:
+    """Turn fan boost on or off, leaving the mode alone.
+
+    BIT_FAN_BOOST is bit 6 and MODE_MASK is bits 7, 5 and 4, so the two are
+    disjoint and a read-modify-write of 0x0751 cannot disturb the mode.
+
+    Its own call rather than apply(mode, boost=...) because apply() rewrites
+    both fan tables, and spending six seconds and 96 register writes to move
+    one bit is the delay we just took out of mode switching. Nothing about
+    boost needs the tables touched.
+    """
+    raw = ec.read(REG_FAN_MODE)
+    want = (raw | BIT_FAN_BOOST) if on else (raw & ~BIT_FAN_BOOST & 0xFF)
+    if want != raw:
+        ec.write_verify(REG_FAN_MODE, want)
+
+
 def ec_limits(ec, mode: str) -> dict:
     """The limits the EC holds for a mode. Read-only."""
     regs = EC_LIMITS.get(mode)

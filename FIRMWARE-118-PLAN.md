@@ -1,4 +1,9 @@
-# EC 118.ELUK and the stock BIOS: what to do before, during and after
+# EC 118.ELUK and the stock BIOS: analysed, and **not flashed**
+
+> **Decision, 2026-10-04: not taking this update.** The reasoning is at
+> the bottom, under "Why this was declined". Everything between here and
+> there is the pre-flash analysis, kept because it is correct and because
+> a future release may be worth taking.
 
 Eluktronics is supplying a BIOS and EC `118.ELUK`, replacing the Prema Mod
 `N.1.09ELUK` (dated 2024-05-04) and EC `117.ELUK`. This is the vendor's own
@@ -533,3 +538,63 @@ unsigned driver package, which is more ceremony than needed.
 `AfuEfi64/` does it from an EFI shell with no Windows at all. The Windows
 drive is the pragmatic choice regardless, because `AMIDEWINx64.EXE` is needed
 afterwards to re-stamp DMI and exists only for Windows.
+
+
+## Why this was declined (2026-10-04)
+
+The vendor's own `BIOS_Release_Note(Intel).docx` settles it. Nine BIOS
+versions, and the complete history for this one:
+
+```
+N.1.11ELU08   2026-09-18   microcode 0x136   "Sync std code: Updated Microcode to m_32_b0671_00000136.pdb"
+N.1.10ELU07   2024-11-18   microcode 0x120   "update aistone secure boot key"
+N.1.10ELU06   2024-08-28   microcode 0x120   "sync std and update ec to 1.17"
+N.1.09ELU05   2024-04-02   microcode 0x120   "Wifi 6E support EU+USA"
+```
+
+**The update's entire content is a microcode bump to 0x136. This machine
+already runs 0x137**, loaded by `intel-ucode` at boot. The firmware is one
+revision behind what the OS supplies.
+
+Across all nine releases the document contains no CVE, no vulnerability fix,
+no Boot Guard change, and no ME update — ME stays at 16.1.30.2307v4 and the
+Source Control Label is identical between N.1.10 and N.1.11. There is no
+security content to gain.
+
+The EC is a horizontal move: 1.18's only change item is "Support copilot long
+press", and all 44 register addresses this project writes are referenced
+identically in both builds.
+
+So the trade was a non-zero bricking risk, the loss of Prema's per-core
+undervolt pages, a DMI re-stamp, a Secure Boot re-enrollment and an
+unverified register map — in exchange for a microcode already superseded.
+
+**Not flashing also preserves the option.** `lowest_supported_fw_version` is
+105; flashing sets the floor to 108 permanently. Declining keeps 108
+available for whenever there is a reason to take it.
+
+### What would change the answer
+
+A Prema build based on N.1.11ELU08 — the microcode sync with the setup pages
+still unhidden — would be strictly better than either current option, and
+worth taking. `BIOS-SETUP-OFFSETS.md` and `ifr_extract.py` are the
+preparation for that, and remain valid against whatever image arrives.
+
+A future stock release with an actual fix in it would also qualify. This is
+not that release.
+
+### One honest footnote
+
+Prema's base is N.1.09-era, so the *firmware-level* microcode here is
+almost certainly 0x120 — pre-mitigation. Anything running before the kernel
+loads `intel-ucode` sees it: POST, a UEFI shell, memtest, a live USB without
+the package. That is seconds at idle load against a degradation mechanism
+driven by sustained voltage under load, so it is negligible. Worth knowing,
+not worth acting on.
+
+### Distribution
+
+Eluktronics supplied this package directly and has not posted it to the
+support site. It is not ours to redistribute. The archive and every extracted
+artefact stay out of this repository, and the CI job that refuses tracked
+firmware stays as the thing that notices if that ever slips.

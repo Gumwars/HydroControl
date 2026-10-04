@@ -771,3 +771,54 @@ reason to match.
 are read directly from the instruction stream and are solid. That `0x0461`
 and `0x0469` are the per-fan inputs is inference from position in the live
 `0x04xx` window, not confirmed.
+
+
+## The participant's method was never actually followed (2026-10-03)
+
+Two arming conditions were reported from the outset: the profile selected
+before the charger is connected, and **a prior discharge below 5%**. The
+second was never tested. Not once, in a month.
+
+The lowest charge in any log before tonight:
+
+```
+ceiling-test.csv       2026-09-28   35%
+phantom-check.csv      2026-09-28   40%
+battery-v.csv          2026-08-18   56%
+charge-profiles.csv    2026-09-10   61%
+wmi-ceiling.csv        2026-09-28   65%
+chargectrl.csv         2026-08-23   87%
+---------------------------------------
+discharge-newpack.csv  2026-10-03    2%   <- first time below 5%
+```
+
+Thirty-three points short of the stated condition, across thirteen logs and
+five weeks. Every "the threshold does nothing" result was produced without
+meeting the precondition the only outside report said was required.
+
+### What tonight settles, and what it does not
+
+**Ruled out:** the profile/threshold must be set before the charger is
+connected. Tonight's threshold was changed with the charge already running
+and the EC acted on it within one sample.
+
+**Still confounded:** tonight was the first discharge below 5% *and* the
+first threshold set below the voltage ceiling. Both firsts, one session.
+Either could be what made the behaviour visible, and this run cannot
+separate them.
+
+### The test that separates them
+
+Run C from the matrix above, now with a specific target:
+
+1. Discharge to about **40%** — below the threshold, well above 5%.
+2. Set the threshold to **60**.
+3. Charge, and integrate.
+
+**Caps near a reported 47% again** → the deep discharge is irrelevant; what
+mattered all along was setting the threshold below the voltage ceiling, and
+the reported arming condition is folklore.
+
+**Runs past, to the ceiling** → the deep discharge armed something, the
+participant was right, and their XMG report describes this hardware after
+all.

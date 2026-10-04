@@ -890,18 +890,25 @@ function vBatt(){
   <div class="card" style="margin-top:var(--space-4)">
     <div class="row"><div class="kick">Charge threshold</div>
       <span class="kv">${S.state.charge_threshold==null
-        ? 'not available' : num(S.state.charge_threshold)+' % — not enforced'}</span></div>
-    <div class="lbl">No control here, because there is nothing to control. This firmware
-      stores a charge threshold and never acts on it: the register held 80% while a pack
-      charged straight past it, the EC's own "threshold reached" bit never armed, and the
-      most recent test was a battery with <em>zero</em> cycles that went eight points
-      beyond an 80% setting while still reporting Charging. Two operating systems, three
-      packs, same answer.</div>
-    <div class="lbl" style="margin-top:var(--space-2)">The protection that <em>is</em> real
-      is a voltage one, and it needs no setting: this pack is held at about
+        ? 'not available' : num(S.state.charge_threshold)+' %'}</span></div>
+    ${S.state.charge_threshold==null ? `
+    <div class="lbl">This system does not expose a charge threshold.</div>` : `
+    <input type="range" id="thr" min="20" max="100" value="${S.state.charge_threshold||80}">
+    <div class="lbl" style="margin-top:var(--space-2)">Measured: set to 60, charging stopped
+      at <span class="kv">3.93 V</span> per cell. Raised back to 80, it restarted within
+      30 seconds and ran to the voltage ceiling. The control works.</div>
+    <div class="lbl" style="margin-top:var(--space-2)"><strong>Above roughly 75 it does
+      nothing</strong>, and that is not a fault. There are two limits and charging stops at
+      whichever comes first: this threshold, and a fixed hold at about
       <span class="kv">4.175 V</span> per cell against a <span class="kv">4.450 V</span>
-      rating. That is a permanent 275 mV per cell reduction and the single most effective
-      thing available for calendar life. It applies whatever the threshold says.</div>
+      rating. The voltage ceiling terminates a charge near a reported 77%, so a threshold
+      above that is never reached. It is also why this looked broken for a month — the
+      default is 80, and at 80 it never bites.</div>
+    <div class="lbl" style="margin-top:var(--space-2)">The number you set will
+      <em>not</em> match where charging stops. The EC compares against its own state of
+      charge, not the percentage shown here, and the reported figure keeps climbing after
+      the current reaches zero — a charge that really ended at 77% was displayed as 100%
+      ninety seconds later. Set 60 and expect a stop somewhere in the forties.</div>`}
   </div>
   <div class="grid g3" style="margin-top:var(--space-4)">
     <div class="card"><div class="kick">Health</div>
@@ -1154,6 +1161,9 @@ function bind(){
       body:JSON.stringify({cycle:b.dataset.v})});
     if(d&&d.ok){S.buttonCycle=d.cycle;render();}
     else msg('#bcyclemsg','failed: '+((d&&d.error)||'no response'),true);};
+
+  const thr=$('#thr');
+  if(thr)thr.onchange=()=>applySettings({charge_threshold:+thr.value});
 
   const pmode=$('#pmode');
   if(pmode)pmode.onclick=e=>{const b=e.target.closest('[data-v]');if(!b)return;

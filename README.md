@@ -7,7 +7,7 @@ A Linux replacement for the Eluktronics Control Center, for the **HYDROC-16 G1**
 battery charging policy, keyboard and chin bar RGB — in a browser UI backed by a
 small privileged daemon.
 
-> **v0.9.0 — beta.** This writes to your laptop's embedded controller. Read
+> **v0.9.1 — beta.** This writes to your laptop's embedded controller. Read
 > [Safety](#safety) before you start. It is validated on **one** machine model
 > and the installer refuses to run on anything else, by design.
 

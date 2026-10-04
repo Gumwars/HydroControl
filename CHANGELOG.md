@@ -1,5 +1,101 @@
 # Changelog
 
+## [0.9.1] — 2026-10-04
+
+One evening with a battery that was not defective, and most of what this
+project believed about charging turned out to be wrong.
+
+### The charge threshold works
+
+It had been called inert since the second day. It is not. Set to 60, charging
+stopped at 3.93 V/cell; raised back to 80, it restarted within one 30-second
+sample.
+
+**Why a month of testing missed it.** There are two limits and charging stops
+at whichever comes first: this threshold, and a fixed hold at about 4.175 V
+per cell against a 4.450 V rating. The default is 80, and at 80 the voltage
+ceiling arrives first, so the threshold never bites. Every test used the
+default. Every result was locally correct and generalised past its evidence.
+
+The control is back in the UI, with the three things that make it usable: it
+does nothing above roughly 75, the number set will not match where charging
+stops, and the reported percentage keeps climbing after the current reaches
+zero.
+
+### The pack holds 77% of its rating, measured twice
+
+```
+discharged out   4865 mAh    98% -> 2%
+charged in       4950 mAh    2%  -> termination
+agreement        98.3%
+```
+
+Two integrations in opposite directions, same session. Against a 6400 mAh
+design figure. The ~23% difference is the voltage derating, which is real
+protection and costs real runtime.
+
+### The last stretch of every charge is fabricated
+
+Caught twice in one evening. At real termination the current goes to zero,
+the voltage starts relaxing downward, and the reported charge keeps climbing
+in exact multiples of 64 mAh — one percent of the design figure. 640 mAh of
+it in ninety seconds, with nothing flowing.
+
+`BAT_REMAIN_CAPACITY` in the EC holds the same invented number, so it is not
+the kernel driver and not ACPI. And the reported figure walks straight
+through the threshold setting without the charge resuming, which settles that
+the EC compares against its own state of charge rather than the number in
+sysfs.
+
+### Shining a light on it
+
+- **A live coulomb counter.** `current_now` is the only independent
+  measurement on the machine. The daemon integrates it and shows it beside
+  what the OS claims, with the ratio between them. It refuses to invent: no
+  ratio from one sample, nothing counted across a gap over 300 s, clean reset
+  on direction change.
+- **A banner** that appears only while the seam is open, saying in plain words
+  that the battery is not charging and the number is still going up.
+- **A volts-per-cell bar** scaled 3.00 V to the pack's 4.450 V rating with the
+  ceiling marked at 4.175, so the 19% of the track that can never be reached
+  is the protection, drawn to scale. It explains itself under load, because
+  terminal voltage is not open-circuit voltage.
+
+### Corrections
+
+- The derating is **not** adaptive to wear. A 0-cycle pack produced the same
+  16800 mV as a 9%-worn one. The adaptive story came from having only ever
+  had a worn pack.
+- The pack never reaches 16800 mV. It regulates at ~16700, and the
+  contradiction had been sitting one line from the claim for weeks because
+  one number was the register and the other was the pack.
+- 9% wear over two years is normal calendar aging, not fast. Cycles were the
+  wrong denominator.
+- Temperature at `0x0502:0x0503` is little-endian. Labelled the other way, it
+  read 188 °C.
+- `battery_watch.py` appended 13 columns under an 11-column header, found
+  while it was collecting the decisive measurement.
+
+### The 118 firmware update was analysed and declined
+
+The vendor's release note gives the whole change: a microcode bump to 0x136.
+This machine already runs 0x137 from `intel-ucode`. Across nine BIOS
+releases there is no CVE, no vulnerability fix and no ME update. The EC's
+only change is "Support copilot long press".
+
+Declining also keeps the option — `lowest_supported_fw_version` stays at 105
+rather than being pinned to 108.
+
+### Still open
+
+- Whether the discharge below 5% was necessary, or whether setting the
+  threshold below the ceiling was always sufficient. Tonight was the first
+  time either had happened, and they are confounded.
+- Whether the charging mode and the threshold interact. Every measurement so
+  far was taken on Stationary.
+- What drives the 34 mA current quantum, which appears in every charge on
+  three packs across two months.
+
 ## [0.9.0] — 2026-10-02
 
 The first tagged release: 94 commits over five weeks, and the last known-good

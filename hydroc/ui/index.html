@@ -181,6 +181,18 @@ input[type=range]:disabled{opacity:.4}
 .chart .end{fill:var(--color-accent-200)}
 .chartlbl{font:400 9.5px var(--font-mono);fill:var(--color-neutral-500)}
 .bar{height:6px;border-radius:3px;background:var(--color-neutral-900);overflow:hidden}
+/* Volts per cell. Taller than .bar and not clipped, because the point
+   is the markers sitting ON the track -- the gap between the ceiling
+   and the rating is the protection, and it has to be visible. */
+.vbar{position:relative;height:14px;border-radius:7px;
+  background:var(--color-neutral-900);margin:var(--space-2) 0 var(--space-3)}
+.vbar i{display:block;height:100%;border-radius:7px;background:var(--color-accent);
+  transition:width .4s ease}
+.vbar u{position:absolute;top:-3px;bottom:-3px;width:2px;text-decoration:none;
+  background:var(--color-text);opacity:.55}
+.vbar u.rating{background:var(--color-danger);opacity:.75}
+.vscale{display:flex;justify-content:space-between;font-size:10px;
+  color:var(--color-neutral-400)}
 .bar i{display:block;height:100%;background:var(--color-accent);border-radius:3px;
   transition:width .45s cubic-bezier(.4,0,.2,1)}
 </style>
@@ -914,6 +926,22 @@ function vBatt(){
       the current reaches zero — a charge that really ended at 77% was displayed as 100%
       ninety seconds later. Set 60 and expect a stop somewhere in the forties.</div>`}
   </div>
+  <div class="card" style="margin-top:var(--space-4)">
+    <div class="row"><div class="kick">Volts per cell</div>
+      <span class="kv"><span data-t="volts_per_cell">—</span> V</span></div>
+    <div class="vbar">
+      <i id="vfill" style="width:0%"></i>
+      <u id="vceil" title="charge stops here"></u>
+      <u class="rating" id="vrate" title="what the pack is rated for"></u>
+    </div>
+    <div class="vscale"><span>3.00</span><span>ceiling 4.175</span><span>rated 4.450</span></div>
+    <div class="lbl">The honest instrument. A percentage on this machine is derived from a
+      capacity the pack never reaches; this is measured. Charging stops at the first marker
+      and the pack is rated to the second, so <strong>the gap on the right is protection you
+      are getting and cannot see anywhere else</strong> — about 275 mV per cell, which is
+      why a full charge yields roughly 4950 mAh of a 6400 mAh rating.</div>
+    <div class="lbl" style="margin-top:var(--space-2)" id="vnote"></div>
+  </div>
   <div class="grid g3" style="margin-top:var(--space-4)">
     <div class="card"><div class="kick">Health</div>
       <div class="row"><span class="lbl">Cycles</span><span class="kv">${num(S.state.charge_cycles)}</span></div>
@@ -1097,6 +1125,29 @@ function paintTelemetry(){
     b.style.width=(v===null||v===undefined?0:Math.max(0,Math.min(100,v/255*100)))+'%';
   });
   paintChart();
+  // Volts per cell against the two limits. 3.00 V is a conventional Li-ion
+  // cutoff and 4.450 the pack's rating, so the track spans what the cells
+  // could do and the fill shows what the firmware allows.
+  const VMIN=3.0, VCEIL=4.175, VRATE=4.45;
+  const vpos=v=>Math.max(0,Math.min(100,(v-VMIN)/(VRATE-VMIN)*100));
+  const vf=$('#vfill'), vc=$('#vceil'), vr=$('#vrate'), vn=$('#vnote');
+  if(vf){
+    const v=S.tel.volts_per_cell;
+    vf.style.width=(v===null||v===undefined?0:vpos(v))+'%';
+    vf.style.background=(v!==null&&v!==undefined&&v>VCEIL+0.005)
+      ?'var(--color-warn)':'var(--color-accent)';
+    if(vc)vc.style.left=vpos(VCEIL)+'%';
+    if(vr)vr.style.left='calc(100% - 2px)';
+    if(vn)vn.textContent=(v===null||v===undefined)?''
+      :S.tel.current_ma>0&&S.tel.status==='Discharging'
+        ? `Under a ${S.tel.current_ma} mA load, so this reads low — terminal voltage `
+          +`includes the drop across the pack's own resistance. It recovers when the load does.`
+      :S.tel.current_ma>0&&S.tel.status==='Charging'
+        ? `Charging at ${S.tel.current_ma} mA, so this reads high for the same reason. `
+          +`The resting voltage is lower than shown.`
+        : 'At rest, so this is close to the cells\' true open-circuit voltage.';
+  }
+
   // The seam, said plainly: the OS reports charge moving and none is.
   const fab=$('#fabricating');
   if(fab){

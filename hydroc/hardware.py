@@ -153,6 +153,7 @@ class Hardware:
         self.ec = EC()
         self._hwmon = find_hwmon()
         self._energy = None          # (microjoules, monotonic seconds)
+        self._coulomb = None         # running charge integral, see _coulomb_step
 
     # -- availability ------------------------------------------------------
 
@@ -236,6 +237,58 @@ class Hardware:
         out["ac_online"] = _read("/sys/class/power_supply/AC0/online") == "1"
         if out.get("voltage_mv"):
             out["volts_per_cell"] = round(out["voltage_mv"] / 1000 / 4, 3)
+        out.update(self._coulomb_step(out))
+        return out
+
+    # -- what the battery is actually doing --------------------------------
+    #
+    # Everything sysfs reports about charge is derived from one number.
+    # charge_now is capacity x (charge_full / 100), charge_full is a figure
+    # the pack never reaches, and after a charge terminates the percentage
+    # keeps climbing with no current flowing -- 640 mAh of it, measured, in
+    # ninety seconds.
+    #
+    # current_now is the only independent measurement. Integrating it gives
+    # the charge that actually moved, and comparing that against the change
+    # in charge_now gives the gap, live, instead of after the fact in a CSV.
+    # On this machine a full discharge came out at 0.786.
+
+    COULOMB_MAX_GAP_S = 300        # a suspend or a stalled poll ends the leg
+
+    def _coulomb_step(self, t: dict) -> dict:
+        """Accumulate real charge since the last direction change."""
+        ma, status = t.get("current_ma"), t.get("status")
+        reported = t.get("charge_now_mah")
+        if ma is None or reported is None:
+            return {}
+        leg = ("charge" if status == "Charging"
+               else "discharge" if status == "Discharging" else "idle")
+        now = time.monotonic()
+        st = self._coulomb
+
+        if st is None or st["leg"] != leg:
+            # A new leg. Nothing integrated yet, so report nothing rather
+            # than a ratio built from one sample.
+            self._coulomb = st = {"leg": leg, "t": now, "ma": ma,
+                                  "mah": 0.0, "from_reported": reported}
+        else:
+            dt = now - st["t"]
+            if 0 < dt <= self.COULOMB_MAX_GAP_S:
+                st["mah"] += (st["ma"] + ma) / 2 * dt / 3600
+            st["t"], st["ma"] = now, ma
+
+        measured = st["mah"]
+        claimed = abs(reported - st["from_reported"])
+        out = {"coulomb_leg": leg,
+               "coulomb_measured_mah": round(measured, 1),
+               "coulomb_claimed_mah": claimed,
+               # Only once there is enough of both to divide meaningfully.
+               "coulomb_ratio": (round(measured / claimed, 3)
+                                 if claimed >= 64 and measured > 0 else None)}
+
+        # The seam itself: the OS says charge is moving and no current is.
+        out["fabricating"] = bool(
+            leg != "idle" and ma == 0 and claimed > 0)
         return out
 
     # -- persistent settings: read actual state ----------------------------

@@ -527,3 +527,51 @@ where one dominates makes the other look absent.
 The 34 mA current quantum appears again in this charge — decrements of 34,
 68, 102, 136 and 272 mA, all multiples — on a third pack and a fourth
 session.
+
+
+## Which battery was in the machine, and when (2026-10-03)
+
+The owner's timeline, and it is confirmed by `charge_full` in the logs:
+
+| period | pack | `charge_full` | reports |
+|---|---|---|---|
+| project start – **2026-09-20** | the **defective** replacement | 6400000 | 0% wear at 77 cycles; later shut the laptop off at a reported 46% |
+| 2026-09-20 – 2026-10-02 | the **original**, two years old | 5800000 | 9.4% wear, normal calendar aging |
+| 2026-10-02 – | the new RMA pack | 6400000 | 0 cycles, not yet learned |
+
+`battery-v.csv` (08-18) and `charge-profiles.csv` (09-10) both read 6400000.
+Every log from 09-28 reads 5800000. The swap is visible in the data.
+
+### The foundational conclusion was formed on the defective pack
+
+```
+2026-08-30  Stop claiming a charge limit the EC never enforces
+2026-09-10  Charging profiles: measured inert at the ceiling, by percentage and by voltage
+            ----- pack replaced 2026-09-20 -----
+2026-09-28  Retract the charging-profile null, fix four instrumentation bugs
+```
+
+Both of the commits that established "the limit does nothing" ran against a
+battery whose gauge was fabricating its capacity and would later drop the
+machine at a reported 46%. The percentage readings those conclusions rest on
+were coming from an instrument that was lying.
+
+### But it does not explain the whole month
+
+Everything from 2026-09-28 onward — the WMI capture, the firmware
+disassembly, the Windows trip — ran on the healthy original pack and reached
+the same conclusion. The defective battery was gone by then.
+
+What survived the pack swap was the method: **every one of those tests used
+the default threshold of 80**, where the voltage ceiling terminates first and
+the threshold genuinely never bites. A correct observation, generalised
+beyond its evidence, and never challenged because no one varied the setting.
+
+Our own instrumentation accounts for the rest — ACPI replies truncated at the
+wrong null until 09-30, the bank stride that made reachable code look dead,
+the temperature endianness, the CSV header that silently shifted columns.
+
+So the honest division: the defective pack poisoned the first three weeks and
+is the single largest contributor to the wrong answer. The next two weeks
+were poisoned by testing one setting and by bugs in the instruments. Neither
+alone would have held the conclusion in place for a month; together they did.

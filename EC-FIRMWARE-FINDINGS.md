@@ -763,3 +763,70 @@ the 90% reading above is the true state of charge and the design figure is
 simply unreachable by design. `battery_watch.py` logs it and
 `battery_summary.py` already implements the integration -- it has never been
 run across a full cycle on a healthy pack.
+
+
+## What the derating costs: a measured discharge (2026-10-03)
+
+A reported 98% to a reported 2% on the zero-cycle pack, 30 s sampling, 329
+samples over 2.75 h, no gaps. Integrating `current_ma` — the only
+independent measurement in the log, since `charge_now` is `capacity × 64`:
+
+```
+delivered (integrated current)   4828 mAh
+reported  (charge_now delta)     6144 mAh
+ratio                            0.786      battery_summary flags below 0.85
+per reported point               50.3 mAh   against the 64.0 the gauge assumes
+implied real capacity            ~5030 mAh  = 79% of the 6400 mAh design figure
+stopped at                       3.387 V/cell, so this is a FLOOR
+```
+
+### The percentage scale is honest; the mAh figures are not
+
+This is the cleaner reading of the 0.786. The gauge's **percentage** tracks
+the pack consistently — 96 points cost 4828 mAh, about 50 mAh each, evenly.
+What is wrong is the number it multiplies them by. `charge_now` is computed
+as `capacity × (charge_full / 100)`, and `charge_full` is 6400 mAh, which
+this pack does not hold.
+
+So every mAh figure sysfs reports on this machine is a percentage dressed up
+in units it has not earned.
+
+### And it puts a price on the voltage derating
+
+The EC holds the pack at **4.175 V/cell against a 4.450 V/cell rating**. A
+high-voltage cell charged 275 mV/cell short of its rating would be expected
+to deliver roughly three quarters to five sixths of its rated capacity. The
+measurement lands at **79%**, inside that range.
+
+So the three results are one result:
+
+| observation | explanation |
+|---|---|
+| charge terminates near a reported 90% | the voltage ceiling is reached |
+| the last 10% appears with no current | the gauge walks the display to 100% |
+| a full discharge yields 79% of design | the pack was never more than ~79% full |
+
+The protection is real, permanent, and **costs about a fifth of the rated
+runtime**. That is a defensible engineering trade — holding 275 mV/cell off a
+Li-ion pack buys a large multiple in calendar life — but it is made silently,
+and the reporting is arranged so the owner cannot see it. A 6400 mAh sticker
+on a pack the firmware will only ever fill to about 5030 mAh is the part that
+is hard to defend.
+
+### Confidence, and what would sharpen it
+
+Solid: the integration itself. 329 clean samples, no interval over 90 s,
+current averaging 1754 mA with no stalls.
+
+A floor, not a total: the discharge was stopped at 3.387 V/cell. Typical
+Li-ion cutoff is nearer 3.0, so there was usable charge left and real
+capacity is somewhat above 5030 mAh.
+
+Assumed: that the percentage scale is linear. It demonstrably is not at the
+very top, where 90–100% is fabricated. If the bottom is compressed the same
+way, 50.3 mAh per point understates the middle of the range.
+
+**The confirming measurement is the recharge**, and it happens next anyway.
+Integrating current *into* the pack from 2% to termination should land near
+the same figure. Two independent integrations agreeing, in opposite
+directions, would make this a measurement rather than an inference.

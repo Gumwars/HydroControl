@@ -830,3 +830,59 @@ way, 50.3 mAh per point understates the middle of the range.
 Integrating current *into* the pack from 2% to termination should land near
 the same figure. Two independent integrations agreeing, in opposite
 directions, would make this a measurement rather than an inference.
+
+
+## Confirmed by integrating both directions (2026-10-03, late)
+
+The recharge was integrated the same way the discharge was, on the same pack
+in the same session:
+
+```
+discharged out   4865 mAh    98% -> 2%,  stopped at 3.387 V/cell
+charged in       4950 mAh    2%  -> termination at 4.169 V/cell
+agreement        98.3%
+```
+
+Two independent integrations, opposite directions, agreeing to 1.7%. The
+small excess on the charge side is charging inefficiency, which is expected
+and is the right sign.
+
+**This pack holds about 4950 mAh against a 6400 mAh design rating — 77%.**
+That is now a measurement rather than an inference from a single discharge.
+
+So every mAh figure the system reports is fiction by about a quarter. At the
+moment of real termination the gauge read 4928 mAh; it then climbed to 5312
+in ninety seconds with the current at zero, heading for 6400.
+
+### The second fabrication event, caught live
+
+```
+21:00:45  76%  4864 mAh  272 mA  4.181   Charging
+21:01:15  77%  4928 mAh    0 mA  4.1692  Charging   <- real termination
+21:01:45  80%  5120 mAh    0 mA  4.1692  Charging   <- +192 mAh, no current
+21:02:15  81%  5184 mAh    0 mA  4.1692  Charging
+21:02:45  83%  5312 mAh    0 mA  4.1692  Charging
+```
+
+384 mAh claimed in 90 seconds with nothing flowing, in increments that are
+all multiples of 64 — one percent of the design figure. This is the second
+time it has been captured today, which makes it the behaviour rather than an
+incident.
+
+**It walks straight through 80.** The threshold was set to 80 and the
+reported capacity passed it at 21:01:45 without the charge resuming, which
+settles something: the EC does not compare the threshold against the number
+in sysfs. It has its own state of charge, and the reported percentage is a
+separate, looser story told to the OS.
+
+### Real termination moved between two charges to the same voltage
+
+Earlier the same day, at the same threshold and the same ~4.17 V/cell, the
+charge really ended at a reported **90%**. This one ended at a reported
+**77%**. Same voltage ceiling, same threshold, twelve points apart in what
+the gauge called it.
+
+The integrations agree with each other; the percentages do not agree with
+themselves. Whatever the reported scale is anchored to, it moved between two
+charges a few hours apart — most likely because the deep discharge in between
+changed the gauge's estimate.

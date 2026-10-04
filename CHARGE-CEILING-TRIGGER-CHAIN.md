@@ -355,3 +355,68 @@ thermal path is separate from and overlaps the charge threshold, and this
 capture was taken at 29.85 °C — one point on a curve nobody has plotted. A
 capture during a hot charge, after a gaming session, would test it for the
 cost of one command.
+
+
+## 79% and a threshold of 80: the experiment was never run (2026-10-03)
+
+The measured capacity came out at **79% of design** on a machine whose charge
+threshold register reads **80**. 80% of 6400 mAh is 5120; the measurement
+implied ~5030 and was a floor. That is close enough to demand an explanation
+rather than a shrug.
+
+### Two hypotheses now fit every observation equally
+
+**(a) Fixed voltage derating.** The EC holds 4.175 V/cell regardless of the
+threshold. The threshold register is inert. 79% is what that voltage yields
+on a 4.450 V/cell cell, and its proximity to 80 is coincidence.
+
+**(b) The threshold is enforced, and the display is rescaled.** The EC stops
+at 80% of true capacity and reports that as 100%. The whole reported 0–100%
+scale maps onto 0–80% of the pack. 4.175 V/cell is simply the voltage at 80%
+state of charge, not a target.
+
+Both predict everything observed: charging "continues past a reported 80% to
+100%", terminates near 4.175 V/cell, and a full discharge yields ~79% of
+design. Under (b), charging past a *reported* 80 is expected — reported 80 is
+true 64%, and the stop is at reported 100.
+
+### The data that looked like a test is read corruption
+
+Several logs appear to contain runs at other thresholds. They do not:
+
+| log | date | anomalous threshold reads |
+|---|---|---|
+| `phantom-check.csv` | 2026-09-28 | 5 of 1883 (0.27%) — single samples at 47, 72, and three empty |
+| `wmi-ceiling.csv` | 2026-09-28 | 1 of 981 (0.10%) — one sample at 46 |
+
+Each is a lone sample with the neighbours back at 80 and the probe's own
+`phase` column unchanged. Both logs predate the ACPI reply truncation fix of
+2026-09-30, which is exactly the bug that produced garbled single reads.
+
+`chargectrl.csv` has 424 consecutive rows at threshold 90, which looks like a
+genuine run — but it ends at 09:23:04 still `Charging` at 90% with 2040 mA
+flowing and `reached` still 0. **The log stopped; the charge did not.**
+
+So no charge has ever been taken to termination with the threshold held at a
+value other than 80.
+
+### The discriminating test
+
+Set the threshold to **60**, charge from the current 2% to termination, and
+integrate `current_ma`.
+
+| | delivered | terminates near |
+|---|---|---|
+| (a) fixed derating | ~5030 mAh, unchanged | 4.175 V/cell |
+| (b) threshold enforced | ~3840 mAh | lower, around 4.0 V/cell |
+
+Also worth watching at the moment of termination: `0x07B9` bit 7,
+`CHARGE_CTRL_REACHED`. Every capture so far has been taken mid-charge with it
+clear, which says nothing about whether it arms at the stop.
+
+### This was removed from the UI prematurely
+
+The threshold control was taken out of the app earlier the same day, on the
+strength of "the threshold does nothing". That conclusion rests entirely on
+observing a charge pass a *reported* 80% — which hypothesis (b) predicts just
+as well. The removal should be revisited if (b) holds.

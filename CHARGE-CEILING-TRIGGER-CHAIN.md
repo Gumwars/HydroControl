@@ -420,3 +420,68 @@ The threshold control was taken out of the app earlier the same day, on the
 strength of "the threshold does nothing". That conclusion rests entirely on
 observing a charge pass a *reported* 80% — which hypothesis (b) predicts just
 as well. The removal should be revisited if (b) holds.
+
+
+## The threshold works. (2026-10-03, same evening)
+
+The test designed two sections above was run. Threshold moved from 80 to 60
+part-way through a charge from 2%, logging every 30 s.
+
+```
+                 accepted    terminates at    reported stop
+predicted (a)   ~4800 mAh     4.175 V/cell             100%
+predicted (b)   ~2900 mAh     ~4.00 V/cell
+OBSERVED         3054 mAh     3.9348 V/cell             47%
+```
+
+Current reached zero at 19:39:14 and stayed there; the voltage then relaxed
+downward while the status still read `Charging`. Hypothesis (b).
+
+**The charge threshold on this machine is enforced.** Every conclusion in
+this document that says otherwise is wrong.
+
+### Why it looked inert for a month
+
+The default is 80, and at 80 the cap lands close enough to the gauge's "full"
+point that the fabricated last stretch covers the gap. Set it to 80, charge,
+watch it reach a reported 100%, and the reasonable conclusion is that nothing
+capped anything.
+
+At 60 the gap is too large to paper over, so the stop becomes visible.
+
+Everything the project observed is consistent with a working threshold seen
+through a display that cannot show it:
+
+| observation | what it actually was |
+|---|---|
+| "charges straight through 80% to 100%" | the cap, then the gauge walking to 100 |
+| `charge_full` always equals design | the capped capacity reported as full |
+| a discharge yields 79% of design | the 80% cap, measured |
+| the vendor's own engineer saw "something happening, but not what is advertised" | exactly this |
+
+It also took effect **mid-charge**: the threshold was changed with the charge
+already running and the EC acted on it. The reported arming conditions —
+profile set before plug-in, a prior discharge below 5% — were not needed
+here.
+
+### What is not explained
+
+It stopped at a reported **47%** with the threshold at **60**, thirteen points
+low. The reported percentage is known to be unreliable, and the EC compares
+against its own internal state of charge rather than the number in sysfs, so
+the two need not agree — but the size of the gap is not accounted for.
+
+The threshold was also changed part-way through this charge, so the stop may
+reflect something latched under 80 beforehand. **The clean re-run is a
+threshold of 60 set before the charger is connected, from a low state of
+charge.** That also happens to be run C of the arming-conditions matrix.
+
+### Direct confirmation still outstanding
+
+`0x07B9` bit 7 is `CHARGE_CTRL_REACHED`. With the threshold at 60 and
+charging stopped, an armed bit reads `0xBC`. Every previous capture was taken
+mid-charge with the bit clear, which was never evidence of anything.
+
+### The UI control was removed on a false conclusion
+
+It was taken out earlier the same day. That was wrong and should be restored.

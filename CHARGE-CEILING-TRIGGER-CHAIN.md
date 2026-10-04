@@ -485,3 +485,45 @@ mid-charge with the bit clear, which was never evidence of anything.
 ### The UI control was removed on a false conclusion
 
 It was taken out earlier the same day. That was wrong and should be restored.
+
+
+### Refinement: two limits, and the lower one wins
+
+Raising the threshold back to 80 restarted charging within one sample — 47%
+to 75% and still going, 1803 mAh accepted. Threshold down stops it, threshold
+up restarts it, nothing else changed. The control is causal.
+
+But the voltage tells the rest of the story:
+
+| threshold | terminated at | what stopped it |
+|---|---|---|
+| 60 | **3.9348 V/cell** | the state-of-charge threshold |
+| 80 | pinned at **4.1753 V/cell**, the CV plateau | the voltage ceiling |
+
+At 60 the charge stopped nowhere near the voltage ceiling. At 80 it reached
+the ceiling and sat on it, exactly as every previous charge has.
+
+**So both earlier hypotheses were true, of different settings.** There are two
+independent limits — a state-of-charge threshold and a fixed ~4.175 V/cell
+derating — and charging stops at whichever is reached first:
+
+- At the **default 80**, the voltage ceiling arrives at or before the 80%
+  point, terminates the charge, and the threshold never bites. Every
+  observation of "the threshold does nothing" was made at 80 and was
+  *locally correct*.
+- At **60**, the threshold is well below the ceiling, bites first, and the
+  control is plainly working.
+
+The claim in the section above — "every conclusion in this document that says
+otherwise is wrong" — is itself too strong. The conclusion was right about
+the default and wrong as a generalisation, which is a different and smaller
+error than being simply wrong. What nobody tested was a setting low enough
+for the threshold to be the binding constraint.
+
+This is the same shape as the owner's earlier correction about thermal
+policy: separate mechanisms that overlap, where observing only the region
+where one dominates makes the other look absent.
+
+The 34 mA current quantum appears again in this charge — decrements of 34,
+68, 102, 136 and 272 mA, all multiples — on a third pack and a fourth
+session.

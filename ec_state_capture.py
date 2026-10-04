@@ -66,8 +66,13 @@ SINGLES = [
     (0x04AB, "battery capacity %", {}),
     (0x0490, "charge guards", {0: "charging active", 2: "guard"}),
     (0x0497, "battery-read sync gate", {0: "enables 0xC81E sync"}),
-    (0x0502, "temperature hi (0.1 K)", {}),
-    (0x0503, "temperature lo", {}),
+    # Little-endian, like 0x0522:0x0523 and unlike 0x030E:0x030F. These
+    # labels were the other way round, which read 0x120C = 462.0 K = 188 C
+    # where the pack was at 35.85 C. The known-good baseline settles it:
+    # 0x0502 = 0xD6, 0x0503 = 0x0B is 0x0BD6 = 3030 = 29.85 C, so the LOW
+    # byte is first.
+    (0x0502, "temperature lo (0.1 K, LE pair with 0x0503)", {}),
+    (0x0503, "temperature hi", {}),
     (0x0522, "charge-control output lo (little-endian pair)", {}),
     (0x0523, "charge-control output hi", {}),
     (0x0730, "balanced PL1"), (0x0731, "balanced PL2"), (0x0732, "balanced PL4"),

@@ -886,3 +886,53 @@ The integrations agree with each other; the percentages do not agree with
 themselves. Whatever the reported scale is anchored to, it moved between two
 charges a few hours apart — most likely because the deep discharge in between
 changed the gauge's estimate.
+
+
+## Does the gauge learn? Not in one cycle — but it can (2026-10-03)
+
+After a full discharge to 2% and a full recharge to termination:
+
+```
+BAT_FULL_CAPACITY   0x0404:0x0405    6400   unchanged
+BAT_DESIGN_CAPACITY 0x0402:0x0403    6400
+```
+
+One complete cycle did not move it. But the value is **not a constant** — the
+original pack, logged on 2026-09-28, reported:
+
+```
+charge_full         5800000 uAh
+charge_full_design  6400000 uAh      a 9.4% difference
+```
+
+So the gauge can and does report a learned full capacity. This pack simply
+has not learned one yet, and a single cycle to a reported 2% was not enough.
+That is consistent with impedance-tracking gauges generally: a qualified
+learning discharge usually needs to reach the termination voltage, not a
+reported percentage, and often more than one pass.
+
+**The relearn advice stands but needs repeating.** One cycle is not a relearn.
+
+### Remaining capacity is fabricated at the EC, not above it
+
+`BAT_REMAIN_CAPACITY` (`0x0436:0x0437`) read **3008** at the threshold-60 stop
+and **6400** when full. 3008 is exactly 47 x 64, and 6400 is 100 x 64 — the
+same `capacity x 64` the sysfs figure is built from.
+
+That narrows where the invention happens. It is not the `uniwill-laptop`
+driver and not ACPI: the EC's own register already holds it. Either the EC
+computes the figure from a percentage, or the gauge IC hands it over that way
+and the EC passes it through.
+
+### A prediction worth checking in a few weeks
+
+This pack measurably holds **~4950 mAh**. If the gauge eventually learns and
+reports that as `charge_full`, the machine will show roughly **23% "wear" on a
+battery with a handful of cycles** — because the firmware never fills it past
+about 77% of the design figure, and a learning gauge has no way to tell a cap
+from a dead cell.
+
+Which also puts the original pack's 9.4% in a new light. 5800 mAh is 91% of
+design, well above the ~77% this firmware actually delivers, so that learned
+value was not the pack's usable capacity under this charging policy either.
+Whatever the gauge converged on, it was not what the pack gives you.

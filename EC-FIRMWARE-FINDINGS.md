@@ -936,3 +936,53 @@ Which also puts the original pack's 9.4% in a new light. 5800 mAh is 91% of
 design, well above the ~77% this firmware actually delivers, so that learned
 value was not the pack's usable capacity under this charging policy either.
 Whatever the gauge converged on, it was not what the pack gives you.
+
+
+## The charging mode does not touch the derating either (2026-10-05)
+
+Asked directly: can this pack reach its 6400 mAh rating? The one lever never
+tried was the charging mode — every measurement in this project had been
+taken on Stationary.
+
+Switched to High Capacity **mid-charge**, with `0x0490` bit 0 set so the
+value was live:
+
+| | `0x07A6` | bits 5:4 | `chg_target` |
+|---|---|---|---|
+| Stationary, mid-charge | `0x20` | 2 | 16800 mV |
+| Stationary, threshold stop | `0x20` | 2 | 16800 mV |
+| **High Capacity, charging** | `0x00` | **0** | **16800 mV** |
+
+The profile register changed. The charge target did not.
+
+So the derating is unconditional in every dimension that has now been tested:
+
+| varied | result |
+|---|---|
+| pack wear (9% vs 0%) | 16800 either way |
+| charge threshold (80 vs 60) | 16800 either way; the threshold acts on state of charge instead |
+| **charging mode (Stationary vs High Capacity)** | **16800 either way** |
+| temperature (29.85, 30.85, 35.85 °C) | 16800 at all three |
+
+**The answer to the original question is no.** 4.175 V/cell against a 4.450 V
+rating is fixed, so about 4950 mAh of a 6400 mAh rating is all this firmware
+will deliver, and nothing exposed to the OS changes it. The three profile
+names are cosmetic with respect to charge voltage — which the project long
+suspected from the firmware constants, and has now measured.
+
+### One caveat that keeps this from being airtight
+
+The mode was changed with the charge already running. The outside report's
+arming conditions included the profile being selected **before the charger is
+connected**, and while last night established that the *threshold* acts
+mid-charge, the profile may not. The clean version is High Capacity set with
+the charger unplugged, then connected.
+
+Worth doing, because a negative result that only rules out the mid-charge
+case leaves the interesting possibility open.
+
+### Also added to the capture
+
+`0x030E:0x030F` — hw_base, the pack maximum every derating is subtracted
+from, and big-endian unlike the other pairs. It had never been in
+`ec_state_capture.py`; a comparison tried to print it and got zero.

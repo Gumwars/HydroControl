@@ -97,6 +97,12 @@ SINGLES = [
     # cycle on a new pack is real advice. If it never moves, charge_full
     # carries no information and every wear figure this project has quoted
     # is a restatement of the design figure.
+    # hw_base: the pack's maximum, and the number every derating is
+    # subtracted from. BIG-endian, unlike 0x0522:0x0523 and 0x0502:0x0503.
+    # Missing from this capture until a comparison tried to print it and got
+    # zero.
+    (0x030E, "hw_base hi (BE pair with 0x030F) = pack max mV"),
+    (0x030F, "hw_base lo"),
     (0x0400, "BAT_POWER_UNIT lo"), (0x0401, "BAT_POWER_UNIT hi"),
     (0x0402, "BAT_DESIGN_CAPACITY lo"), (0x0403, "BAT_DESIGN_CAPACITY hi"),
     (0x0404, "BAT_FULL_CAPACITY lo"), (0x0405, "BAT_FULL_CAPACITY hi"),

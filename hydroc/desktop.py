@@ -531,11 +531,29 @@ class Window(Gtk.ApplicationWindow):
         return GLib.SOURCE_CONTINUE
 
 
+def start_display_service() -> None:
+    """Start hydroc-display if it is installed and not running. Best effort.
+
+    It is a user-session Wayland client (hydroc/displayd.py) and this window
+    runs as the user, so no escalation. A failure only means the Display card
+    says the service is not running -- the window must not wait on it.
+    """
+    if not shutil.which("systemctl"):
+        return
+    try:
+        subprocess.Popen(["systemctl", "--user", "start", "--no-block",
+                          "hydroc-display.service"],
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except OSError:
+        pass
+
+
 class App(Gtk.Application):
     def __init__(self) -> None:
         super().__init__(application_id=APP_ID)
 
     def do_activate(self) -> None:
+        start_display_service()
         win = self.props.active_window or Window(self)
         win.present()
 

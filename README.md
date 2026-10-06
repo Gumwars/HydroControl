@@ -7,7 +7,7 @@ A Linux replacement for the Eluktronics Control Center, for the **HYDROC-16 G1**
 battery charging policy, keyboard and chin bar RGB — in a browser UI backed by a
 small privileged daemon.
 
-> **v0.9.2 — beta.** This writes to your laptop's embedded controller. Read
+> **v0.9.3 — beta.** This writes to your laptop's embedded controller. Read
 > [Safety](#safety) before you start. It is validated on **one** machine model
 > and the installer refuses to run on anything else, by design.
 
@@ -29,6 +29,7 @@ small privileged daemon.
 | **Graphics mode** | Dynamic · dGPU only · iGPU only — a real firmware switch, applied at the next reboot |
 | **Platform toggles** | Fn lock, Super key, touchpad hotkey, AC auto-boot, USB powershare |
 | **Factory colour profile** | your panel's own factory calibration, fetched as Control Center does and applied through hyprmoncfg — see [below](#factory-colour-profile) |
+| **Display colour modes** | Standard · Gaming · Video · Read · Custom, on top of the factory calibration — see [below](#display-colour-modes) |
 | **Lock keys** | Num Lock and Caps Lock on the built-in keyboard: set now, restored at boot, resume and login |
 
 **Not yet:** battery calibration, display refresh-rate switching and the cooling
@@ -394,6 +395,38 @@ the line at the next hotplug — `hyprmoncfg save NAME`, then apply again.
 Without hyprmoncfg, add `icc = "/var/lib/hydroc/icc/<panel>-factory.icc"` to
 the panel's monitor rule yourself (`icc status` prints the exact line). On
 GNOME or KDE, import the file in the colour settings.
+
+---
+
+## Display colour modes
+
+Control Center's Standard / Gaming / Video / Read / Custom, each with its own
+brightness, colour temperature and R/G/B. Pick one on the **System** page, or:
+
+```bash
+python3 -m hydroc.cli display read
+python3 -m hydroc.cli display custom temperature=5000 blue=110
+python3 -m hydroc.cli display custom reset
+```
+
+**Hyprland only.** Windows writes these into the display's gamma ramp — which
+is exactly where Hyprland loads the factory calibration above, so copying it
+would throw the calibration away. These use Hyprland's colour matrix instead,
+applied on top. A matrix scales channels, so Windows' contrast slider and
+Video's lifted blacks are not offered; 6500 K, the panel's calibrated white
+point, is neutral.
+
+Hyprland resets the matrix when the program holding it exits, so a small
+service runs in your session. `install.sh` installs it as a user unit; start
+it from your Hyprland autostart:
+
+```lua
+hl.exec_cmd("sh -c 'systemctl --user import-environment WAYLAND_DISPLAY XDG_RUNTIME_DIR && systemctl --user start hydroc-display'")
+```
+
+The desktop app also starts it when it opens. Only one program can hold the
+colour matrix — if **hyprsunset** is running, the card says so; stop one.
+Settings are saved per user in `~/.config/hydroc/display.json`.
 
 ---
 

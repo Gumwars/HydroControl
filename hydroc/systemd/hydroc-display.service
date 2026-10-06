@@ -1,0 +1,16 @@
+[Unit]
+Description=HydroControl — display colour mode (Hyprland colour matrix)
+Documentation=file:@INSTALL_DIR@/hydroc/displayd.py
+# A USER unit: it is a Wayland client in your session. Hyprland resets the
+# colour matrix when this exits, so it has to keep running. Started from the
+# compositor's autostart (`systemctl --user start hydroc-display`), because
+# graphical-session.target is not activated by every Hyprland setup.
+
+[Service]
+Type=simple
+WorkingDirectory=@INSTALL_DIR@
+ExecStart=/usr/bin/python3 -m hydroc.displayd
+Environment=PYTHONPATH=@INSTALL_DIR@
+# Exits 0 when the compositor goes away (logout) -- that is not a crash.
+Restart=on-failure
+RestartSec=3

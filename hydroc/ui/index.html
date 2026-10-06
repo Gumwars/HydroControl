@@ -378,6 +378,7 @@ async function refreshState(){
   const gp=await api('/api/gpu');if(gp)S.gpu=gp;
   const lk=await api('/api/locks');if(lk)S.locks=lk;
   const ic=await api('/api/icc');if(ic)S.icc=ic;
+  if(!S.dispDrag){const dm=await api('/api/display');if(dm)S.display=dm;}
   const fd=await api('/api/found');if(fd)S.found=fd;
   // Defensive: this runs inside the shared state refresh, so anything that
   // throws here blanks the WHOLE app, not just the fan page. A presets map
@@ -771,6 +772,54 @@ function iccCard(){
       S.iccMsg.bad?'var(--color-danger)':'var(--color-accent)'}">${esc(S.iccMsg.text)}</div>`:''}
   </div>`;
 }
+// ── display colour mode ─────────────────────────────────────────────────────
+// Control Center's display modes, as Hyprland's colour matrix rather than the
+// gamma ramp Windows writes -- the ramp is where the factory calibration
+// lives. Held by hydroc-display, a user-session service; this card is a remote.
+const DISPSLIDERS=[
+ {k:'brightness',n:'Brightness',u:'%'},{k:'temperature',n:'Colour temperature',u:' K',step:100},
+ {k:'red',n:'Red',u:''},{k:'green',n:'Green',u:''},{k:'blue',n:'Blue',u:''}];
+function displayCard(){
+  const d=S.display;
+  if(!d)return '';
+  if(d.running===false||!d.modes)return `<div class="card" style="margin-top:var(--space-4)">
+    <div class="kick">Display colour mode</div>
+    <div class="lbl">${esc(d.error||'hydroc-display is not running')}</div>
+    <div class="lbl kv" style="font-size:10.5px;user-select:all">systemctl --user start hydroc-display</div></div>`;
+  const m=d.modes.find(x=>x.id===d.mode)||d.modes[0];
+  const lim=d.limits||{};
+  return `<div class="card" style="margin-top:var(--space-4)">
+    <div class="row"><div class="kick">Display colour mode</div>
+      <span class="kv">${esc((d.applied_to||[]).join(', ')||'not applied')}</span></div>
+    <div class="lbl">Applied on top of the factory calibration, not instead of it.
+      Each mode keeps its own settings.</div>
+    <div class="seg" id="dispmode" style="align-self:flex-start;margin-top:var(--space-3)">
+      ${d.modes.map(x=>`<button data-v="${x.id}" aria-pressed="${x.id===d.mode}">${esc(x.name)}${x.edited?' •':''}</button>`).join('')}</div>
+    ${DISPSLIDERS.map(sl=>{const [lo,hi]=lim[sl.k]||[0,255];const v=m.params[sl.k];
+      return `<div style="margin-top:var(--space-3)"><div class="row"><span class="lbl">${sl.n}</span>
+        <span class="kv" data-dispval="${sl.k}">${v}${sl.u}</span></div>
+        <input type="range" data-disp="${sl.k}" min="${lo}" max="${hi}" step="${sl.step||1}" value="${v}"></div>`;}).join('')}
+    <div style="margin-top:var(--space-3)"><button class="btn btn-secondary" id="dispreset"${m.edited?'':' disabled'}>Reset ${esc(m.name)}</button></div>
+    ${d.error?`<div class="lbl" style="margin-top:var(--space-2);color:var(--color-danger)">${esc(d.error)}</div>`:''}
+  </div>`;
+}
+async function setDisplay(body){
+  const d=await api('/api/display',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify(body)});
+  if(d)S.display=d;
+  render();
+}
+function bindDisplay(){
+  const seg=$('#dispmode');
+  if(seg)seg.onclick=e=>{const b=e.target.closest('[data-v]');if(b)setDisplay({mode:b.dataset.v});};
+  document.querySelectorAll('[data-disp]').forEach(r=>{
+    const k=r.dataset.disp, sl=DISPSLIDERS.find(x=>x.k===k);
+    r.oninput=()=>{S.dispDrag=true;const o=$(`[data-dispval="${k}"]`);if(o)o.textContent=r.value+sl.u;};
+    r.onchange=()=>{S.dispDrag=false;setDisplay({mode:S.display.mode,params:{[k]:+r.value}});};
+  });
+  const rs=$('#dispreset');if(rs)rs.onclick=()=>setDisplay({mode:S.display.mode,reset:true});
+}
+
 function bindIcc(){
   const b=$('#iccfetch');
   if(b)b.onclick=async()=>{S.iccMsg={text:'asking the Uniwill server…'};render();
@@ -1143,6 +1192,7 @@ function vSys(){
   </div>
   ${locksCard()}
   ${iccCard()}
+  ${displayCard()}
   ${foundCard()}
   ${gpuCard()}
   <div class="card" style="margin-top:var(--space-4)">
@@ -1464,6 +1514,7 @@ function bind(){
   bindGpu();
   bindLocks();
   bindIcc();
+  bindDisplay();
 }
 window.addEventListener('keydown',e=>{
   if(S.section!=='light'||S.kbTab!=='perkey')return;

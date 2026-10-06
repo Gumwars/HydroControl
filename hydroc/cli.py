@@ -416,10 +416,11 @@ def main(argv=None) -> int:
     ap.add_argument("command",
                     choices=["status", "state", "telemetry", "drift",
                              "apply", "write-default-profile", "doctor",
-                             "icc", "locks"])
+                             "icc", "locks", "display"])
     ap.add_argument("args", nargs="*",
                     help="icc: status | fetch | apply | import FILE;  "
-                         "locks: [num|caps on|off|default]")
+                         "locks: [num|caps on|off|default];  "
+                         "display: [MODE] [key=value ...] [reset]")
     ap.add_argument("-p", "--profile", help="profile JSON path")
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--json", action="store_true")
@@ -432,6 +433,8 @@ def main(argv=None) -> int:
         return icc_command(args.args, args.json)
     if args.command == "locks":
         return locks_command(args.args, args.profile, args.json)
+    if args.command == "display":
+        return display_command(args.args, args.json)
 
     hw = Hardware()
 
@@ -625,6 +628,43 @@ def icc_command(argv: list[str], as_json: bool) -> int:
         return 0
 
     raise SystemExit(f"unknown icc command {sub!r} (status | fetch | import FILE)")
+
+
+def display_command(argv: list[str], as_json: bool) -> int:
+    from . import displayd, displaymode
+    if not argv:
+        st = displayd.call({"op": "status"})
+    else:
+        req: dict = {"op": "set", "params": {}}
+        for a in argv:
+            if a in displaymode.MODES:
+                req["mode"] = a
+            elif a == "reset":
+                req["reset"] = True
+            elif "=" in a and a.split("=", 1)[0] in displaymode.LIMITS:
+                k, v = a.split("=", 1)
+                req["params"][k] = v
+            else:
+                raise SystemExit(f"display: {a!r} is not a mode ({', '.join(displaymode.ORDER)}), "
+                                 f"reset, or key=value ({', '.join(displaymode.LIMITS)})")
+        st = displayd.call(req)
+    if as_json:
+        print(json.dumps(st, indent=2))
+        return 0 if st.get("running", True) and st.get("ok", True) else 1
+    if st.get("running") is False or (st.get("error") and "modes" not in st):
+        print(st.get("error"), file=sys.stderr)
+        return 1
+    for m in st["modes"]:
+        mark = "*" if m["id"] == st["mode"] else " "
+        p = m["params"]
+        print(f" {mark} {m['name']:<9} brightness {p['brightness']}%  "
+              f"R {p['red']} G {p['green']} B {p['blue']}  {p['temperature']} K"
+              + ("  (edited)" if m["edited"] else ""))
+    print(f"\n  applied to {', '.join(st['applied_to']) or 'nothing'}")
+    if st.get("error"):
+        print(f"  {st['error']}", file=sys.stderr)
+        return 1
+    return 0
 
 
 def locks_command(argv: list[str], profile_path: str | None,

@@ -259,6 +259,15 @@ if (( HAVE_BLEAK )); then
   c_warn "  (stop LibreLPP first if you use it: systemctl --user disable --now lpp-daemon)"
 fi
 
+# Display colour modes: a USER unit, because it is a Wayland client in the
+# session. Installed for every user; nothing starts it until the compositor's
+# autostart does.
+mkdir -p /etc/systemd/user
+sed "s|@INSTALL_DIR@|$DIR|g" "$DIR/hydroc/systemd/hydroc-display.service" \
+  > /etc/systemd/user/hydroc-display.service
+c_ok "hydroc-display user unit installed (display colour modes, Hyprland)"
+c_warn "  start it from your Hyprland autostart:  systemctl --user start hydroc-display"
+
 # ── 5. Done ──────────────────────────────────────────────────────────────────
 # doctor is the real verdict: it checks the things this script cannot, like
 # whether the module actually bound and whether both RGB devices answer.

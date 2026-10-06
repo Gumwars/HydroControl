@@ -1,5 +1,58 @@
 # Changelog
 
+## [0.9.3] — 2026-10-06
+
+### Display colour modes
+
+Control Center's **Standard · Gaming · Video · Read · Custom**, each mode
+keeping its own brightness, colour temperature and R/G/B, editable and
+resettable. On the System page, or `python3 -m hydroc.cli display MODE`.
+
+**What Windows does**, decompiled from `GCUService.exe`: every mode is one
+call that builds a per-channel gamma ramp —
+`contrast · (x/256)^(1/γ) · 65535 + offset · 255` — and loads it with
+`SetDeviceGammaRamp`. Brightness, R/G/B and temperature are additive offsets.
+Standard and Gaming are both identity until edited; Video adds +10 brightness;
+Read sets Blue to 0, an offset of half of full scale.
+
+**Why it is not copied.** The gamma ramp is where Hyprland loads the factory
+calibration added in 0.9.2 — the profile carries a `vcgt` curve and
+`render:icc_vcgt_enabled` is on. A Windows-style mode would silently replace
+it. Hyprland has a second stage, a per-output 3×3 colour matrix
+(`hyprland_ctm_control_v1`, the one hyprsunset uses), so modes are matrices
+here, applied on top of calibration.
+
+A matrix scales; it cannot add. The translation keeps each mode's intent:
+
+| | Windows | here |
+|---|---|---|
+| neutral white | 4200 (arbitrary) | 6500 K — the panel's calibrated D65 |
+| R / G / B | offset, 128 neutral | gain `0.5 + v/256`, 128 = 1.0 |
+| Read | Blue offset −128 | blue × 0.5 — the same half-scale cut |
+| Video | brightness offset +10 | brightness × 1.04 |
+| contrast, lifted blacks | ramp only | not offered rather than faked |
+
+Temperature gains are relative to 6500 K and scaled so the largest is 1, so a
+shift never brightens a channel and never clips.
+
+**`hydroc-display`**, a user service. Hyprland resets the matrix when the
+client holding it disconnects, so something has to keep running in the
+session, and a Wayland connection belongs to the user, not root. It is a
+stdlib-only Wayland client — the wire format is a 32-bit object id, a 16-bit
+size and opcode, then 4-byte-aligned arguments — that holds the matrix on the
+built-in panel, re-applies when the output comes back, and keeps its state in
+`~/.config/hydroc/display.json`. The root daemon reaches it through a socket
+in `$XDG_RUNTIME_DIR`, as it does the LPP sidecar.
+
+Only one client may hold the matrix. A second is told `blocked` and ignored by
+the compositor, so a running hyprsunset is reported, not fought.
+
+Started from the Hyprland autostart, because `graphical-session.target` is not
+activated by every Hyprland setup — it is not on the development machine. The
+desktop app also starts it on launch.
+
+688 tests.
+
 ## [0.9.2] — 2026-10-06
 
 Two features the Windows app has and this one did not, both read out of the

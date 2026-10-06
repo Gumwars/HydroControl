@@ -150,6 +150,8 @@ hydroc/            the application
   rgb.py           visual key id -> matrix bridge; chin bar modes
   colorprofile.py  factory ICC: fetch (root), store, apply via hyprmoncfg (user)
   lockkeys.py      Num/Caps Lock on the built-in keyboard; state from Hyprland IPC
+  displaymode.py   display colour modes as a 3x3 matrix -- pure
+  displayd.py      user-session Wayland client holding Hyprland's CTM
   lpp.py           LPP dock protocol (pure, no transport)
   lppd.py          LPP sidecar daemon — BLE, Unix socket at /run/hydroc/lpp.sock
   deps.py          "can the ROOT daemon import this?" — one answer, three-valued

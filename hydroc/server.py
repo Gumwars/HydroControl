@@ -30,7 +30,7 @@ from .cli import (PROFILE_PATHS, REPAIR_MODPROBE, REPAIR_MODULE, REPAIR_RELOAD,
 from .hardware import Hardware
 from . import fancurve, found, gpumode, presets, rgb
 from . import nativemode
-from . import colorprofile, lockkeys
+from . import colorprofile, displayd, lockkeys
 from .hotkeys import ProfileButton
 
 # The LPP dock lives behind a sidecar daemon (hydroc.lppd) because BLE is async
@@ -317,6 +317,10 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(locks_status())
         if route == "/api/icc":
             return self._json(colorprofile.status())
+        if route == "/api/display":
+            # A user-session service (Wayland), reached by its socket the way
+            # the LPP sidecar is. Root never resolves the user's $HOME.
+            return self._json(displayd.call({"op": "status"}))
 
         if route == "/api/fan":
             state = _hw.read_state()
@@ -431,6 +435,13 @@ class Handler(BaseHTTPRequestHandler):
 
         if route == "/api/icc/fetch":
             return self._json(icc_fetch())
+
+        if route == "/api/display":
+            req = {"op": "set"}
+            for k in ("mode", "params", "reset"):
+                if k in payload:
+                    req[k] = payload[k]
+            return self._json(displayd.call(req))
 
         if route == "/api/apply":
             desired = payload.get("settings")

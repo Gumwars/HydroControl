@@ -376,6 +376,8 @@ async function refreshState(){
   const l=await api('/api/lpp');
   S.lpp=l||{running:false};
   const gp=await api('/api/gpu');if(gp)S.gpu=gp;
+  const lk=await api('/api/locks');if(lk)S.locks=lk;
+  const ic=await api('/api/icc');if(ic)S.icc=ic;
   const fd=await api('/api/found');if(fd)S.found=fd;
   // Defensive: this runs inside the shared state refresh, so anything that
   // throws here blanks the WHOLE app, not just the fan page. A presets map
@@ -697,6 +699,85 @@ function foundCard(){
       <span class="kv">had ${esc(JSON.stringify(d.found))} · wanted ${esc(JSON.stringify(d.intent))}</span>
       </div>`).join('')}
   </div>`;
+}
+
+// ── lock keys ───────────────────────────────────────────────────────────────
+// Control Center's Num Lock switch is a synthesised keypress, not firmware.
+// Ours does the same into the built-in keyboard's own input device, and the
+// state shown is the keyboard LED -- what the compositor actually holds for
+// that keyboard. Picking On/Off sets it now and makes it the default at boot,
+// resume and login; "Leave alone" hands it back to the desktop.
+const LOCKNAMES={num:'Num Lock',caps:'Caps Lock'};
+function locksCard(){
+  const l=S.locks;
+  if(!l)return '';
+  if(!l.available)return `<div class="card" style="margin-top:var(--space-4)">
+    <div class="kick">Lock keys</div><div class="lbl">${esc(l.error||'keyboard not found')}</div></div>`;
+  const d=l.defaults||{};
+  return `<div class="card" style="margin-top:var(--space-4)">
+    <div class="kick">Lock keys · built-in keyboard</div>
+    <div class="lbl">On or Off sets it now and restores it at boot, resume and every login.
+      Leave alone lets the desktop decide. External keyboards keep their own state.</div>
+    ${Object.keys(LOCKNAMES).map(k=>{const cur=d[k]===true?'on':d[k]===false?'off':'none';
+      return `<div class="row" style="margin-top:var(--space-3)">
+      <div><div style="font-size:13.5px">${LOCKNAMES[k]}</div>
+        <div class="lbl kv" style="font-size:10.5px">now ${l[k]===null?'unknown':l[k]?'on':'off'}</div></div>
+      <div class="seg" data-lock="${k}">${[['none','Leave alone'],['on','On'],['off','Off']].map(([v,n])=>
+        `<button data-v="${v}" aria-pressed="${cur===v}">${n}</button>`).join('')}</div></div>`;}).join('')}
+    ${S.lockMsg?`<div class="lbl" style="margin-top:var(--space-2);color:${
+      S.lockMsg.bad?'var(--color-danger)':'var(--color-accent)'}">${esc(S.lockMsg.text)}</div>`:''}
+  </div>`;
+}
+function bindLocks(){
+  document.querySelectorAll('[data-lock]').forEach(seg=>seg.onclick=async e=>{
+    const b=e.target.closest('[data-v]');if(!b)return;
+    const v=b.dataset.v, lock=seg.dataset.lock;
+    const d=await api('/api/locks',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({lock,on:v==='none'?null:v==='on'})});
+    if(d&&d.locks)S.locks=d.locks;
+    S.lockMsg=d&&d.ok?{text:`${LOCKNAMES[lock]}: ${v==='none'?'left to the desktop':v}`}
+                     :{text:'failed: '+((d&&d.error)||'no response'),bad:true};
+    render();});
+}
+
+// ── factory colour profile ──────────────────────────────────────────────────
+// Control Center's Color Management "Restore": the panel was measured at the
+// factory and the profile sits on Uniwill's server, looked up by this
+// machine's serial number. The daemon fetches and stores it; applying it is
+// the desktop's job, so this shows the line to add rather than editing config.
+function iccCard(){
+  const c=S.icc;
+  if(!c)return '';
+  const p=c.panel, st=c.stored;
+  return `<div class="card" style="margin-top:var(--space-4)">
+    <div class="row"><div class="kick">Factory colour profile</div>
+      <span class="kv">${p?esc(p.panel_id+(p.name?' · '+p.name:'')):'no panel'}</span></div>
+    ${!p?`<div class="lbl">${esc(c.error||'built-in panel not found')}</div>`:st?`
+      <div class="lbl">${esc(st.description||'ICC profile')} · ICC ${esc(st.version||'?')} ·
+        ${esc(st.source||'')}</div>
+      <div class="lbl kv" style="font-size:10.5px">${esc(st.path)}</div>
+      <div class="lbl" style="margin-top:var(--space-2)">Hyprland with hyprmoncfg — adds it to every saved
+        profile with this panel, and to the current layout:</div>
+      <div class="lbl kv" style="font-size:10.5px;user-select:all">python3 -m hydroc.cli icc apply</div>
+      <div class="lbl">Without hyprmoncfg, add to this panel's monitor rule:
+        <span class="kv" style="user-select:all">${esc(c.hyprland_rule||'')}</span></div>
+      <div class="lbl">GNOME / KDE: import it in the colour settings, or
+        <span class="kv">colormgr import-profile</span>.</div>`:`
+      <div class="lbl">Each panel was measured at the factory. The profile is on Uniwill's
+        server, looked up by this machine's serial number — fetching sends the serial and
+        the panel model there, over plain HTTP, exactly as Control Center does.</div>
+      <div style="margin-top:var(--space-3)"><button class="btn btn-primary" id="iccfetch">Get factory profile</button></div>`}
+    ${S.iccMsg?`<div class="lbl" style="margin-top:var(--space-2);color:${
+      S.iccMsg.bad?'var(--color-danger)':'var(--color-accent)'}">${esc(S.iccMsg.text)}</div>`:''}
+  </div>`;
+}
+function bindIcc(){
+  const b=$('#iccfetch');
+  if(b)b.onclick=async()=>{S.iccMsg={text:'asking the Uniwill server…'};render();
+    const d=await api('/api/icc/fetch',{method:'POST'});
+    if(d&&d.icc)S.icc=d.icc;
+    S.iccMsg=d&&d.ok?{text:'stored'}:{text:'failed: '+((d&&d.error)||'no response'),bad:true};
+    render();};
 }
 
 function gpuCard(){
@@ -1060,6 +1141,8 @@ function vSys(){
       <div class="lbl kv" style="font-size:10.5px">${t.path}</div></div>
       <button class="sw" data-toggle="${t.id}" aria-pressed="${!!S.state[t.id]}"><i></i></button></div>`).join('')}
   </div>
+  ${locksCard()}
+  ${iccCard()}
   ${foundCard()}
   ${gpuCard()}
   <div class="card" style="margin-top:var(--space-4)">
@@ -1379,6 +1462,8 @@ function bind(){
     msg('#chinmsg',d&&d.ok?`chin bar → ${S.chin.mode}`:'failed: '+((d&&d.error)||'no response'),!(d&&d.ok));};
   bindFans();
   bindGpu();
+  bindLocks();
+  bindIcc();
 }
 window.addEventListener('keydown',e=>{
   if(S.section!=='light'||S.kbTab!=='perkey')return;

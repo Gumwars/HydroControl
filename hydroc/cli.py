@@ -46,6 +46,10 @@ DEFAULT_PROFILE = {
     "touchpad_toggle_enable": True,
     "ac_auto_boot": False,
     "usb_powershare_high": False,
+    # Lock keys on the built-in keyboard: True / False, or None to leave them
+    # to the desktop. Not EC state and never drift -- see hydroc/lockkeys.py.
+    "numlock_default": None,
+    "capslock_default": None,
     # Chin bar. Volatile like the EC -- restored by `apply`, not by the bar.
     "chin_mode": "static",
     "chin_color": "#8CBF73",
@@ -411,7 +415,11 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="hydroc")
     ap.add_argument("command",
                     choices=["status", "state", "telemetry", "drift",
-                             "apply", "write-default-profile", "doctor"])
+                             "apply", "write-default-profile", "doctor",
+                             "icc", "locks"])
+    ap.add_argument("args", nargs="*",
+                    help="icc: status | fetch | apply | import FILE;  "
+                         "locks: [num|caps on|off|default]")
     ap.add_argument("-p", "--profile", help="profile JSON path")
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--json", action="store_true")
@@ -419,6 +427,11 @@ def main(argv=None) -> int:
                     help="what triggered this apply (boot, resume, ...) -- "
                          "recorded with the pre-apply hardware capture")
     args = ap.parse_args(argv)
+
+    if args.command == "icc":
+        return icc_command(args.args, args.json)
+    if args.command == "locks":
+        return locks_command(args.args, args.profile, args.json)
 
     hw = Hardware()
 
@@ -510,7 +523,154 @@ def main(argv=None) -> int:
             chin_ok = False
             print(f"  chin bar: FAILED -- {res.get('error')}", file=sys.stderr)
 
-    return 0 if (all(c.ok for c in changes) and chin_ok) else 1
+    # Lock keys are not EC state either -- they belong to whoever reads the
+    # keyboard. At boot that is the VT; a compositor starting later resets
+    # them, which the daemon's SessionWatcher covers.
+    locks_ok = True
+    if not args.dry_run:
+        from . import lockkeys
+        for r in lockkeys.apply_defaults(profile):
+            locks_ok &= r["ok"]
+            print(f"  {r['lock']} lock: "
+                  + (f"{'on' if r['now'] else 'off'}" if r["ok"]
+                     else f"FAILED -- {r['error']}"),
+                  file=sys.stdout if r["ok"] else sys.stderr)
+
+    return 0 if (all(c.ok for c in changes) and chin_ok and locks_ok) else 1
+
+
+def icc_command(argv: list[str], as_json: bool) -> int:
+    from . import colorprofile as cp
+    sub = argv[0] if argv else "status"
+
+    if sub == "status":
+        st = cp.status()
+        if as_json:
+            print(json.dumps(st, indent=2))
+            return 0
+        p = st["panel"]
+        if not p:
+            print(st["error"], file=sys.stderr)
+            return 1
+        print(f"  panel     {p['panel_id']}  {p['name'] or ''}  on {p['connector']}")
+        s = st["stored"]
+        if not s:
+            print("  profile   none stored -- `sudo python3 -m hydroc.cli icc fetch`")
+            return 0
+        print(f"  profile   {s['path']}")
+        print(f"            {s.get('description') or '(no description)'}, "
+              f"ICC {s.get('version')}, {s.get('size')} bytes, {s.get('source')}")
+        print(f"\n  Hyprland: {st['hyprland_rule']}")
+        return 0
+
+    p = cp.internal_panel()
+    if not p:
+        raise SystemExit("built-in panel not found (no eDP connector with an EDID)")
+
+    if sub == "fetch":
+        if os.geteuid() != 0:
+            raise SystemExit("fetch needs root: the system serial number is "
+                             "readable only by root")
+        print(f"asking {cp.SERVER} for the {p['panel_id']} factory profile ...")
+        try:
+            name, data, header = cp.fetch(p["panel_id"], cp.system_serial(),
+                                          cp.ethernet_mac())
+            path = cp.store(p["panel_id"], data, "Uniwill ICC server")
+        except cp.ColorProfileError as e:
+            raise SystemExit(f"fetch failed: {e}")
+        by = "serial" if name.endswith(cp.system_serial() or "\0") else "MAC"
+        print(f"  found by {by}: {header.get('description') or '(no description)'}, "
+              f"ICC {header['version']}, {header['size']} bytes")
+        print(f"  stored   {path}")
+        return 0
+
+    if sub == "apply":
+        # The user's monitor config, so the user's process -- the daemon is
+        # root and must never resolve $HOME (DESIGN.md 4.4).
+        if os.geteuid() == 0:
+            raise SystemExit("run `icc apply` as yourself, not root: it edits "
+                             "your hyprmoncfg profiles")
+        path = cp.stored_path(p["panel_id"])
+        if not os.path.exists(path):
+            raise SystemExit("no profile stored yet -- `sudo python3 -m hydroc.cli icc fetch`")
+        try:
+            res = cp.apply_hyprmoncfg(path, p["panel_id"])
+        except (cp.ColorProfileError, OSError, ValueError) as e:
+            raise SystemExit(f"apply failed: {e}")
+        for n in res["profiles"]:
+            print(f"  hyprmoncfg profile {n!r}: icc set")
+        for n in res["unchanged"]:
+            print(f"  hyprmoncfg profile {n!r}: already set")
+        if not res["profiles"] and not res["unchanged"]:
+            print("  no saved hyprmoncfg profile includes this panel")
+        if res["live"]:
+            print(f"  {res['live']}: icc set for the current layout")
+            if os.environ.get("HYPRLAND_INSTANCE_SIGNATURE"):
+                import subprocess
+                r = subprocess.run(["hyprctl", "reload"], capture_output=True, text=True)
+                print(f"  hyprctl reload: {(r.stdout or r.stderr).strip()}")
+        print("\n  A layout that is not a saved profile is regenerated by hyprmoncfg on the\n"
+              "  next display change WITHOUT the icc line. Save it as a profile\n"
+              "  (`hyprmoncfg save NAME`) and run this again to make it stick.")
+        return 0
+
+    if sub == "import":
+        if len(argv) < 2:
+            raise SystemExit("usage: icc import FILE")
+        try:
+            path = cp.import_file(argv[1], p["panel_id"])
+        except (cp.ColorProfileError, OSError) as e:
+            raise SystemExit(f"import failed: {e}")
+        print(f"stored {path}")
+        return 0
+
+    raise SystemExit(f"unknown icc command {sub!r} (status | fetch | import FILE)")
+
+
+def locks_command(argv: list[str], profile_path: str | None,
+                  as_json: bool) -> int:
+    from . import lockkeys
+    if not argv:
+        st = lockkeys.state()
+        profile, _ = load_profile(profile_path)
+        st["defaults"] = {lock: profile.get(key)
+                          for lock, (_, _, key) in lockkeys.LOCKS.items()}
+        if as_json:
+            print(json.dumps(st, indent=2))
+        elif not st["available"]:
+            print(st["error"], file=sys.stderr)
+            return 1
+        else:
+            for lock in lockkeys.LOCKS:
+                d = st["defaults"][lock]
+                print(f"  {lock:<5} {('on' if st[lock] else 'off') if st[lock] is not None else '?':<4}"
+                      f"  default: {'leave alone' if d is None else ('on' if d else 'off')}")
+        return 0
+
+    if len(argv) != 2 or argv[0] not in lockkeys.LOCKS \
+            or argv[1] not in ("on", "off", "default"):
+        raise SystemExit("usage: locks [num|caps on|off|default]")
+    lock, val = argv
+    if os.geteuid() != 0:
+        raise SystemExit("setting a lock needs root: it writes to the keyboard's "
+                         "input device")
+    key = lockkeys.LOCKS[lock][2]
+    if val == "default":
+        # Clear the default -- leave this lock to the desktop from now on.
+        profile, src = load_profile(profile_path)
+        profile[key] = None
+        print(f"{lock} lock: no default (saved to {save_profile(profile, profile_path)})")
+        return 0
+    on = val == "on"
+    r = lockkeys.set_lock(lock, on)
+    if not r["ok"]:
+        raise SystemExit(f"{lock} lock: FAILED -- {r['error']}")
+    profile, _ = load_profile(profile_path)
+    profile[key] = on
+    dest = save_profile(profile, profile_path)
+    print(f"{lock} lock: {'on' if on else 'off'}"
+          f"{'' if r['changed'] else ' (already)'} -- default saved to {dest}")
+    return 0
 
 
 if __name__ == "__main__":

@@ -148,6 +148,8 @@ hydroc/            the application
   presets.py       Office / Balanced / Performance, matched against live state
   hotkeys.py       KEY_F14 listener — the physical profile button
   rgb.py           visual key id -> matrix bridge; chin bar modes
+  colorprofile.py  factory ICC: fetch (root), store, apply via hyprmoncfg (user)
+  lockkeys.py      Num/Caps Lock on the built-in keyboard; state from Hyprland IPC
   lpp.py           LPP dock protocol (pure, no transport)
   lppd.py          LPP sidecar daemon — BLE, Unix socket at /run/hydroc/lpp.sock
   deps.py          "can the ROOT daemon import this?" — one answer, three-valued

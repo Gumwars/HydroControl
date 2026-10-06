@@ -7,7 +7,7 @@ A Linux replacement for the Eluktronics Control Center, for the **HYDROC-16 G1**
 battery charging policy, keyboard and chin bar RGB — in a browser UI backed by a
 small privileged daemon.
 
-> **v0.9.1 — beta.** This writes to your laptop's embedded controller. Read
+> **v0.9.2 — beta.** This writes to your laptop's embedded controller. Read
 > [Safety](#safety) before you start. It is validated on **one** machine model
 > and the installer refuses to run on anything else, by design.
 
@@ -28,6 +28,8 @@ small privileged daemon.
 | **Fan curves** | your own curve driven by the EC's own tables — CPU and GPU independently, with hysteresis |
 | **Graphics mode** | Dynamic · dGPU only · iGPU only — a real firmware switch, applied at the next reboot |
 | **Platform toggles** | Fn lock, Super key, touchpad hotkey, AC auto-boot, USB powershare |
+| **Factory colour profile** | your panel's own factory calibration, fetched as Control Center does and applied through hyprmoncfg — see [below](#factory-colour-profile) |
+| **Lock keys** | Num Lock and Caps Lock on the built-in keyboard: set now, restored at boot, resume and login |
 
 **Not yet:** battery calibration, display refresh-rate switching and the cooling
 dock's auto mode, all of which the Windows app has. Also not yet: switching to
@@ -364,6 +366,34 @@ The app only ever writes the three values the firmware itself produced, refuses
 to act if the two variables disagree or hold anything it does not recognise, and
 backs both up before writing. It asks for confirmation because the change
 outlives a power cycle, not because it is unsafe.
+
+---
+
+## Factory colour profile
+
+Every panel was measured at the factory and its ICC profile is held on
+Uniwill's server, looked up by your machine's serial number. Control Center's
+Color Management "Restore" fetches it; so does this:
+
+```bash
+sudo python3 -m hydroc.cli icc fetch     # or "Get factory profile" in System
+python3 -m hydroc.cli icc apply          # as yourself, not root
+```
+
+Fetching sends your serial number and panel model to
+`iccprofile.uniwill.com.tw`, over plain HTTP — the only way that server
+answers, and exactly what the Windows app does. The profile is stored in
+`/var/lib/hydroc/icc/`.
+
+`icc apply` is for **Hyprland with hyprmoncfg**: it adds the profile to every
+saved hyprmoncfg profile that includes the built-in panel, and to the current
+rule, backing up each file as `*.hydroc-bak`. hyprmoncfg regenerates the live
+file on every display change, so a layout that is not saved as a profile loses
+the line at the next hotplug — `hyprmoncfg save NAME`, then apply again.
+
+Without hyprmoncfg, add `icc = "/var/lib/hydroc/icc/<panel>-factory.icc"` to
+the panel's monitor rule yourself (`icc status` prints the exact line). On
+GNOME or KDE, import the file in the colour settings.
 
 ---
 

@@ -1,5 +1,81 @@
 # Changelog
 
+## [0.9.2] — 2026-10-06
+
+Two features the Windows app has and this one did not, both read out of the
+Windows service itself rather than guessed at.
+
+### The panel's factory colour calibration
+
+Each unit's panel was measured at the factory, and the result sits on
+Uniwill's server. Control Center's Display -> Color Management -> "Restore" is
+nothing more than fetching it. Decompiled from `GCUService.exe`:
+
+```
+GET http://iccprofile.uniwill.com.tw/api/iccprofile/<PANEL>_<SERIAL>
+GET http://iccprofile.uniwill.com.tw/api/iccprofile/<PANEL>_<MAC>
+```
+
+`PANEL` is the EDID ID as Windows writes it (`BOE0B87` for the
+NE160QDM-NZA), `SERIAL` the SMBIOS system serial, `MAC` the first wired NIC.
+On the development machine it returned the real thing: *NE160QDM-NZA #1
+2024-09-26, D6500, gamma 2.2*, a 20 KB ICC 2.2 profile with a calibration
+curve and matrix.
+
+- `sudo python3 -m hydroc.cli icc fetch` — or **Get factory profile** on the
+  System page. Root, because `product_serial` is mode 0400. The reply is
+  checked to be a well-formed ICC display profile before anything is stored;
+  an error page served with a 200 never becomes a monitor profile.
+- `python3 -m hydroc.cli icc apply` — as yourself. Adds it to every saved
+  **hyprmoncfg** profile containing this panel, and to the live rule, with a
+  `.hydroc-bak` of every file touched first.
+- `icc import FILE` takes a profile you already have, e.g. the `.icm` from a
+  Windows install.
+
+**Why not just append the rule.** hyprmoncfg's daemon regenerates the live
+monitor file on every display change — it did so twice during development —
+so a hand-added line is gone at the next hotplug. Its saved profiles carry ICC
+per output and are re-read at every reconciliation, so that is where it goes.
+A layout that is not a saved profile is rebuilt from live Hyprland state,
+which reports no ICC: save it with `hyprmoncfg save NAME` and apply again.
+
+### Lock keys
+
+Control Center's "Num Lock" switch is not firmware. It reads
+`GetKeyState(VK_NUMLOCK)` and synthesises one keypress if the state is wrong.
+Caps Lock has no setting over there, only an OSD.
+
+Here: **Leave alone / On / Off** for Num Lock and Caps Lock on the System page,
+or `sudo python3 -m hydroc.cli locks num on`. On or Off sets it now and
+becomes the default at boot, resume and every login. A compositor starting up
+resets each keyboard, so the daemon watches logind for new graphical sessions
+and applies twice, a few seconds in — and never again, so a Num Lock you press
+yourself is never fought.
+
+The press goes into the **built-in keyboard's own evdev node**. Hyprland keeps
+a lock state per keyboard, so a virtual uinput keyboard (what `ydotool`
+creates) would toggle only its own. Lock state is not drift: pressing Num Lock
+never raises the banner.
+
+### Corrections
+
+**The keyboard's Num Lock LED is not that keyboard's state under Hyprland.**
+The first version of the lock-keys code verified against the LED, saw it lit,
+and saved a default without pressing anything — while Hyprland held the
+built-in's Num Lock off. Hyprland drives every keyboard's LEDs from whichever
+keyboard last became active. State is now read from Hyprland's IPC socket
+where it runs, and the LED only as a fallback.
+
+That also explains a long-standing complaint that Num Lock "randomly turns
+off". Logged for an hour: when a Bluetooth keyboard reconnected with its own
+Num Lock off, the built-in's LED went dark while Hyprland reported the
+built-in's Num Lock **on** throughout. Three config reloads did not touch it.
+The light was reporting a different keyboard. Setting Hyprland's
+`input.numlock_by_default = true` makes keyboards that reconnect come up
+agreeing.
+
+673 tests.
+
 ## [0.9.1] — 2026-10-04
 
 One evening with a battery that was not defective, and most of what this

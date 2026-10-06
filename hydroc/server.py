@@ -30,6 +30,7 @@ from .cli import (PROFILE_PATHS, REPAIR_MODPROBE, REPAIR_MODULE, REPAIR_RELOAD,
 from .hardware import Hardware
 from . import fancurve, found, gpumode, presets, rgb
 from . import nativemode
+from . import colorprofile, lockkeys
 from .hotkeys import ProfileButton
 
 # The LPP dock lives behind a sidecar daemon (hydroc.lppd) because BLE is async
@@ -162,6 +163,58 @@ def _on_profile_button() -> None:
 
 
 _button = ProfileButton(_on_profile_button)
+_sessions = lockkeys.SessionWatcher(lambda: load_profile()[0])
+
+
+def locks_status() -> dict:
+    st = lockkeys.state()
+    profile, _ = load_profile()
+    st["defaults"] = {lock: profile.get(key)
+                      for lock, (_, _, key) in lockkeys.LOCKS.items()}
+    st["session_watcher"] = {"running": _sessions.is_alive(),
+                             "error": _sessions.error}
+    return st
+
+
+def set_lock(payload: dict) -> tuple[dict, int]:
+    """POST /api/locks: {lock, on: true|false|null}.
+
+    true/false sets the lock now and saves it as the default; null clears the
+    default and touches nothing. A set that did not take is not saved -- a
+    default the keyboard will not hold would fail at every session start.
+    """
+    lock = payload.get("lock")
+    on = payload.get("on")
+    if lock not in lockkeys.LOCKS or on not in (True, False, None):
+        return {"ok": False, "error": "want {lock: num|caps, on: true|false|null}"}, 400
+    result = {"ok": True, "lock": lock}
+    if on is not None:
+        result = lockkeys.set_lock(lock, on)
+        if not result["ok"]:
+            return {**result, "locks": locks_status()}, 200
+    profile, _ = load_profile()
+    profile[lockkeys.LOCKS[lock][2]] = on
+    try:
+        result["persisted"] = save_profile(profile)
+    except OSError as e:
+        result["persisted"] = f"failed: {e}"
+    return {**result, "locks": locks_status()}, 200
+
+
+def icc_fetch() -> dict:
+    """POST /api/icc/fetch: Control Center's "Restore", done by the daemon
+    because the system serial is readable only by root."""
+    panel = colorprofile.internal_panel()
+    if not panel:
+        return {"ok": False, "error": "built-in panel not found"}
+    try:
+        _, data, _ = colorprofile.fetch(panel["panel_id"],
+                                        colorprofile.system_serial(),
+                                        colorprofile.ethernet_mac())
+        colorprofile.store(panel["panel_id"], data, "Uniwill ICC server")
+    except (colorprofile.ColorProfileError, OSError) as e:
+        return {"ok": False, "error": str(e), "icc": colorprofile.status()}
+    return {"ok": True, "icc": colorprofile.status()}
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -260,6 +313,10 @@ class Handler(BaseHTTPRequestHandler):
 
         if route == "/api/gpu":
             return self._json(gpumode.status())
+        if route == "/api/locks":
+            return self._json(locks_status())
+        if route == "/api/icc":
+            return self._json(colorprofile.status())
 
         if route == "/api/fan":
             state = _hw.read_state()
@@ -367,6 +424,13 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json({"ok": False, "error": str(e)}, 400)
             except OSError as e:
                 return self._json({"ok": False, "error": f"firmware write failed: {e}"}, 500)
+
+        if route == "/api/locks":
+            body, code = set_lock(payload)
+            return self._json(body, code)
+
+        if route == "/api/icc/fetch":
+            return self._json(icc_fetch())
 
         if route == "/api/apply":
             desired = payload.get("settings")
@@ -579,6 +643,7 @@ def main() -> int:
         print("warning: not root -- EC values and writes will be unavailable",
               file=sys.stderr)
     _button.start()
+    _sessions.start()
     srv = ThreadingHTTPServer((HOST, PORT), Handler)
     print(f"hydroc UI on http://{HOST}:{PORT}  (loopback only, Ctrl-C to stop)")
     st = _button.status()

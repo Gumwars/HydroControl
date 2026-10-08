@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.9.4] — 2026-10-08
 
 ### Corrections
 
@@ -32,7 +32,7 @@ the running kernel's is fatal.
 Existing installs: `sudo ./install.sh --module` clears the misnamed
 registration.
 
-703 tests.
+688 tests.
 
 ## [0.9.3] — 2026-10-06
 

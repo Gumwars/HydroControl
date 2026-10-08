@@ -1,5 +1,39 @@
 # Changelog
 
+## [Unreleased]
+
+### Corrections
+
+**DKMS registered the module under the wrong name.** The version was
+`1.0-hydroc16`. Arch's pacman DKMS hook recovers name and version from
+`/usr/src/<name>-<version>` by splitting at the *last* hyphen, so on a kernel
+upgrade it registered a second module, `uniwill-laptop-1.0`, version
+`hydroc16`. The module still built and loaded, but nothing looking for
+`uniwill-laptop` could see it: `doctor` reported "NOT DKMS-managed" and offered
+a Repair nobody needed, and `install.sh` found nothing to remove, so the stray
+registration survived reinstalls. And because its source stayed in `/usr/src`,
+the hook re-created it on every upgrade, building source older than the repo's.
+
+The version is now `1.0.hydroc16`. `install.sh` reads it from `dkms.conf`
+instead of keeping a second copy, refuses a hyphenated one, removes every
+`uniwill-laptop*` registration and its `/usr/src` tree before staging, and
+stops on a failed `dkms add` instead of discarding the error.
+
+**`dkms.conf` was never committed.** `uniwill-laptop/.gitignore` listed it, so
+a fresh clone had none and `install.sh` stopped at the copy. Bundles only
+worked because `make-bundle.sh` copied it from a working tree that happened to
+have one.
+
+**The module is built for every installed kernel, not only the running one.**
+LTS and alternate-scheduler kernels previously had no module until the pacman
+hook next ran for them. A failed build for another kernel is a warning; only
+the running kernel's is fatal.
+
+Existing installs: `sudo ./install.sh --module` clears the misnamed
+registration.
+
+703 tests.
+
 ## [0.9.3] — 2026-10-06
 
 ### Display colour modes

@@ -133,7 +133,15 @@ fi
 # after every kernel update, and the failure is silent — it presents as
 # "hwmon is down", not "your module was rejected on vermagic".
 DKMS_NAME="uniwill-laptop"
-DKMS_VER="1.0-hydroc16"
+# One source of truth: dkms.conf. Two copies of the version drift.
+DKMS_VER="$(sed -n 's/^PACKAGE_VERSION="\(.*\)"$/\1/p' "$DIR/uniwill-laptop/dkms.conf" 2>/dev/null || true)"
+[[ -n "$DKMS_VER" ]] || die "no PACKAGE_VERSION in uniwill-laptop/dkms.conf"
+# Arch's pacman DKMS hook recovers name and version from /usr/src/<name>-<version>
+# by splitting at the LAST hyphen. "1.0-hydroc16" made it register a second
+# module, "uniwill-laptop-1.0" version "hydroc16", on the next kernel upgrade --
+# which doctor's `dkms status -m uniwill-laptop` then could not see.
+[[ "$DKMS_VER" != *-* ]] || die "dkms.conf PACKAGE_VERSION '$DKMS_VER' contains a hyphen;
+       the pacman DKMS hook would misread the module name. Use dots."
 DKMS_SRC="/usr/src/${DKMS_NAME}-${DKMS_VER}"
 
 purge_manual_installs() {
@@ -151,30 +159,52 @@ purge_manual_installs() {
 if command -v dkms >/dev/null; then
   step "Installing kernel module via DKMS"
 
-  # Drop any previously registered version (including this one, for reinstalls).
-  while read -r line; do
-    [[ -z "$line" ]] && continue
-    ver="${line#*/}"; ver="${ver%%,*}"
-    dkms remove -m "$DKMS_NAME" -v "$ver" --all >/dev/null 2>&1 \
-      && c_warn "removed previous DKMS registration $DKMS_NAME/$ver"
-  done < <(dkms status -m "$DKMS_NAME" 2>/dev/null | cut -d, -f1 | sort -u)
+  # Drop every previous registration, this version included (reinstalls), and
+  # the misnamed "uniwill-laptop-1.0/hydroc16" the pacman hook made out of the
+  # old hyphenated version. Matching on the name prefix of a full `dkms status`
+  # is what catches that one: `dkms status -m uniwill-laptop` does not list it.
+  while read -r nv; do
+    [[ -z "$nv" ]] && continue
+    name="${nv%%/*}"; ver="${nv#*/}"
+    dkms remove -m "$name" -v "$ver" --all >/dev/null 2>&1 \
+      && c_warn "removed previous DKMS registration $name/$ver"
+  done < <(dkms status 2>/dev/null | cut -d, -f1 | grep -E "^${DKMS_NAME}[^/]*/" | sort -u)
+
+  # Their sources too. Left in /usr/src, the hook re-registers them on the next
+  # kernel upgrade -- that is how the misnamed module came back.
+  for old in /usr/src/"${DKMS_NAME}"-*; do
+    [[ -d "$old" ]] || continue
+    rm -rf "$old"; c_warn "removed old DKMS source $old"
+  done
 
   purge_manual_installs
 
-  rm -rf "$DKMS_SRC"; mkdir -p "$DKMS_SRC"
+  mkdir -p "$DKMS_SRC"
   cp "$DIR/uniwill-laptop/"{uniwill-acpi.c,uniwill-wmi.c,uniwill-wmi.h,Makefile,dkms.conf} "$DKMS_SRC/"
   c_ok "sources staged in $DKMS_SRC"
 
-  dkms add -m "$DKMS_NAME" -v "$DKMS_VER" >/dev/null 2>&1 || true
-  if dkms build -m "$DKMS_NAME" -v "$DKMS_VER" >/dev/null 2>&1; then
-    c_ok "built for $KERNEL"
-  else
-    dkms build -m "$DKMS_NAME" -v "$DKMS_VER" 2>&1 | tail -15
-    die "DKMS build failed — output above"
+  if ! out="$(dkms add -m "$DKMS_NAME" -v "$DKMS_VER" 2>&1)"; then
+    printf '%s\n' "$out" | tail -15
+    die "DKMS add failed — output above"
   fi
-  dkms install -m "$DKMS_NAME" -v "$DKMS_VER" --force >/dev/null 2>&1 \
-    || die "DKMS install failed"
-  c_ok "installed — will rebuild automatically on every kernel update"
+
+  # Every installed kernel with headers, not only the running one: otherwise the
+  # LTS and alternate-scheduler kernels have no module until the pacman hook
+  # next happens to run for them.
+  for kbuild in /lib/modules/*/build; do
+    [[ -d "$kbuild" ]] || continue
+    kver="${kbuild#/lib/modules/}"; kver="${kver%/build}"
+    if out="$(dkms build -m "$DKMS_NAME" -v "$DKMS_VER" -k "$kver" 2>&1)" \
+       && dkms install -m "$DKMS_NAME" -v "$DKMS_VER" -k "$kver" --force >/dev/null 2>&1; then
+      c_ok "built and installed for $kver"
+    elif [[ "$kver" == "$KERNEL" ]]; then
+      printf '%s\n' "$out" | tail -15
+      die "DKMS build for the running kernel failed — output above"
+    else
+      c_warn "DKMS build for $kver failed (not the running kernel; continuing)"
+    fi
+  done
+  c_ok "will rebuild automatically on every kernel update"
 
 else
   c_warn "dkms not found — falling back to a manual build"

@@ -89,6 +89,31 @@ class ThresholdAbsentTest(unittest.TestCase):
         self.assertEqual(
             [c for c in changes if c.setting == "charge_threshold"], [])
 
+    # drift() has to agree with apply(). It did not: apply() skipped the absent
+    # attribute, drift() still compared the saved 80 against None, and the UI
+    # showed a banner on every boot with no control left to clear it.
+
+    def _drift(self, desired, actual):
+        return Hardware.drift(_Stub(actual), desired, actual)
+
+    def test_absent_attribute_is_not_drift(self):
+        self.assertNotIn("charge_threshold",
+                         self._drift({"charge_threshold": 80},
+                                     {"charge_threshold": None}))
+
+    def test_absent_attribute_hides_nothing_else(self):
+        d = self._drift({"charge_threshold": 80, "charge_profile": "balanced"},
+                        {"charge_threshold": None, "charge_profile": "stationary"})
+        self.assertEqual(list(d), ["charge_profile"])
+
+    def test_present_attribute_still_drifts(self):
+        path = os.path.join(self.tmp.name, "charge_control_end_threshold")
+        with open(path, "w") as fh:
+            fh.write("100")
+        self.assertEqual(
+            self._drift({"charge_threshold": 80}, {"charge_threshold": 100}),
+            {"charge_threshold": {"desired": 80, "actual": 100}})
+
 
 class DescriptorTest(unittest.TestCase):
     """The driver must not claim a feature measured not to work."""

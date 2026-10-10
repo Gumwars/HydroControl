@@ -120,6 +120,17 @@ def battery_int(name: str, base: str | None = None) -> int | None:
 _read = read_text
 
 
+def _charge_threshold_exposed() -> bool:
+    """Does the driver offer a charge threshold at all?
+
+    Not on the HYDROC-16: the EC stores one and never enforces it, so the
+    descriptor stopped claiming BATTERY_CHARGE_LIMIT (DESIGN.md §3.2). apply()
+    and drift() both key on this, so a saved threshold can neither fail a
+    write nor raise a banner on a machine with no control for it.
+    """
+    return os.path.exists(os.path.join(BAT, "charge_control_end_threshold"))
+
+
 def _write(path: str, value: str) -> str:
     """Returns '' on success, else an error string.
 
@@ -509,8 +520,7 @@ class Hardware:
         # profile written before that change still carries the key, so skip it
         # rather than reporting a failed write on every boot. Absent hardware
         # is not an error.
-        if differs("charge_threshold") and not os.path.exists(
-                os.path.join(BAT, "charge_control_end_threshold")):
+        if differs("charge_threshold") and not _charge_threshold_exposed():
             pass
         elif differs("charge_threshold"):
             ch = Change("charge_threshold", actual.get("charge_threshold"),
@@ -591,6 +601,13 @@ class Hardware:
         if desired.get("native_mode"):
             desired = {k: v for k, v in desired.items()
                        if k not in NATIVE_OWNED}
+        # Same for a charge threshold the driver does not expose. read_state()
+        # still reports the key, as None, so the check below would compare a
+        # pre-0.9.4 profile's 80 against None and raise a banner on every boot
+        # with no control left in the UI to clear it.
+        if not _charge_threshold_exposed():
+            desired = {k: v for k, v in desired.items()
+                       if k != "charge_threshold"}
         # Only compare settings the hardware actually reports. A stale key left
         # by a rename would otherwise show as drift forever, since no write can
         # ever make it match.

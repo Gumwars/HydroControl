@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.9.5] — 2026-10-10
+
+### Corrections
+
+**A charge-threshold banner nothing could clear.** Once the driver stopped
+exposing `charge_control_end_threshold` (the EC stores a threshold and never
+enforces it, DESIGN.md §3.2), the slider went with it and `apply()` learned to
+skip a saved `charge_threshold`. `drift()` did not. A profile saved before
+then still carried the threshold, `read_state()` reported it as missing, and
+the comparison raised a "charge threshold does not match" banner after every
+reboot, with no control left in the UI to resolve it. Both now ask the same
+question — is the attribute there? — so a saved threshold is ignored where
+the hardware has none and still compared where it does.
+
+691 tests.
+
 ## [0.9.4] — 2026-10-08
 
 ### Corrections

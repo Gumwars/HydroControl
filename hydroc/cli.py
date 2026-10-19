@@ -53,6 +53,10 @@ DEFAULT_PROFILE = {
     # "keep" | "dim" | "off": keyboard and chin bar while unplugged. Applied by
     # hydroc-server on unplug, undone on plug-in -- see hydroc/batterylight.py.
     "battery_lighting": "keep",
+    # "auto" | "on" | "off": the measured power-saving levers, engaged on unplug
+    # by hydroc-server -- see hydroc/powersaver.py. While engaged the lights
+    # are off whatever battery_lighting says.
+    "power_saver": "auto",
     # Chin bar. Volatile like the EC -- restored by `apply`, not by the bar.
     "chin_mode": "static",
     "chin_color": "#8CBF73",

@@ -31,7 +31,7 @@ from .cli import (PROFILE_PATHS, REPAIR_MODPROBE, REPAIR_MODULE, REPAIR_RELOAD,
 from .hardware import Hardware
 from . import fancurve, found, gpumode, presets, rgb
 from . import nativemode
-from . import batterylight, colorprofile, displayd, lockkeys
+from . import batterylight, colorprofile, displayd, lockkeys, powersaver
 from .hotkeys import ProfileButton
 
 # The LPP dock lives behind a sidecar daemon (hydroc.lppd) because BLE is async
@@ -177,19 +177,67 @@ _battery_light = batterylight.BatteryLighting(
     rgb.keyboard_brightness, _kbd_set, rgb.apply_chinbar_profile)
 
 
+_power_saver = powersaver.PowerSaver()
+_DGPU = powersaver.find_dgpu()
+
+
+def _on_battery(ext: bool | None) -> bool | None:
+    return None if ext is None else not ext
+
+
 class PowerWatcher(threading.Thread):
-    """Applies battery lighting on unplug and undoes it on plug-in.
+    """Power Saver and battery lighting, on unplug and plug-in.
 
     Polls the power supplies every 2 s rather than listening on udev: it is
     two sysfs reads, and polling also catches a profile change made from the
-    CLI. Acts only when (power, setting) changes, and at start.
+    CLI. Each acts only when (power, its setting) changes, and at start.
+
+    Power Saver goes first, and lighting sees its effect: while engaged, the
+    lights are off whatever battery_lighting says. While engaged it is also
+    re-asserted every REASSERT_S, because resume and Wi-Fi reconnects reset
+    the low-level levers without telling anyone.
     """
+
+    REASSERT_S = 60
 
     def __init__(self) -> None:
         super().__init__(daemon=True, name="power-watcher")
         self.last: dict = {}
+        self.saver_last: dict = {}
         self.error: str | None = None
         self._seen = None
+        self._seen_saver = None
+        self._asserted = 0.0
+        self.rtx_state: str | None = None
+        self.rtx_awake_since: float | None = None
+
+    @staticmethod
+    def light_key(profile: dict, ext: bool | None) -> tuple:
+        lp = powersaver.lighting_profile(profile, _on_battery(ext))
+        return (ext, batterylight.mode_of(lp))
+
+    def _saver(self, profile: dict, ext: bool | None, now: float) -> None:
+        key = (ext, powersaver.mode_of(profile))
+        due = (self.saver_last.get("active")
+               and now - self._asserted >= self.REASSERT_S)
+        if key == self._seen_saver and not due:
+            return
+        self._seen_saver, self._asserted = key, now
+        r = _power_saver.reconcile(profile, _on_battery(ext))
+        if r.get("changed") or not self.saver_last:
+            self.saver_last = r
+        if r.get("changed"):
+            print("power saver: " + "; ".join(r.get("actions") or ["no change"])
+                  + "".join(f"; ERROR {e}" for e in r.get("errors") or []),
+                  flush=True)
+
+    def _rtx(self) -> None:
+        import time
+        self.rtx_state = powersaver.rtx_state(_DGPU)
+        if self.rtx_state == "active":
+            self.rtx_awake_since = self.rtx_awake_since or time.time()
+        else:
+            self.rtx_awake_since = None
 
     def run(self) -> None:
         import time
@@ -197,18 +245,21 @@ class PowerWatcher(threading.Thread):
             try:
                 profile, _ = load_profile()
                 ext = batterylight.on_external_power()
-                key = (ext, batterylight.mode_of(profile))
+                self._saver(profile, ext, time.monotonic())
+                key = self.light_key(profile, ext)
                 if key != self._seen:
                     self._seen = key
                     self.last = _battery_light.reconcile(
-                        profile, None if ext is None else not ext)
+                        powersaver.lighting_profile(profile, _on_battery(ext)),
+                        _on_battery(ext))
                     if self.last.get("changed"):
                         print("battery lighting: " + "; ".join(self.last["actions"]),
                               flush=True)
+                self._rtx()
                 self.error = None
             except Exception as e:                          # noqa: BLE001
                 self.error = str(e)
-                self._seen = None                           # retry next tick
+                self._seen = self._seen_saver = None        # retry next tick
             time.sleep(2)
 
 
@@ -240,6 +291,29 @@ def battery_lighting_status() -> dict:
             "on_battery": None if ext is None else not ext,
             "watcher": {"running": _power.is_alive(), "error": _power.error},
             **_battery_light.status()}
+
+
+def power_saver_status() -> dict:
+    import time
+    profile, _ = load_profile()
+    ext = batterylight.on_external_power()
+    on_battery = _on_battery(ext)
+    rtx = {"present": _DGPU is not None, "state": _power.rtx_state,
+           "awake_s": (round(time.time() - _power.rtx_awake_since)
+                       if _power.rtx_awake_since else None)}
+    if _power.rtx_state == "active":
+        # A /proc walk, so only when there is something to explain.
+        rtx["holders"] = powersaver.dgpu_holders(_DGPU)
+    hz = powersaver.panel_refresh()
+    return {"mode": powersaver.mode_of(profile), "modes": list(powersaver.MODES),
+            "on_battery": on_battery,
+            "wanted": powersaver.wanted(profile, on_battery),
+            **_power_saver.status(),
+            "last": _power.saver_last,
+            "rtx": rtx,
+            "panel_hz": hz, "panel_hz_target": powersaver.PANEL_HZ,
+            "brightness_cap_pct": powersaver.BRIGHTNESS_CAP_PCT,
+            "watcher": {"running": _power.is_alive(), "error": _power.error}}
 
 
 def locks_status() -> dict:
@@ -395,6 +469,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(colorprofile.status())
         if route == "/api/battery-lighting":
             return self._json(battery_lighting_status())
+        if route == "/api/power-saver":
+            return self._json(power_saver_status())
         if route == "/api/display":
             # A user-session service (Wayland), reached by its socket the way
             # the LPP sidecar is. Root never resolves the user's $HOME.
@@ -527,13 +603,32 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json({"ok": False, "error": str(e)}, 500)
             ext = batterylight.on_external_power()
             try:
-                res = _battery_light.reconcile(profile, None if ext is None else not ext)
+                # Through Power Saver: while it is engaged the lights stay off
+                # whatever this setting says, and it takes effect on release.
+                res = _battery_light.reconcile(
+                    powersaver.lighting_profile(profile, _on_battery(ext)),
+                    _on_battery(ext))
             except Exception as e:                          # noqa: BLE001
                 return self._json({"ok": False, "error": str(e),
                                    **battery_lighting_status()})
-            _power._seen = (ext, mode)                      # already handled
+            _power._seen = _power.light_key(profile, ext)   # already handled
             return self._json({"ok": True, "result": res, **battery_lighting_status()})
 
+        if route == "/api/power-saver":
+            mode = payload.get("mode")
+            if mode not in powersaver.MODES:
+                return self._json({"ok": False,
+                                   "error": f"mode must be one of {powersaver.MODES}"}, 400)
+            profile, _ = load_profile()
+            profile[powersaver.KEY] = mode
+            try:
+                save_profile(profile)
+            except OSError as e:
+                return self._json({"ok": False, "error": str(e)}, 500)
+            # The watcher applies it within a tick, lighting included -- one
+            # code path for every transition, not a second one here.
+            _power._seen = _power._seen_saver = None
+            return self._json({"ok": True, **power_saver_status()})
 
         if route == "/api/display":
             req = {"op": "set"}

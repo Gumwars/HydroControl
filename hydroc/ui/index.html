@@ -378,6 +378,7 @@ async function refreshState(){
   const gp=await api('/api/gpu');if(gp)S.gpu=gp;
   const lk=await api('/api/locks');if(lk)S.locks=lk;
   const bl=await api('/api/battery-lighting');if(bl)S.battLight=bl;
+  const ps=await api('/api/power-saver');if(ps)S.saver=ps;
   const ic=await api('/api/icc');if(ic)S.icc=ic;
   if(!S.dispDrag){const dm=await api('/api/display');if(dm)S.display=dm;}
   const fd=await api('/api/found');if(fd)S.found=fd;
@@ -1039,12 +1040,63 @@ function battLightCard(){
     <div class="seg" id="battlight" style="align-self:flex-start;margin-top:var(--space-3)">
       ${BATTLIGHT.map(x=>`<button data-v="${x.id}" aria-pressed="${b.mode===x.id}">${x.name}</button>`).join('')}</div>
     <div class="lbl">${esc(cur.desc)}</div>
+    ${S.saver&&S.saver.active&&b.on_battery?`<div class="lbl">Power Saver is engaged and has the lights
+      off; this setting takes over again when it releases.</div>`:''}
     ${b.watcher&&!b.watcher.running?`<div class="lbl" style="color:var(--color-warn)">The power watcher is not running —
       settings apply at the next unplug once hydroc-server is restarted.</div>`:''}
     ${b.watcher&&b.watcher.error?`<div class="lbl" style="color:var(--color-danger)">${esc(b.watcher.error)}</div>`:''}
     ${S.battLightMsg?`<div class="lbl" style="color:${S.battLightMsg.bad?'var(--color-danger)':'var(--color-accent)'}">${esc(S.battLightMsg.text)}</div>`:''}
   </div>`;
 }
+// ── power saver ─────────────────────────────────────────────────────────────
+// Measured levers only (hydroc/powersaver.py). It never touches refresh rate --
+// hyprmoncfg owns that and would fight it -- so it says so instead.
+const SAVER=[
+ {id:'auto',name:'Auto',desc:'On when you unplug, off when you plug in.'},
+ {id:'on',name:'On',desc:'Always on, plugged in or not.'},
+ {id:'off',name:'Off',desc:'Never on.'}];
+function saverCard(){
+  const p=S.saver;
+  if(!p)return '';
+  const cur=SAVER.find(x=>x.id===p.mode)||SAVER[0];
+  const power=p.on_battery===null?'power unknown':p.on_battery?'on battery':'on AC';
+  const r=p.rtx||{};
+  const awake=p.active&&r.state==='active';
+  const hz=p.panel_hz, hzHigh=p.active&&hz&&hz>p.panel_hz_target+1;
+  const errs=((p.last||{}).errors)||[];
+  return `<div class="card" style="margin-bottom:var(--space-4)">
+    <div class="row"><div class="kick">Power Saver</div>
+      <span class="kv">${power} · ${p.active?'engaged':'not engaged'}</span></div>
+    <div class="seg" id="saver" style="align-self:flex-start;margin-top:var(--space-3)">
+      ${SAVER.map(x=>`<button data-v="${x.id}" aria-pressed="${p.mode===x.id}">${x.name}</button>`).join('')}</div>
+    <div class="lbl">${esc(cur.desc)} While engaged: audio, Wi-Fi and PCI power
+      saving, the power-saver platform profile, lights off, and brightness capped
+      at ${p.brightness_cap_pct}% — never raised. Measured here: about 24 → 20 W idle,
+      plus ~4 W at full brightness. Everything is given back on release, except
+      brightness or a profile you changed yourself.</div>
+    ${awake?`<div class="lbl" style="color:var(--color-warn)">The RTX is awake${
+      r.awake_s!=null?' ('+Math.round(r.awake_s/60)+' min)':''} — on battery that costs
+      more than everything above together. Open on it: ${esc((r.holders||[]).join(', ')||'nothing found')}.
+      Holding is not always using; the app that woke it is usually the one you started last.</div>`:''}
+    ${hzHigh?`<div class="lbl" style="color:var(--color-warn)">The panel is at ${hz} Hz. Power Saver
+      leaves refresh rate to hyprmoncfg — switching to ${p.panel_hz_target} Hz there saves more.</div>`:''}
+    ${errs.length?`<div class="lbl" style="color:var(--color-danger)">${esc(errs.join(' · '))}</div>`:''}
+    ${p.watcher&&!p.watcher.running?`<div class="lbl" style="color:var(--color-warn)">The power watcher is not running —
+      Power Saver applies once hydroc-server is restarted.</div>`:''}
+    ${p.watcher&&p.watcher.error?`<div class="lbl" style="color:var(--color-danger)">${esc(p.watcher.error)}</div>`:''}
+  </div>`;
+}
+function bindSaver(){
+  const seg=$('#saver');
+  if(seg)seg.onclick=async e=>{const b=e.target.closest('[data-v]');if(!b)return;
+    const d=await api('/api/power-saver',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({mode:b.dataset.v})});
+    if(d&&d.mode)S.saver=d;
+    render();
+    // The watcher applies it within a tick; read back what it did.
+    setTimeout(async()=>{const s=await api('/api/power-saver');if(s){S.saver=s;render();}},2500);};
+}
+
 function bindBattLight(){
   const seg=$('#battlight');
   if(seg)seg.onclick=async e=>{const b=e.target.closest('[data-v]');if(!b)return;
@@ -1059,6 +1111,7 @@ function bindBattLight(){
 function vBatt(){
   const cp=S.state.charge_profile;
   return `<div class="drift" id="fabricating" style="display:none"></div>
+  ${saverCard()}
   ${battLightCard()}
   <div class="card"><div class="kick">Charging mode</div>
     <div class="seg" id="charge">${CHARGE.map(c=>
@@ -1553,6 +1606,7 @@ function bind(){
   bindIcc();
   bindDisplay();
   bindBattLight();
+  bindSaver();
 }
 window.addEventListener('keydown',e=>{
   if(S.section!=='light'||S.kbTab!=='perkey')return;

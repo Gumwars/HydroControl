@@ -620,6 +620,59 @@ driver rejects both on. Present as a three-way choice, not two independent switc
 
 ---
 
+### 3.9 Power Saver ✅ verified on hardware — Linux-only, not from Control Center
+
+`power_saver: auto | on | off` (default `auto`): on unplug, a bundle of levers chosen
+by measurement; on plug-in, everything given back. `hydroc/powersaver.py`, driven by
+hydroc-server's power watcher.
+
+**Measured first, with `power_saver_probe.py`** (on battery, each lever added in turn,
+system watts from `current_now × voltage_now`, 2026-10-19):
+
+| Lever | Idle | Video | In? |
+|---|---|---|---|
+| Baseline | 24.3 W | 37.3 W | |
+| Audio codec `power_save` | −1.0 | −0.2 | only from 0 — see below |
+| Wi-Fi power save | −1.0 | −0.7 | yes |
+| PCI runtime PM `on` → `auto` | **−2.6** | **−2.0** | yes |
+| Stop `nvidia-persistenced` | +0.3 | 0.0 | **no** |
+| EC PL1 15 / PL2 25 / PL4 60 | +0.1 | +0.1 | **no** — never binds at these loads |
+| Brightness 100 % vs low | +4.5 | +5.6 | cap at 50 %, never raise |
+
+Also: power-profiles-daemon to `power-saver`, and lights off (battery lighting is
+forced to `off` while engaged).
+
+**The RTX was in runtime D3 for 100 % of both runs**, with Xwayland and Firefox's
+decoder holding it open and `nvidia-persistenced` running. Fine-grained RTD3 works,
+so taking the RTX out of the session (Hyprland on the iGPU only, a logout) buys
+nothing for browsing and video. It is *watched* instead: its `runtime_status` is
+read every 2 s — which, unlike `nvidia-smi`, never wakes it — and the UI says when
+it is awake on battery and which processes hold it. ~29 W was seen with it at P0.
+HyDE's `uwsm/env.d/01-gpu.sh` sets `__GLX_VENDOR_LIBRARY_NAME=nvidia` and
+`VK_LAYER_NV_optimus=1` on hybrid setups, steering GL and Vulkan apps to it — the
+first place to look when it wakes.
+
+**Rules it keeps:**
+
+- *Refresh rate is not touched.* hyprmoncfg owns it and would fight a change; the
+  UI says when the panel is above 60 Hz.
+- *A change the user made on battery is theirs.* Brightness and the platform profile
+  are restored only if they still hold what Power Saver set (the batterylight rule).
+- *Do not fight the distribution.* CachyOS's `20-audio-pm.rules`
+  (`cachyos-settings`) sets `snd_hda_intel power_save=10` on unplug and `0` on AC.
+  Power Saver overwriting it with 1 raced the rule at unplug and re-asserted against
+  it every minute. It now moves the value only from 0. Which also means the probe's
+  −1.0 W was 10 → 1 — with nothing playing the codec sleeps under either: noise.
+- *Resume undoes things silently.* While engaged, audio, Wi-Fi and PCI are
+  re-asserted every 60 s — never brightness or the profile.
+
+State lives in `/run/hydroc/power-saver.json`, cleared on reboot along with every
+lever it records, so the two cannot disagree. Verified: engage and release on the
+hardware, release after a server restart mid-battery, and lights restored to the
+keyboard's previous level.
+
+---
+
 ## 4. Corrections — do not re-tread these
 
 Each of these was investigated and closed. They are recorded so nobody repeats them.

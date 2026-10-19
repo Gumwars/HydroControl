@@ -23,6 +23,7 @@ from __future__ import annotations
 import json
 import os
 import sys
+import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from .cli import (PROFILE_PATHS, REPAIR_MODPROBE, REPAIR_MODULE, REPAIR_RELOAD,
@@ -30,7 +31,7 @@ from .cli import (PROFILE_PATHS, REPAIR_MODPROBE, REPAIR_MODULE, REPAIR_RELOAD,
 from .hardware import Hardware
 from . import fancurve, found, gpumode, presets, rgb
 from . import nativemode
-from . import colorprofile, displayd, lockkeys
+from . import batterylight, colorprofile, displayd, lockkeys
 from .hotkeys import ProfileButton
 
 # The LPP dock lives behind a sidecar daemon (hydroc.lppd) because BLE is async
@@ -164,6 +165,81 @@ def _on_profile_button() -> None:
 
 _button = ProfileButton(_on_profile_button)
 _sessions = lockkeys.SessionWatcher(lambda: load_profile()[0])
+
+
+def _kbd_set(n: int) -> None:
+    r = rgb.set_brightness(n)
+    if not r.get("ok"):
+        raise OSError(r.get("error") or "keyboard brightness write failed")
+
+
+_battery_light = batterylight.BatteryLighting(
+    rgb.keyboard_brightness, _kbd_set, rgb.apply_chinbar_profile)
+
+
+class PowerWatcher(threading.Thread):
+    """Applies battery lighting on unplug and undoes it on plug-in.
+
+    Polls the power supplies every 2 s rather than listening on udev: it is
+    two sysfs reads, and polling also catches a profile change made from the
+    CLI. Acts only when (power, setting) changes, and at start.
+    """
+
+    def __init__(self) -> None:
+        super().__init__(daemon=True, name="power-watcher")
+        self.last: dict = {}
+        self.error: str | None = None
+        self._seen = None
+
+    def run(self) -> None:
+        import time
+        while True:
+            try:
+                profile, _ = load_profile()
+                ext = batterylight.on_external_power()
+                key = (ext, batterylight.mode_of(profile))
+                if key != self._seen:
+                    self._seen = key
+                    self.last = _battery_light.reconcile(
+                        profile, None if ext is None else not ext)
+                    if self.last.get("changed"):
+                        print("battery lighting: " + "; ".join(self.last["actions"]),
+                              flush=True)
+                self.error = None
+            except Exception as e:                          # noqa: BLE001
+                self.error = str(e)
+                self._seen = None                           # retry next tick
+            time.sleep(2)
+
+
+_power = PowerWatcher()
+
+
+def _remember_kb_brightness(result: dict, value) -> None:
+    """Record the keyboard level the user applied, for battery lighting to
+    restore -- the keyboard's own readback cannot be trusted (batterylight)."""
+    try:
+        v = int(value)
+    except (TypeError, ValueError):
+        return
+    if not result.get("ok") or not 0 <= v <= batterylight.KEYBOARD_MAX:
+        return
+    profile, _ = load_profile()
+    if profile.get("kb_brightness") != v:
+        profile["kb_brightness"] = v
+        try:
+            save_profile(profile)
+        except OSError:
+            pass
+
+
+def battery_lighting_status() -> dict:
+    profile, _ = load_profile()
+    ext = batterylight.on_external_power()
+    return {"mode": batterylight.mode_of(profile), "modes": list(batterylight.MODES),
+            "on_battery": None if ext is None else not ext,
+            "watcher": {"running": _power.is_alive(), "error": _power.error},
+            **_battery_light.status()}
 
 
 def locks_status() -> dict:
@@ -317,6 +393,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(locks_status())
         if route == "/api/icc":
             return self._json(colorprofile.status())
+        if route == "/api/battery-lighting":
+            return self._json(battery_lighting_status())
         if route == "/api/display":
             # A user-session service (Wayland), reached by its socket the way
             # the LPP sidecar is. Root never resolves the user's $HOME.
@@ -435,6 +513,27 @@ class Handler(BaseHTTPRequestHandler):
 
         if route == "/api/icc/fetch":
             return self._json(icc_fetch())
+
+        if route == "/api/battery-lighting":
+            mode = payload.get("mode")
+            if mode not in batterylight.MODES:
+                return self._json({"ok": False,
+                                   "error": f"mode must be one of {batterylight.MODES}"}, 400)
+            profile, _ = load_profile()
+            profile[batterylight.KEY] = mode
+            try:
+                save_profile(profile)
+            except OSError as e:
+                return self._json({"ok": False, "error": str(e)}, 500)
+            ext = batterylight.on_external_power()
+            try:
+                res = _battery_light.reconcile(profile, None if ext is None else not ext)
+            except Exception as e:                          # noqa: BLE001
+                return self._json({"ok": False, "error": str(e),
+                                   **battery_lighting_status()})
+            _power._seen = (ext, mode)                      # already handled
+            return self._json({"ok": True, "result": res, **battery_lighting_status()})
+
 
         if route == "/api/display":
             req = {"op": "set"}
@@ -585,21 +684,25 @@ class Handler(BaseHTTPRequestHandler):
             return self._json({"ok": True, "cycle": cycle})
 
         if route == "/api/rgb/perkey":
-            return self._json(rgb.apply_per_key(
+            res = rgb.apply_per_key(
                 payload.get("colors") or {},
                 brightness=payload.get("brightness"),
                 save=bool(payload.get("save")),
-                correct=bool(payload.get("correct", False))))
+                correct=bool(payload.get("correct", False)))
+            _remember_kb_brightness(res, payload.get("brightness"))
+            return self._json(res)
 
         if route == "/api/rgb/effect":
-            return self._json(rgb.apply_effect(
+            res = rgb.apply_effect(
                 payload.get("name", "rainbow"),
                 speed=int(payload.get("speed", 5)),
                 brightness=int(payload.get("brightness", 25)),
                 color_idx=int(payload.get("color_idx", 8)),
                 direction_idx=int(payload.get("direction_idx", 1)),
                 save=bool(payload.get("save")),
-                reactive=bool(payload.get("reactive"))))
+                reactive=bool(payload.get("reactive")))
+            _remember_kb_brightness(res, payload.get("brightness", 25))
+            return self._json(res)
 
         if route == "/api/rgb/chinbar":
             mode = payload.get("mode", "static")
@@ -655,6 +758,7 @@ def main() -> int:
               file=sys.stderr)
     _button.start()
     _sessions.start()
+    _power.start()
     srv = ThreadingHTTPServer((HOST, PORT), Handler)
     print(f"hydroc UI on http://{HOST}:{PORT}  (loopback only, Ctrl-C to stop)")
     st = _button.status()

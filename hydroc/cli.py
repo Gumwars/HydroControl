@@ -50,6 +50,9 @@ DEFAULT_PROFILE = {
     # to the desktop. Not EC state and never drift -- see hydroc/lockkeys.py.
     "numlock_default": None,
     "capslock_default": None,
+    # "keep" | "dim" | "off": keyboard and chin bar while unplugged. Applied by
+    # hydroc-server on unplug, undone on plug-in -- see hydroc/batterylight.py.
+    "battery_lighting": "keep",
     # Chin bar. Volatile like the EC -- restored by `apply`, not by the bar.
     "chin_mode": "static",
     "chin_color": "#8CBF73",
@@ -516,8 +519,12 @@ def main(argv=None) -> int:
     # cycle and nothing ever restores it.
     chin_ok = True
     if not args.dry_run:
-        from . import rgb
-        res = rgb.apply_chinbar_profile(profile)
+        from . import batterylight, rgb
+        # Battery lighting owns the bar while unplugged: lighting it from the
+        # profile here would undo that at every boot and resume on battery.
+        ext = batterylight.on_external_power()
+        over = batterylight.chin_override(profile, ext is False)
+        res = rgb.apply_chinbar_profile({**profile, **over} if over else profile)
         if res.get("skipped"):
             print(f"  chin bar: skipped -- {res.get('error')}")
         elif res.get("ok"):

@@ -377,6 +377,7 @@ async function refreshState(){
   S.lpp=l||{running:false};
   const gp=await api('/api/gpu');if(gp)S.gpu=gp;
   const lk=await api('/api/locks');if(lk)S.locks=lk;
+  const bl=await api('/api/battery-lighting');if(bl)S.battLight=bl;
   const ic=await api('/api/icc');if(ic)S.icc=ic;
   if(!S.dispDrag){const dm=await api('/api/display');if(dm)S.display=dm;}
   const fd=await api('/api/found');if(fd)S.found=fd;
@@ -1020,9 +1021,45 @@ function vLpp(){
     ${l.last_notification?`<div class="drift">last frame from dock: ${esc(l.last_notification)}</div>`:''}
   </div>`;
 }
+// ── battery lighting ────────────────────────────────────────────────────────
+// Keyboard and chin bar while unplugged. hydroc-server applies it on unplug and
+// gives back the previous keyboard level and the saved chin bar on plug-in.
+const BATTLIGHT=[
+ {id:'keep',name:'Keep',desc:'Lighting is not touched on battery.'},
+ {id:'dim',name:'Dim',desc:'Keyboard to 10 / 50 at most, chin bar to 20%. Restored on AC.'},
+ {id:'off',name:'Off',desc:'Keyboard and chin bar off on battery. Restored on AC.'}];
+function battLightCard(){
+  const b=S.battLight;
+  if(!b)return '';
+  const cur=BATTLIGHT.find(x=>x.id===b.mode)||BATTLIGHT[0];
+  return `<div class="card" style="margin-bottom:var(--space-4)">
+    <div class="row"><div class="kick">Lighting on battery</div>
+      <span class="kv">${b.on_battery===null?'power unknown':b.on_battery?'on battery':'on AC'}${
+        b.applied?' · '+esc(b.applied)+' now':''}</span></div>
+    <div class="seg" id="battlight" style="align-self:flex-start;margin-top:var(--space-3)">
+      ${BATTLIGHT.map(x=>`<button data-v="${x.id}" aria-pressed="${b.mode===x.id}">${x.name}</button>`).join('')}</div>
+    <div class="lbl">${esc(cur.desc)}</div>
+    ${b.watcher&&!b.watcher.running?`<div class="lbl" style="color:var(--color-warn)">The power watcher is not running —
+      settings apply at the next unplug once hydroc-server is restarted.</div>`:''}
+    ${b.watcher&&b.watcher.error?`<div class="lbl" style="color:var(--color-danger)">${esc(b.watcher.error)}</div>`:''}
+    ${S.battLightMsg?`<div class="lbl" style="color:${S.battLightMsg.bad?'var(--color-danger)':'var(--color-accent)'}">${esc(S.battLightMsg.text)}</div>`:''}
+  </div>`;
+}
+function bindBattLight(){
+  const seg=$('#battlight');
+  if(seg)seg.onclick=async e=>{const b=e.target.closest('[data-v]');if(!b)return;
+    const d=await api('/api/battery-lighting',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({mode:b.dataset.v})});
+    if(d&&d.mode)S.battLight=d;
+    S.battLightMsg=d&&d.ok?{text:((d.result||{}).actions||[]).join(' · ')||'saved'}
+                          :{text:'failed: '+((d&&d.error)||'no response'),bad:true};
+    render();};
+}
+
 function vBatt(){
   const cp=S.state.charge_profile;
   return `<div class="drift" id="fabricating" style="display:none"></div>
+  ${battLightCard()}
   <div class="card"><div class="kick">Charging mode</div>
     <div class="seg" id="charge">${CHARGE.map(c=>
       `<button data-v="${c.id}" aria-pressed="${cp===c.id}">${c.name}</button>`).join('')}</div>
@@ -1515,6 +1552,7 @@ function bind(){
   bindLocks();
   bindIcc();
   bindDisplay();
+  bindBattLight();
 }
 window.addEventListener('keydown',e=>{
   if(S.section!=='light'||S.kbTab!=='perkey')return;

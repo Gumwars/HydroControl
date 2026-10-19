@@ -286,6 +286,22 @@ def apply_effect(name: str, speed: int = 5, brightness: int = 25,
     return out
 
 
+def keyboard_brightness() -> int | None:
+    """Current keyboard brightness, or None if it cannot be read.
+
+    Not HardwareDriver.get_brightness(): that answers 25 when the device is
+    missing, and a battery-saving restore would then "restore" a level the
+    keyboard never had.
+    """
+    try:
+        kbd = _keyboard()
+        if not kbd.connected():
+            return None
+        return int(kbd.handle.get_brightness())
+    except Exception:
+        return None
+
+
 def set_brightness(value: int) -> dict:
     try:
         _keyboard().set_brightness(max(0, min(50, int(value))))

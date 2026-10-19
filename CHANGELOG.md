@@ -1,5 +1,56 @@
 # Changelog
 
+## [0.9.6] — 2026-10-19
+
+### Lighting on battery
+
+**Keep · Dim · Off** for the keyboard and chin bar while unplugged, on the
+Battery page. Unplugging applies it; plugging in gives back what was there.
+USB-C counts as plugged in — `AC0` reads offline while charging over it.
+
+Only the keyboard's brightness is touched, never its effect or colours, and
+with a command that carries no save byte, so unplugging all day writes no
+flash. The level before dimming comes back on AC — unless you picked a new one
+on battery, which is yours. A boot or resume on battery no longer relights a
+chin bar battery lighting switched off.
+
+The saving was measured when this was written but the figures were not kept,
+and the probe below cannot price the lights (hydroc-server owns the keyboard),
+so it is not quantified here.
+
+### Power Saver
+
+New, and not from Control Center: a battery mode built from what measured as
+worth having on this machine. **Auto** engages when you unplug (USB-C counts as
+plugged in) and gives everything back when you plug in; **On** and **Off** pin
+it. On the Battery page, above lighting.
+
+While engaged: Wi-Fi power save, PCI runtime power management, audio codec
+power save, the `power-saver` platform profile, lights off, and brightness
+capped at 50 % — lowered, never raised.
+
+**Measured before it was built.** `power_saver_probe.py` adds one lever at a
+time on battery and reads the draw from the battery itself. Idle went from
+24.3 W to 19.6 W, video from 37.3 W to 34.4 W, with ~4 W more from the
+brightness cap at full brightness. About 1 W of the idle figure was audio and is
+probably noise — CachyOS already powers the codec down on battery (below) — so
+call it −15 %: Wi-Fi power save and PCI runtime PM are the real saving. Two
+levers that sounded right measured as
+nothing and were left out: low CPU power limits (they never bind while
+browsing or playing video) and stopping `nvidia-persistenced`.
+
+**The RTX already sleeps.** It sat in runtime D3 through every measurement,
+video included, so Power Saver does not log you out to take it out of the
+session. It watches instead: if the RTX wakes on battery — ~29 W at P0 — the
+card says so, for how long, and what has it open.
+
+**What it will not do:** change the refresh rate (hyprmoncfg owns it; the card
+says when the panel is above 60 Hz), undo a brightness or profile change you
+made on battery, or fight CachyOS's own audio power-save rule — which it did,
+briefly, before it learned to only ever move that setting from off.
+
+733 tests.
+
 ## [0.9.5] — 2026-10-10
 
 ### Corrections

@@ -199,6 +199,7 @@ class PowerWatcher(threading.Thread):
     """
 
     REASSERT_S = 60
+    RESUME_RETRY_S = 30
 
     def __init__(self) -> None:
         super().__init__(daemon=True, name="power-watcher")
@@ -210,6 +211,40 @@ class PowerWatcher(threading.Thread):
         self._asserted = 0.0
         self.rtx_state: str | None = None
         self.rtx_awake_since: float | None = None
+        self._slept = self.sleep_offset()
+        self._kbd_resume_until: float | None = None
+
+    @staticmethod
+    def sleep_offset() -> float:
+        """Seconds this boot has spent asleep. CLOCK_BOOTTIME counts through
+        suspend and CLOCK_MONOTONIC does not, so their difference grows by
+        exactly the time asleep -- a resume detector with no sleep hook."""
+        import time
+        return time.clock_gettime(time.CLOCK_BOOTTIME) - time.monotonic()
+
+    def _resumed(self, now: float) -> bool:
+        off = self.sleep_offset()
+        if off - self._slept < 1.0:
+            return False
+        self._slept = off
+        self._kbd_resume_until = now + self.RESUME_RETRY_S
+        self._asserted = 0.0              # re-assert Power Saver now, not in a minute
+        return True
+
+    def _keyboard_after_resume(self, profile: dict, ext: bool | None, now: float) -> None:
+        if self._kbd_resume_until is None:
+            return
+        try:
+            r = _battery_light.resume(
+                powersaver.lighting_profile(profile, _on_battery(ext)))
+        except Exception as e:                              # noqa: BLE001
+            if now >= self._kbd_resume_until:
+                self._kbd_resume_until = None
+                print(f"battery lighting: gave up on the keyboard after resume: {e}",
+                      flush=True)
+            return                                          # USB still settling
+        self._kbd_resume_until = None
+        print("battery lighting: " + "; ".join(r["actions"]), flush=True)
 
     @staticmethod
     def light_key(profile: dict, ext: bool | None) -> tuple:
@@ -245,7 +280,10 @@ class PowerWatcher(threading.Thread):
             try:
                 profile, _ = load_profile()
                 ext = batterylight.on_external_power()
-                self._saver(profile, ext, time.monotonic())
+                now = time.monotonic()
+                self._resumed(now)
+                self._saver(profile, ext, now)
+                self._keyboard_after_resume(profile, ext, now)
                 key = self.light_key(profile, ext)
                 if key != self._seen:
                     self._seen = key

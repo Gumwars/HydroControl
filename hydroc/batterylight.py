@@ -135,6 +135,31 @@ class BatteryLighting:
         st = self._load()
         return {"applied": st.get("mode"), "keyboard_saved": st.get("kbd_saved")}
 
+    def resume(self, profile: dict) -> dict:
+        """Re-send the keyboard level after a system sleep.
+
+        The keyboard comes back from sleep dark: nothing in the host resends
+        its lighting, and kbctrl's daemon -- whose sleep hook used to -- is no
+        longer running. The chin bar is handled by `cli apply` at resume; the
+        keyboard cannot be, because hydroc-server owns it.
+
+        The level is whatever it should be now: battery lighting's own, if it
+        is applied (Power Saver's lights-off included), else the last level
+        applied through HydroControl. Raises if the write fails, so the caller
+        can retry while USB settles.
+        """
+        st = self._load()
+        level = st.get("kbd_set") if st.get("mode") else self._fallback(profile)
+        raw = self.kbd_get()
+        if raw is None:
+            raise OSError("keyboard not connected yet after resume")
+        if not self._valid(level):
+            return {"changed": False,
+                    "actions": [f"keyboard read {raw} after resume; nothing to re-send"]}
+        self.kbd_set(level)
+        return {"changed": True,
+                "actions": [f"keyboard read {raw} after resume; re-sent {level}"]}
+
     def reconcile(self, profile: dict, on_battery: bool | None) -> dict:
         """Bring the lights in line with (profile, power). Idempotent."""
         if on_battery is None:

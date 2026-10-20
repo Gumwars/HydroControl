@@ -120,6 +120,18 @@ def battery_int(name: str, base: str | None = None) -> int | None:
 _read = read_text
 
 
+def device_info(dmi: str = "/sys/class/dmi/id") -> dict:
+    """What this is running on, for the UI's title bar. Read, never assumed:
+    each field is None when the firmware does not report it."""
+    def r(name: str) -> str | None:
+        v = _read(os.path.join(dmi, name))
+        return v or None
+    return {"model": r("product_sku") or r("product_name"),
+            "ec_firmware": r("ec_firmware_release"),
+            "bios": r("bios_version"),
+            "kernel": os.uname().release}
+
+
 def _charge_threshold_exposed() -> bool:
     """Does the driver offer a charge threshold at all?
 
@@ -186,6 +198,7 @@ class Hardware:
             "battery": os.path.isdir(BAT),
             "ec_available": ec_ok,
             "ec_error": ec_why,
+            "device": device_info(),
         }
 
     # -- telemetry (read-only, safe without root) --------------------------

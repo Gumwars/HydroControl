@@ -6,121 +6,220 @@
 <title>HydroControl</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
 <style>
-/* ── Matugen re-seed of the Nocturne token sheet (seed #8CBF73, OKLCH hue 139) ── */
+/* ── Tokens: Nocturne dark + Matugen accent (seed #8CBF73, OKLCH hue 141) ──
+   From the GUI polish design. warn / danger / info are deliberately NOT
+   derived from the accent: status colour must mean the same thing on every
+   desktop. */
 :root{
-  --color-bg:oklch(0.196 0.011 141); --color-surface:oklch(0.246 0.013 141);
-  --color-text:oklch(0.930 0.008 141); --color-accent:oklch(0.775 0.107 139);
-  --color-accent-2:oklch(0.820 0.070 139);
-  --color-divider:color-mix(in oklab,oklch(0.930 0.008 141) 15%,transparent);
-  --color-neutral-300:oklch(0.846 0.010 141); --color-neutral-400:oklch(0.752 0.011 141);
-  --color-neutral-500:oklch(0.652 0.012 141); --color-neutral-700:oklch(0.446 0.012 141);
-  --color-neutral-800:oklch(0.338 0.012 141); --color-neutral-900:oklch(0.262 0.011 141);
+  --bg:oklch(0.148 0.008 141);          /* app frame */
+  --surface:oklch(0.198 0.008 141);     /* cards, raised panels */
+  --surface-2:oklch(0.225 0.008 141);   /* raised again: hover, wells, tracks */
+  --surface-3:oklch(0.255 0.009 141);   /* active / selected fill */
+  --fg:oklch(0.935 0.008 141);
+  --muted:oklch(0.705 0.010 141);
+  --faint:oklch(0.575 0.010 141);
+  --border:oklch(0.305 0.009 141);
+  --border-soft:oklch(0.255 0.008 141);
+  --accent:#8CBF73;
+  --accent-bright:oklch(0.82 0.115 140);
+  --accent-soft:color-mix(in oklab,var(--accent) 16%,transparent);
+  --accent-ring:color-mix(in oklab,var(--accent) 45%,transparent);
+  --on-accent:oklch(0.22 0.02 141);
+  --warn:oklch(0.78 0.13 78);
+  --warn-soft:color-mix(in oklab,var(--warn) 15%,transparent);
+  --danger:oklch(0.66 0.19 27);
+  --danger-soft:color-mix(in oklab,var(--danger) 15%,transparent);
+  --info:oklch(0.72 0.12 245);
+  --info-soft:color-mix(in oklab,var(--info) 14%,transparent);
+  --radius:10px;
+  --shadow-card:0 0 0 1px rgba(0,0,0,.22),0 1px 0 rgba(255,255,255,.04) inset,0 14px 40px rgba(0,0,0,.4);
+  --glow-accent:color-mix(in oklab,var(--accent) 7%,transparent);
+
+  /* The names the rest of this file was written against, mapped onto the
+     tokens above so every existing control takes the new palette without
+     being rewritten. */
+  --color-bg:var(--bg); --color-surface:var(--surface);
+  --color-text:var(--fg); --color-accent:var(--accent);
+  --color-accent-2:var(--accent-bright);
+  --color-divider:var(--border);
+  --color-neutral-300:oklch(0.846 0.010 141); --color-neutral-400:var(--muted);
+  --color-neutral-500:var(--faint); --color-neutral-700:oklch(0.446 0.012 141);
+  --color-neutral-800:var(--surface-3); --color-neutral-900:var(--surface-2);
   --color-accent-100:oklch(0.972 0.022 139); --color-accent-200:oklch(0.930 0.048 139);
   --color-accent-800:oklch(0.400 0.068 139);
-  --color-warn:oklch(0.790 0.107 78); --color-danger:oklch(0.680 0.150 25);
-  --color-info:oklch(0.775 0.075 236);
-  --color-warn-tint:color-mix(in oklab,oklch(0.790 0.107 78) 16%,transparent);
-  --color-danger-tint:color-mix(in oklab,oklch(0.680 0.150 25) 16%,transparent);
-  --font-body:"Inter",system-ui,sans-serif; --font-mono:"JetBrains Mono",ui-monospace,monospace;
+  --color-warn:var(--warn); --color-danger:var(--danger); --color-info:var(--info);
+  --color-warn-tint:var(--warn-soft); --color-danger-tint:var(--danger-soft);
+  --font-body:"Inter",-apple-system,"Segoe UI",system-ui,sans-serif;
+  --font-mono:"JetBrains Mono",ui-monospace,"SF Mono","Cascadia Mono",Menlo,Consolas,monospace;
   --space-2:5.6px; --space-3:8.4px; --space-4:11.2px; --space-6:16.8px; --space-8:22.4px;
-  --radius-sm:4px; --radius-md:8px; --radius-lg:14px;
+  --radius-sm:7px; --radius-md:var(--radius); --radius-lg:14px;
   /* One selection language for the whole app. Selected controls were drawn
      three different ways: seg used an inset 1px ring, swatch a detached 2px
      outline, and .btn nothing at all. */
   --sel-tint:color-mix(in oklab,var(--color-accent) 14%,transparent);
   --sel-ring:0 0 0 2px var(--color-bg),0 0 0 3.5px var(--color-accent);
-  --shadow-sm:0 0 0 1px oklch(0.338 0.012 141);
-  --shadow-md:0 0 0 1px oklch(0.446 0.012 141),0 6px 18px rgba(0,0,0,.55);
+  --shadow-sm:0 0 0 1px var(--border-soft);
+  --shadow-md:0 0 0 1px var(--border),0 6px 18px rgba(0,0,0,.55);
 }
 *,*::before,*::after{box-sizing:border-box}
-body{margin:0;background:var(--color-bg);color:var(--color-text);
-  font:400 15px/1.55 var(--font-body);-webkit-font-smoothing:antialiased}
+html,body{height:100%}
+body{margin:0;color:var(--fg);overflow:hidden;
+  background:
+    radial-gradient(1200px 720px at 78% -12%,var(--glow-accent),transparent 62%),
+    radial-gradient(900px 600px at -8% 108%,color-mix(in oklab,var(--info) 4%,transparent),transparent 60%),
+    var(--bg);
+  font:400 13px/1.5 var(--font-body);-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
 .kv{font-family:var(--font-mono);font-variant-numeric:tabular-nums}
 h1,h2,h3,h4{font-weight:500;line-height:1.12;letter-spacing:-.015em;margin:0}
-:focus-visible{outline:2px solid var(--color-accent);outline-offset:2px}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+::selection{background:var(--accent-soft)}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
 
-/* ── shell ── */
-.app{display:grid;grid-template-columns:236px 1fr;min-height:100vh}
-.side{border-right:1px solid var(--color-divider);padding:var(--space-6) var(--space-4);
-  display:flex;flex-direction:column;gap:var(--space-6)}
-.brand{display:flex;align-items:baseline;gap:8px;padding:0 var(--space-3)}
-.brand b{font-size:16px;font-weight:600;letter-spacing:-.02em}
-.brand span{font:400 10px var(--font-mono);color:var(--color-neutral-500)}
+/* ── shell: title bar over sidebar + content ── */
+.app{display:flex;flex-direction:column;height:100vh}
+.titlebar{flex:none;display:flex;align-items:center;gap:12px;height:46px;padding:0 14px;
+  background:color-mix(in oklab,var(--surface) 82%,transparent);
+  backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
+  border-bottom:1px solid var(--border-soft)}
+.tb-brand{display:flex;align-items:center;gap:9px;min-width:0}
+.tb-logo{width:18px;height:18px;border-radius:5px;flex:none;
+  background:linear-gradient(140deg,var(--accent-bright),var(--accent));
+  box-shadow:0 0 0 1px color-mix(in oklab,var(--accent) 40%,transparent),
+             0 0 12px color-mix(in oklab,var(--accent) 35%,transparent)}
+.tb-name{font-weight:600;font-size:12.5px;letter-spacing:-.01em;white-space:nowrap}
+.tb-device{font-family:var(--font-mono);font-size:10.5px;color:var(--faint);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tb-status{display:flex;align-items:center;gap:8px;flex:none}
+#vizSwitch{margin-left:auto}
+.chip{display:inline-flex;align-items:center;gap:6px;height:24px;padding:0 10px;border-radius:999px;
+  font-family:var(--font-mono);font-size:10.5px;letter-spacing:.02em;white-space:nowrap;
+  border:1px solid var(--border);color:var(--muted)}
+.chip .dot{width:6px;height:6px;margin:0;border-radius:50%;flex:none}
+.chip.live{color:var(--fg)}
+.chip.live .dot{background:var(--accent);animation:pulse 2.2s ease-in-out infinite}
+.chip.warn{color:var(--warn);border-color:color-mix(in oklab,var(--warn) 40%,transparent)}
+.chip.warn .dot{background:var(--warn)}
+.chip.bad{color:var(--danger);border-color:color-mix(in oklab,var(--danger) 40%,transparent)}
+.chip.bad .dot{background:var(--danger)}
+.layout{flex:1;display:flex;min-height:0}
+
+.side{flex:none;width:216px;display:flex;flex-direction:column;gap:2px;padding:14px 10px;
+  background:color-mix(in oklab,var(--surface) 40%,transparent);
+  border-right:1px solid var(--border-soft)}
 .nav{display:flex;flex-direction:column;gap:2px}
-.nav button{display:flex;flex-direction:column;gap:1px;text-align:left;cursor:pointer;
-  background:none;border:0;color:inherit;font:inherit;padding:8px var(--space-3);
-  border-radius:var(--radius-md)}
-.nav button:hover{background:color-mix(in oklab,var(--color-text) 6%,transparent)}
-.nav button[aria-current]{background:var(--color-surface);box-shadow:inset 0 0 0 1px var(--color-divider)}
-.nav button[aria-current] .nm{color:var(--color-accent)}
-.nav .nm{font-size:13.5px}
-.nav .sb{font:400 10.5px var(--font-mono);color:var(--color-neutral-500)}
-.health{margin-top:auto;padding:var(--space-3);border-radius:var(--radius-md);
-  background:var(--color-surface);box-shadow:var(--shadow-sm);font-size:11.5px}
+.nav-item{position:relative;display:flex;align-items:center;gap:10px;height:38px;padding:0 11px;
+  border:0;border-radius:var(--radius-sm);background:none;cursor:pointer;text-align:left;
+  color:var(--muted);font:500 13px var(--font-body);transition:background .13s,color .13s}
+.nav-item svg{width:16px;height:16px;flex:none}
+.nav-item:hover{background:var(--surface-2);color:var(--fg)}
+.nav-item[aria-current]{background:color-mix(in oklab,var(--accent) 12%,var(--surface-3));color:var(--fg)}
+.nav-item[aria-current]::before{content:'';position:absolute;left:0;top:9px;bottom:9px;width:2px;
+  border-radius:1px;background:var(--accent);box-shadow:0 0 8px var(--accent)}
+.nav-item[aria-current] svg{color:var(--accent-bright)}
+
+.health{margin-top:auto;padding:10px 11px;border-radius:var(--radius-sm);
+  background:var(--surface);box-shadow:0 0 0 1px var(--border-soft);font-size:11px}
+.health .hrow{display:flex;align-items:center;gap:7px}
+.health .led{width:6px;height:6px;border-radius:50%;flex:none;background:var(--accent);
+  animation:pulse 2.2s infinite}
+.health .led.bad{background:var(--danger);animation:none}
+.health .name{font-family:var(--font-mono);font-size:11px}
+.health .st{margin-left:auto;font-size:10px;color:var(--accent)}
+.health .st.bad{color:var(--danger)}
+.health .hl{margin-top:6px;font-family:var(--font-mono);font-size:9.5px;line-height:1.6;color:var(--faint)}
+.health .hl .bad{color:var(--danger)}
 .dot{width:7px;height:7px;border-radius:50%;display:inline-block;margin-right:6px}
-main{padding:var(--space-8) var(--space-8) 60px;max-width:1080px}
-.hd{display:flex;align-items:baseline;gap:12px;margin-bottom:var(--space-6)}
-.hd h2{font-size:24px}
-.hd .sub{font:400 11px var(--font-mono);color:var(--color-neutral-500)}
+
+main{flex:1;min-width:0;display:flex;flex-direction:column}
+.hd{flex:none;display:flex;align-items:center;gap:12px;padding:15px 24px 12px}
+.hd h2{font-size:17px;font-weight:600;letter-spacing:-.01em}
+.hd .sub{font-size:11.5px;color:var(--faint);align-self:flex-end;padding-bottom:1px}
+.content{flex:1;overflow:auto;padding:0 24px 28px;
+  scrollbar-width:thin;scrollbar-color:var(--surface-3) transparent}
+.content::-webkit-scrollbar{width:8px}
+.content::-webkit-scrollbar-thumb{background:var(--surface-3);border-radius:4px}
+.content>*{max-width:1120px}
 
 /* ── cards ── */
-.grid{display:grid;gap:var(--space-4)}
+.grid{display:grid;gap:14px}
 .g3{grid-template-columns:repeat(3,1fr)} .g2{grid-template-columns:repeat(2,1fr)}
-.card{background:var(--color-surface);border-radius:var(--radius-md);
-  padding:var(--space-4);box-shadow:var(--shadow-sm);display:flex;flex-direction:column;gap:var(--space-3)}
-.kick{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--color-accent)}
+.card{background:linear-gradient(180deg,color-mix(in oklab,var(--fg) 2.5%,var(--surface)),var(--surface) 34%);
+  border-radius:var(--radius-lg);box-shadow:var(--shadow-card);padding:16px;
+  display:flex;flex-direction:column;gap:10px;min-width:0}
+.kick{font-family:var(--font-mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
 .lbl{font-size:12px;color:var(--color-neutral-400)}
 .big{font:500 30px/1 var(--font-mono);font-variant-numeric:tabular-nums}
 .unit{font-size:13px;color:var(--color-neutral-500);font-weight:400}
 .row{display:flex;align-items:center;justify-content:space-between;gap:10px}
 
-/* ── controls ── */
-.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;cursor:pointer;
-  font:500 13px/1.2 var(--font-body);color:var(--color-text);background:transparent;
-  border:1px solid transparent;padding:6px 11px;border-radius:var(--radius-md)}
-.btn-primary{color:var(--color-accent);border-color:var(--color-accent)}
-.btn-primary:hover{background:color-mix(in oklab,var(--color-accent) 12%,transparent)}
-.btn-secondary{border-color:var(--color-divider)}
-.btn-secondary:hover{background:color-mix(in oklab,var(--color-text) 7%,transparent)}
+/* ── controls (GUI polish design) ── */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;cursor:pointer;
+  height:30px;padding:0 13px;font:500 12px/1 var(--font-body);color:var(--fg);background:transparent;
+  border:1px solid transparent;border-radius:var(--radius-sm);
+  transition:background .14s,border-color .14s,color .14s,transform .04s}
+.btn:active:not(:disabled){transform:translateY(1px)}
+.btn-primary{background:var(--accent);color:var(--on-accent)}
+.btn-primary:hover:not(:disabled){background:var(--accent-bright)}
+.btn-secondary{background:var(--surface-2);border-color:var(--border)}
+.btn-secondary:hover:not(:disabled){background:var(--surface-3)}
 .btn:disabled{opacity:.45;cursor:not-allowed}
-.seg{display:inline-flex;border:1px solid var(--color-divider);border-radius:var(--radius-md);overflow:hidden}
-.seg button{background:none;border:0;color:inherit;font:400 13px var(--font-body);
-  padding:7px 13px;cursor:pointer}
-.seg button+button{border-left:1px solid var(--color-divider)}
-.seg button[aria-pressed="true"]{color:var(--color-accent);background:var(--sel-tint)}
 
-/* A joined segmented control cannot wrap: the divider borders land at the start
-   of each new row and the rounded corners only clip the outer two. Groups that
-   wrap use standalone pills instead. */
-.seg.wrap{border:0;overflow:visible;gap:6px;flex-wrap:wrap}
-.seg.wrap button{border:1px solid var(--color-divider);border-radius:var(--radius-md);padding:6px 11px}
-.seg.wrap button[aria-pressed="true"]{border-color:var(--color-accent)}
+/* Segmented: a recessed well, the chosen segment raised out of it. */
+.seg{display:inline-flex;align-self:flex-start;padding:2px;gap:2px;border-radius:var(--radius-sm);
+  background:var(--surface-2)}
+.seg button{height:26px;padding:0 12px;border:0;border-radius:6px;background:none;cursor:pointer;
+  font:400 11.5px var(--font-body);color:var(--muted);transition:background .13s,color .13s}
+.seg button:hover{color:var(--fg)}
+.seg button[aria-pressed="true"]{background:var(--surface-3);color:var(--fg);box-shadow:0 0 0 1px var(--border)}
+
+/* A joined segmented control cannot wrap: its well would break across rows.
+   Groups that wrap are standalone pills instead -- the design's .pick, which
+   is a different element here (the RGB picker), so the style lives on these. */
+.seg.wrap{background:none;padding:0;gap:6px;flex-wrap:wrap}
+.seg.wrap button{height:28px;padding:0 11px;border:1px solid transparent;border-radius:var(--radius-sm);
+  background:var(--surface-2);font-size:12px;transition:background .13s,color .13s,border-color .13s}
+.seg.wrap button:hover{background:var(--surface-3);color:var(--fg)}
 
 /* Selected state, applied last so it beats the :hover rules above at equal
-   specificity. .btn had no selected style at all -- picking a keyboard effect
-   applied it but left the button looking untouched. */
-.btn[aria-pressed="true"]{color:var(--color-accent);border-color:var(--color-accent);
-  background:var(--sel-tint)}
-.sw{flex:none;width:34px;height:19px;border-radius:10px;padding:2px;cursor:pointer;
-  background:var(--color-neutral-800);transition:background .15s;border:0}
-.sw[aria-pressed="true"]{background:var(--color-accent)}
-.sw i{display:block;width:15px;height:15px;border-radius:50%;background:var(--color-bg);transition:transform .15s}
-.sw[aria-pressed="true"] i{transform:translateX(15px)}
-input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:6px;border-radius:3px;
-  background:var(--color-neutral-900);outline:none}
-input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:13px;height:13px;
-  border-radius:50%;background:var(--color-accent-200);box-shadow:0 0 0 1px var(--color-bg);cursor:pointer}
-input[type=range]:disabled{opacity:.4}
-.tag{display:inline-flex;align-items:center;font:400 10.5px var(--font-mono);
-  padding:2px 7px;border-radius:5px;background:var(--color-neutral-900);color:var(--color-neutral-400)}
-.tag-warn{background:var(--color-warn-tint);color:var(--color-warn)}
-.tag-accent{background:var(--color-accent-800);color:var(--color-accent-100)}
+   specificity: pills and pressable buttons share it. */
+.seg.wrap button[aria-pressed="true"],
+.btn[aria-pressed="true"]{background:var(--accent-soft);color:var(--accent-bright);
+  border-color:var(--accent-ring);box-shadow:none}
+.sw{flex:none;width:38px;height:21px;border-radius:11px;padding:2px;cursor:pointer;
+  background:var(--surface-3);transition:background .16s;border:0}
+.sw[aria-pressed="true"]{background:var(--accent)}
+.sw i{display:block;width:17px;height:17px;border-radius:50%;background:var(--fg);
+  transition:transform .16s,background .16s}
+.sw[aria-pressed="true"] i{transform:translateX(17px);background:var(--on-accent)}
+.sw:disabled{opacity:.45;cursor:not-allowed}
 
-/* ── banners ── */
-.banner{display:flex;align-items:flex-start;gap:12px;padding:var(--space-4);
-  border-radius:var(--radius-md);margin-bottom:var(--space-6);font-size:13px}
-.banner.warn{background:var(--color-warn-tint);box-shadow:inset 0 0 0 1px var(--color-warn)}
-.banner.bad{background:var(--color-danger-tint);box-shadow:inset 0 0 0 1px var(--color-danger)}
+/* Sliders: the design's filled track. --fill is kept in step with the value
+   by syncRanges() -- a native range input cannot colour its own left side. */
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:6px;border-radius:3px;
+  margin:10px 0;outline:none;cursor:pointer;
+  background:linear-gradient(90deg,var(--accent) 0 var(--fill,0%),var(--surface-2) 0)}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:15px;height:15px;
+  border-radius:50%;background:var(--accent-bright);box-shadow:0 0 0 2px var(--bg);cursor:pointer;
+  transition:box-shadow .12s}
+input[type=range]::-moz-range-thumb{width:15px;height:15px;border:0;border-radius:50%;
+  background:var(--accent-bright);box-shadow:0 0 0 2px var(--bg);cursor:pointer}
+input[type=range]:hover::-webkit-slider-thumb,input[type=range]:focus-visible::-webkit-slider-thumb{
+  box-shadow:0 0 0 2px var(--bg),0 0 0 4px var(--accent-ring)}
+input[type=range]:focus-visible{outline:2px solid var(--accent);outline-offset:4px}
+input[type=range]:disabled{opacity:.4;cursor:not-allowed}
+.tag{display:inline-flex;align-items:center;font:400 10.5px var(--font-mono);
+  padding:2px 7px;border-radius:5px;background:var(--surface-2);color:var(--muted)}
+.tag-warn{background:var(--warn-soft);color:var(--warn)}
+.tag-accent{background:var(--accent-soft);color:var(--accent-bright)}
+
+/* ── banners: the design's notes. They carry warnings, so they keep a faint
+   outline the design's inline notes do not need. ── */
+.banner{display:flex;align-items:flex-start;gap:12px;padding:10px 12px;
+  border-radius:var(--radius);margin-bottom:14px;font-size:12px;line-height:1.5}
+.banner.warn{background:var(--warn-soft);box-shadow:inset 0 0 0 1px color-mix(in oklab,var(--warn) 35%,transparent)}
+.banner.warn b{color:var(--warn)}
+.banner.bad{background:var(--danger-soft);box-shadow:inset 0 0 0 1px color-mix(in oklab,var(--danger) 40%,transparent)}
+.banner.bad b{color:var(--danger)}
 .banner b{font-weight:600}
 .drift{font:400 11px var(--font-mono);color:var(--color-neutral-300);margin-top:5px}
 .drift s{color:var(--color-neutral-500);text-decoration:none;opacity:.7}
@@ -137,10 +236,11 @@ input[type=range]:disabled{opacity:.4}
 .kcap span{font-weight:500;line-height:1;letter-spacing:.01em}
 .hint{display:flex;gap:14px;font-size:10.5px;color:var(--color-neutral-500);margin-top:8px}
 .sws{display:flex;flex-wrap:wrap;gap:6px}
-.swatch{width:26px;height:26px;border-radius:6px;cursor:pointer;border:0;
-  box-shadow:inset 0 0 0 1px rgba(0,0,0,.4);outline:0 solid transparent;outline-offset:2px}
-.swatch[aria-pressed="true"]{outline:0;
-  box-shadow:inset 0 0 0 1px rgba(0,0,0,.4),var(--sel-ring)}
+.swatch{width:28px;height:28px;border-radius:6px;cursor:pointer;border:0;flex:none;
+  box-shadow:inset 0 0 0 1px rgba(0,0,0,.35);outline:0 solid transparent;outline-offset:2px;
+  transition:transform .1s}
+.swatch:hover{transform:scale(1.08)}
+.swatch[aria-pressed="true"]{outline:2px solid var(--accent);outline-offset:2px}
 .hidden{display:none}
 .pick{display:flex;flex-direction:column;gap:7px;margin-top:6px}
 .pick .ch{flex:1}
@@ -150,24 +250,56 @@ input[type=range]:disabled{opacity:.4}
   color:var(--color-neutral-300);flex:none}
 .pv{display:inline-block;width:34px;height:18px;border-radius:5px;vertical-align:-4px;
   box-shadow:inset 0 0 0 1px rgba(0,0,0,.4);margin-right:7px}
-.hexin{width:88px;background:var(--color-surface-raised,rgba(255,255,255,.06));
-  color:inherit;border:1px solid var(--color-divider);border-radius:6px;
+.hexin{width:88px;background:var(--surface-2);
+  color:inherit;border:1px solid var(--border);border-radius:6px;
   padding:3px 7px;font:400 12px var(--font-mono);text-transform:uppercase}
+.hexin:focus{outline:1px solid var(--accent-ring);background:var(--surface-3)}
 /* R/G/B slider tracks tinted so the axis being dragged is obvious */
 .ch[data-ch=r]{background:linear-gradient(90deg,#000,#FF3B30)}
 .ch[data-ch=g]{background:linear-gradient(90deg,#000,#3BFF6B)}
 .ch[data-ch=b]{background:linear-gradient(90deg,#000,#3E7BFA)}
 
-/* ── gauges & charts ── */
-.gaugewrap{display:grid;place-items:center;position:relative}
-.gauge{transform:rotate(135deg)}
-.gauge circle{fill:none;stroke-linecap:round}
-.gauge .track{stroke:var(--color-neutral-900)}
-.gauge .val{transition:stroke-dasharray .45s cubic-bezier(.4,0,.2,1),stroke .45s}
-.gaugeval{position:absolute;display:grid;place-items:center;text-align:center;line-height:1}
-.gaugeval b{font:500 26px/1 var(--font-mono);font-variant-numeric:tabular-nums}
-.gaugeval span{font-size:10.5px;color:var(--color-neutral-500)}
-.chart{width:100%;height:92px;display:block;overflow:visible}
+/* ── readings: four styles, picked in the title bar (GUI polish design) ── */
+.viz-switch{display:flex;align-items:center;gap:2px;padding:2px;border-radius:var(--radius-sm);
+  background:var(--surface-2);border:1px solid var(--border-soft);flex:none}
+.viz-btn{display:inline-flex;align-items:center;gap:6px;height:24px;padding:0 10px;border:0;
+  border-radius:6px;background:none;cursor:pointer;font:400 11.5px var(--font-body);color:var(--muted);
+  transition:background .13s,color .13s}
+.viz-btn svg{width:13px;height:13px;flex:none}
+.viz-btn:hover{color:var(--fg)}
+.viz-btn[aria-pressed="true"]{background:var(--surface-3);color:var(--fg);box-shadow:0 0 0 1px var(--border)}
+.viz-btn[aria-pressed="true"] svg{color:var(--accent-bright)}
+@media (max-width:1260px){.viz-label{display:none}.viz-btn{padding:0 8px}}
+.rd-card{align-items:center;justify-content:center}
+.g-label{font-size:12.5px;font-weight:500;letter-spacing:.01em}
+.gauge{display:flex;flex-direction:column;align-items:center;gap:5px}
+.gauge svg{display:block}
+.gauge path,.gauge circle,.gauge text{transition:stroke-dasharray .6s,stroke .3s,fill .3s}
+.tbar{width:100%;display:flex;flex-direction:column;gap:7px}
+.tbar-head{display:flex;align-items:baseline;justify-content:space-between;gap:10px}
+.tbar-num{font:600 26px/1 var(--font-mono);letter-spacing:-.02em;font-variant-numeric:tabular-nums;transition:color .3s}
+.tbar-unit{font-size:12px;color:var(--faint);margin-left:2px;font-weight:400}
+.tbar-track{position:relative;height:14px;border-radius:7px;background:var(--surface-2);
+  box-shadow:inset 0 1px 2px rgba(0,0,0,.3)}
+.tbar-fill{position:relative;height:100%;border-radius:7px;min-width:11px;
+  transition:width .6s cubic-bezier(.2,.75,.2,1),background .3s;box-shadow:inset 0 1px 0 rgba(255,255,255,.22)}
+.tbar-tip{position:absolute;right:-4px;top:50%;transform:translateY(-50%);width:11px;height:11px;
+  border-radius:50%;box-shadow:0 0 0 2px var(--bg),0 0 9px currentColor;transition:background .3s,color .3s}
+.tbar-tick{position:absolute;top:0;bottom:0;width:1px;background:rgba(0,0,0,.34)}
+.tbar-scale{display:flex;justify-content:space-between;font:400 8.5px var(--font-mono);color:var(--faint)}
+.tramp{display:flex;flex-direction:column;align-items:center;gap:8px}
+.tramp-num{font:600 30px/1 var(--font-mono);letter-spacing:-.02em;font-variant-numeric:tabular-nums;transition:color .3s}
+.tramp-unit{font-size:12px;color:var(--faint);margin-left:2px;font-weight:400}
+.tramp-row{display:flex;align-items:stretch;gap:7px}
+.tramp-scale{display:flex;flex-direction:column;justify-content:space-between;text-align:right;
+  font:400 8.5px var(--font-mono);color:var(--faint);padding:1px 0}
+.tramp-col{display:flex;flex-direction:column;gap:2px}
+.tramp-seg{width:44px;height:7px;border-radius:2px;background:var(--surface-2);
+  box-shadow:inset 0 1px 1px rgba(0,0,0,.25);transition:background .3s,box-shadow .3s}
+@keyframes vizPop{from{opacity:0;transform:scale(.94) translateY(4px)}to{opacity:1;transform:none}}
+.viz-pop{animation:vizPop .34s cubic-bezier(.2,.8,.2,1)}
+.spark-pulse{animation:pulse 2.2s ease-in-out infinite}
+.chart{width:100%;height:120px;display:block;overflow:visible}
 .curvechart{width:100%;aspect-ratio:520/210;height:auto;display:block;
   overflow:visible;touch-action:none}
 .curvechart .cpt{fill:var(--color-accent);cursor:ns-resize}
@@ -195,20 +327,43 @@ input[type=range]:disabled{opacity:.4}
   color:var(--color-neutral-400)}
 .bar i{display:block;height:100%;background:var(--color-accent);border-radius:3px;
   transition:width .45s cubic-bezier(.4,0,.2,1)}
+
+/* ── narrow windows: the sidebar becomes an icon rail ── */
+/* The design collapses every grid to one column here. At the app window's
+   usual ~800 px that stacked the Overview's cards past the fold, so three
+   columns go to two first and only reach one below 720 px. */
+@media (max-width:940px){
+  .g3{grid-template-columns:repeat(2,1fr)}
+  .side{width:64px;padding:14px 8px}
+  .nav-item{justify-content:center;padding:0}
+  .nav-item .nl,.health .name,.health .hl,.health .st{display:none}
+  .health{display:flex;justify-content:center;padding:10px 0}
+}
+@media (max-width:720px){
+  .g3,.g2{grid-template-columns:1fr}
+  .tb-device{display:none}
+  .hd,.content{padding-left:16px;padding-right:16px}
+}
 </style>
 </head>
 <body>
 <div class="app">
-  <aside class="side">
-    <div class="brand"><b>HydroControl</b><span>HYDROC-16</span></div>
-    <nav class="nav" id="nav"></nav>
-    <div class="health" id="health"></div>
-  </aside>
-  <main>
-    <div id="banners"></div>
-    <div class="hd"><h2 id="secName">Overview</h2><span class="sub" id="secSub"></span></div>
-    <div id="view"></div>
-  </main>
+  <header class="titlebar">
+    <div class="tb-brand"><span class="tb-logo" aria-hidden="true"></span>
+      <span class="tb-name">HydroControl</span><span class="tb-device" id="tbDevice"></span></div>
+    <div class="viz-switch" id="vizSwitch" role="group" aria-label="Reading style"></div>
+    <div class="tb-status" id="tbStatus"></div>
+  </header>
+  <div class="layout">
+    <aside class="side">
+      <nav class="nav" id="nav" aria-label="Sections"></nav>
+      <div class="health" id="health"></div>
+    </aside>
+    <main>
+      <div class="hd"><h2 id="secName">Overview</h2><span class="sub" id="secSub"></span></div>
+      <div class="content"><div id="banners"></div><div id="view"></div></div>
+    </main>
+  </div>
 </div>
 <script>
 const NAV=[
@@ -219,6 +374,19 @@ const NAV=[
  {id:'light',name:'Lighting',sub:'keyboard · chin bar'},
  {id:'lpp',name:'Cooling dock',sub:'LPP · Bluetooth LE',optional:true},
  {id:'sys',name:'System',sub:'platform toggles'}];
+
+// Nav icons: the GUI polish design's set, plus Fans (its unused i-fan symbol)
+// and the cooling dock, which the design does not cover, drawn to match.
+const svgI=(body,extra='')=>`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+  stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"${extra}>${body}</svg>`;
+const NAV_ICON={
+ overview:svgI('<path d="M4.5 18a7.5 7.5 0 1 1 15 0"/><path d="M12 15.5 14.8 10"/><circle cx="12" cy="15.5" r="1.4"/>'),
+ perf:svgI('<path d="M13 2 4.5 13.5H11L10.5 22 19 10.5h-6.5L13 2z"/>'),
+ batt:svgI('<rect x="2" y="7" width="17" height="10" rx="2"/><path d="M22 10.5v3"/><path d="M12.5 8.5 9.5 12.5h2.3l-1.1 3"/>'),
+ fans:svgI('<path d="M3 8h9a3 3 0 1 0-3-3M3 12h13a3 3 0 1 1-3 3M3 16h7a3 3 0 1 1-3 3"/>'),
+ light:svgI('<path d="M9.5 18h5"/><path d="M10 21h4"/><path d="M12 3a6 6 0 0 0-4 10.3c.6.5 1 1.3 1 2.2h6c0-.9.4-1.7 1-2.2A6 6 0 0 0 12 3z"/>'),
+ lpp:svgI('<path d="M5 13h14l-1.5 4h-11z"/><path d="M6 13V6.5A1.5 1.5 0 0 1 7.5 5h9A1.5 1.5 0 0 1 18 6.5V13"/><path d="M9 20.5c1-.7 2-.7 3 0s2 .7 3 0"/>'),
+ sys:svgI('<path d="M4 7h16M4 12h16M4 17h16"/><circle cx="9" cy="7" r="1.6" fill="var(--bg)"/><circle cx="15" cy="12" r="1.6" fill="var(--bg)"/><circle cx="7" cy="17" r="1.6" fill="var(--bg)"/>')};
 
 const PUMP={low:'Low',medium:'Medium',high:'High',max:'Max'};
 
@@ -402,6 +570,7 @@ async function poll(){
       const a=S.hist[k];a.push(v);if(a.length>60)a.shift();};
     push('pkg',t.package_w);push('cpu',t.cpu_temp_c);push('gpu',t.gpu_temp_c);
   }else{S.status.offline=true;}
+  renderTitlebar();renderHealth();
   paintTelemetry();
 }
 async function applySettings(settings,persist=true){
@@ -420,23 +589,39 @@ async function applySettings(settings,persist=true){
 
 // ── render ──
 function render(){
-  $('#nav').innerHTML=NAV.filter(n=>!n.optional||S.lpp.present).map(n=>`<button data-sec="${n.id}"${S.section===n.id?' aria-current="page"':''}>
-    <span class="nm">${n.name}</span><span class="sb">${n.sub}</span></button>`).join('');
+  $('#nav').innerHTML=NAV.filter(n=>!n.optional||S.lpp.present).map(n=>`<button class="nav-item"
+    data-sec="${n.id}" title="${n.name}"${S.section===n.id?' aria-current="page"':''}>${NAV_ICON[n.id]||''}<span
+    class="nl">${n.name}</span></button>`).join('');
   const cur=NAV.find(n=>n.id===S.section);
   $('#secName').textContent=cur.name;$('#secSub').textContent=cur.sub;
-  renderHealth();renderBanners();
+  renderTitlebar();renderVizSwitch();renderHealth();renderBanners();
   $('#view').innerHTML=({overview:vOverview,perf:vPerf,batt:vBatt,fans:vFans,light:vLight,lpp:vLpp,sys:vSys})[S.section]();
-  paintTelemetry();bind();
+  paintTelemetry();bind();syncRanges();
+}
+// Title bar: the device it is running on, and the three things that decide
+// whether a setting takes effect -- the daemon, the custom-profile latch (PL
+// writes are ignored without it) and the PL1 the EC holds.
+function renderTitlebar(){
+  const s=S.status,d=s.device||{},st=S.state||{};
+  $('#tbDevice').textContent=[d.model,d.ec_firmware&&('EC '+d.ec_firmware),d.kernel]
+    .filter(Boolean).join(' · ');
+  const off=!!s.offline,latch=st.custom_profile,pl1=st.cpu_pl1;
+  $('#tbStatus').innerHTML=
+    `<span class="chip ${off?'bad':'live'}"><span class="dot"></span>${off?'daemon offline':'daemon running'}</span>`+
+    (latch===undefined||latch===null?'':
+      `<span class="chip${latch?'':' warn'}" title="${latch?'Power-limit writes take effect':
+        'Power-limit writes are ignored until the custom profile is armed'}">${latch?'custom profile armed':'custom profile off'}</span>`)+
+    (typeof pl1==='number'?`<span class="chip">PL1 ${pl1} W</span>`:'');
 }
 function renderHealth(){
   const s=S.status,off=s.offline;
-  const items=[['Daemon',!off],['Driver',!!s.driver_loaded],['hwmon',!!s.hwmon],['EC',!!s.ec_available]];
-  const hz=S.health;
-  $('#health').innerHTML=`<div class="lbl" style="margin-bottom:6px">Daemon health</div>`+
-    items.map(([n,ok])=>`<div class="row" style="padding:1px 0"><span>${n}</span>
-      <span class="kv" style="color:${ok?'var(--color-accent)':'var(--color-danger)'}">
-      <span class="dot" style="background:${ok?'var(--color-accent)':'var(--color-danger)'}"></span>${ok?'ok':'down'}</span></div>`).join('')
-    +((hz&&!hz.ok)?`<div class="lbl" style="margin-top:6px">${hz.failed} check${hz.failed===1?'':'s'} failing — see the banner</div>`:'');
+  const items=[['driver',!!s.driver_loaded],['hwmon',!!s.hwmon],['EC',!!s.ec_available]];
+  const hz=S.health, bad=off||items.some(([,ok])=>!ok)||(hz&&!hz.ok);
+  $('#health').innerHTML=`<div class="hrow" title="${off?'daemon offline':bad?'a check is failing':'all checks ok'}">
+      <span class="led${bad?' bad':''}"></span><span class="name">hydroc-server</span>
+      <span class="st${bad?' bad':''}">${off?'offline':bad?'degraded':'running'}</span></div>
+    <div class="hl">${items.map(([n,ok])=>`<span${ok?'':' class="bad"'}>${n} ${ok?'ok':'down'}</span>`).join(' · ')}
+    ${(hz&&!hz.ok)?`<br>${hz.failed} check${hz.failed===1?'':'s'} failing — see the banner`:''}</div>`;
 }
 function renderBanners(){
   let h='';
@@ -481,7 +666,7 @@ function renderBanners(){
   }
   if(S.status.offline){
     h+=`<div class="banner bad"><div style="flex:1"><b>Daemon not reachable.</b>
-      Telemetry is unavailable and controls are inert. Nothing is being applied to the hardware.
+      Telemetry and controls are unavailable.
       <div class="drift">start it with &nbsp;<span class="kv">sudo python3 -m hydroc.server</span></div></div></div>`;
   } else if(!S.status.ec_available){
     h+=`<div class="banner warn"><div style="flex:1"><b>EC unavailable — ${esc(S.status.ec_error||'')}</b>
@@ -499,33 +684,147 @@ function renderBanners(){
 }
 
 // ── sections ──
-// 270-degree arc: r=42 -> C=263.9, visible sweep = 197.9
-const ARC_C=263.9, ARC_SWEEP=197.9;
-function gauge(id,label,unit,max){
-  return `<div class="card"><div class="kick">${label}</div>
-    <div class="gaugewrap">
-      <svg class="gauge" width="118" height="118" viewBox="0 0 118 118">
-        <circle class="track" cx="59" cy="59" r="42" stroke-width="9"
-          stroke-dasharray="${ARC_SWEEP} ${ARC_C}"></circle>
-        <circle class="val" data-gauge="${id}" data-max="${max}" cx="59" cy="59" r="42"
-          stroke-width="9" stroke="var(--color-accent)" stroke-dasharray="0 ${ARC_C}"></circle>
-      </svg>
-      <div class="gaugeval"><div><b data-t="${id}">—</b><br><span>${unit}</span></div></div>
-    </div></div>`;
+// ── readings: Gauge · Bars · Ramp · Radial (GUI polish design) ──────────────
+// Picked in the title bar. A display preference, so it lives in the browser,
+// not the hardware profile: it is not a setting and must never show as drift.
+// Every storage access is guarded -- the design read it unguarded, and where
+// storage is blocked that one line stopped the whole page from drawing.
+const VIZ={
+ gauge:{name:'Gauge',title:'Gauge dials',icon:'<path d="M5 18a7 7 0 1 1 14 0"/><path d="M12 18 15.5 9"/><circle cx="12" cy="18" r="1.3"/>'},
+ bars:{name:'Bars',title:'Bar gauges',icon:'<path d="M6 20V9"/><path d="M12 20V4"/><path d="M18 20v-7"/>'},
+ ramp:{name:'Ramp',title:'Segmented ramp',icon:'<path d="M4 16h4l2-5 3 9 2-6h5"/>'},
+ radial:{name:'Radial',title:'Radial bars',icon:'<circle cx="12" cy="12" r="8.2"/><path d="M12 3.8v2.6"/><path d="M19.7 10.4l-2.1 1.4"/><path d="M4.3 13.6l2.1-1.4"/>'}};
+const VIZ_DEFAULT='bars', VIZ_KEY='hydroc-viz';
+function loadViz(){
+  try{const v=localStorage.getItem(VIZ_KEY);return VIZ[v]?v:VIZ_DEFAULT;}catch(e){return VIZ_DEFAULT;}
 }
+function saveViz(v){try{localStorage.setItem(VIZ_KEY,v);}catch(e){}}
+S.viz=loadViz();
+
+// Battery is not a temperature: it keeps the accent colour in every style.
+const READINGS=[
+ {id:'cpu_temp_c',label:'CPU package',unit:'°C',max:100,temp:true},
+ {id:'gpu_temp_c',label:'GPU',unit:'°C',max:100,temp:true},
+ {id:'capacity_pct',label:'Battery',unit:'%',max:100,temp:false}];
+const READ_BY_ID=Object.fromEntries(READINGS.map(r=>[r.id,r]));
+const clamp01=x=>Math.max(0,Math.min(1,x));
+const rdVal=r=>{const v=S.tel[r.id];return typeof v==='number'?v:null;};
+const rdText=v=>v===null?'—':String(Math.round(v));
+const rdColor=(r,v)=>v===null?'var(--faint)':r.temp?tempColorC(v):'var(--accent)';
+const segColor=(r,frac)=>r.temp?tempColorC(frac*100):'var(--accent)';
+
+const DIAL_R=50;
+const dialPath=r=>{const a=r*0.70710678;return `M ${-a} ${a} A ${r} ${r} 0 1 1 ${a} ${a}`;};
+const dialPt=(rr,f)=>{const a=(135+f*270)*Math.PI/180;return [rr*Math.cos(a),rr*Math.sin(a)];};
+function dialGauge(r){
+  let ticks='';
+  for(let v=0;v<=100;v+=5){const major=v%10===0;
+    const [x1,y1]=dialPt(DIAL_R-1,v/100),[x2,y2]=dialPt(major?DIAL_R-9:DIAL_R-5.5,v/100);
+    ticks+=`<line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}"
+      stroke="var(--surface-3)" stroke-width="${major?1.4:0.7}" opacity="${major?0.85:0.42}"/>`;}
+  const [z0x,z0y]=dialPt(DIAL_R+15,0),[z1x,z1y]=dialPt(DIAL_R+15,1);
+  const arc=(cls,w,op)=>`<path class="${cls}" d="${dialPath(DIAL_R)}" fill="none" stroke-width="${w}"
+    stroke-linecap="round" pathLength="270" stroke-dasharray="0 270"${op?` opacity="${op}"`:''}/>`;
+  return `<div class="gauge"><svg width="150" height="128" viewBox="-72 -68 144 126" aria-hidden="true">
+      <path d="${dialPath(DIAL_R)}" fill="none" stroke="var(--surface-2)" stroke-width="7" stroke-linecap="round"/>
+      ${ticks}${arc('rd-glow',16,0.13)}${arc('rd-arc',7)}
+      <circle class="rd-end" r="8.5" opacity="0.22"/><circle class="rd-end" r="3.2"/>
+      <text x="${z0x.toFixed(1)}" y="${(z0y+3).toFixed(1)}" fill="var(--faint)" font-size="8.5"
+        font-family="var(--font-mono)" text-anchor="middle">0</text>
+      <text x="${z1x.toFixed(1)}" y="${(z1y+3).toFixed(1)}" fill="var(--faint)" font-size="8.5"
+        font-family="var(--font-mono)" text-anchor="middle">${r.max}</text>
+      <text class="rd-val" text-anchor="middle" x="0" y="-4" font-size="34" font-weight="600"
+        font-family="var(--font-mono)" letter-spacing="-0.02em">—</text>
+      <text text-anchor="middle" x="0" y="13" fill="var(--faint)" font-size="10.5" font-family="var(--font-mono)">${r.unit}</text>
+    </svg><div class="g-label">${r.label}</div></div>`;
+}
+const RADIAL_N=24, RADIAL_R=46;
+function radialGauge(r){
+  const span=360/RADIAL_N, gap=2.4; let segs='';
+  for(let i=0;i<RADIAL_N;i++){
+    const a0=(i*span+gap/2-90)*Math.PI/180, a1=((i+1)*span-gap/2-90)*Math.PI/180;
+    segs+=`<path class="rd-seg" d="M ${(RADIAL_R*Math.cos(a0)).toFixed(1)} ${(RADIAL_R*Math.sin(a0)).toFixed(1)}
+      A ${RADIAL_R} ${RADIAL_R} 0 0 1 ${(RADIAL_R*Math.cos(a1)).toFixed(1)} ${(RADIAL_R*Math.sin(a1)).toFixed(1)}"
+      fill="none" stroke="var(--surface-2)" stroke-width="8.5" stroke-linecap="round"/>`;}
+  return `<div class="gauge"><svg width="152" height="152" viewBox="-64 -64 128 128" aria-hidden="true">
+      <circle cx="0" cy="0" r="${RADIAL_R}" fill="none" stroke="var(--border-soft)" stroke-width="1"/>${segs}
+      <text class="rd-val" text-anchor="middle" x="0" y="-2" font-size="32" font-weight="600"
+        font-family="var(--font-mono)" letter-spacing="-0.02em">—</text>
+      <text text-anchor="middle" x="0" y="15" fill="var(--faint)" font-size="10.5" font-family="var(--font-mono)">${r.unit}</text>
+    </svg><div class="g-label">${r.label}</div></div>`;
+}
+function barGauge(r){
+  const q=[0,.25,.5,.75,1];
+  return `<div class="tbar">
+      <div class="tbar-head"><span class="g-label">${r.label}</span>
+        <span class="tbar-num"><span class="rd-val">—</span><span class="tbar-unit">${r.unit}</span></span></div>
+      <div class="tbar-track" role="img" aria-label="${r.label}">
+        ${q.map(f=>`<span class="tbar-tick" style="left:${f*100}%"></span>`).join('')}
+        <div class="tbar-fill" style="width:0"><span class="tbar-tip"></span></div></div>
+      <div class="tbar-scale">${q.map(f=>`<span>${Math.round(f*r.max)}</span>`).join('')}</div>
+    </div>`;
+}
+const RAMP_N=20;
+function rampGauge(r){
+  return `<div class="tramp">
+      <div class="tramp-num"><span class="rd-val">—</span><span class="tramp-unit">${r.unit}</span></div>
+      <div class="tramp-row"><div class="tramp-scale"><span>${r.max}</span><span>${r.max/2}</span><span>0</span></div>
+        <div class="tramp-col" role="img" aria-label="${r.label}">${
+          Array.from({length:RAMP_N},()=>'<span class="tramp-seg"></span>').join('')}</div></div>
+      <div class="g-label">${r.label}</div></div>`;
+}
+const VIZ_BUILD={gauge:dialGauge,bars:barGauge,ramp:rampGauge,radial:radialGauge};
+function readingCard(r){
+  return `<div class="card rd-card viz-pop" data-rd="${r.id}" data-style="${S.viz}">${VIZ_BUILD[S.viz](r)}</div>`;
+}
+// In place, every poll: rebuilding would restart the transitions each second.
+function paintReadings(){
+  document.querySelectorAll('[data-rd]').forEach(el=>{
+    const r=READ_BY_ID[el.dataset.rd], v=rdVal(r), f=v===null?0:clamp01(v/r.max), c=rdColor(r,v);
+    el.querySelectorAll('.rd-val').forEach(t=>{t.textContent=rdText(v);
+      if(t.tagName==='text')t.setAttribute('fill',c);});
+    const num=el.querySelector('.tbar-num,.tramp-num'); if(num)num.style.color=c;
+    switch(el.dataset.style){
+    case 'gauge':{
+      el.querySelectorAll('.rd-arc,.rd-glow').forEach(p=>{
+        p.setAttribute('stroke-dasharray',`${(f*270).toFixed(1)} 270`);p.setAttribute('stroke',c);});
+      el.querySelector('.rd-glow').style.display=f>0.01?'':'none';
+      const [ex,ey]=dialPt(DIAL_R,f);
+      el.querySelectorAll('.rd-end').forEach(e=>{e.setAttribute('cx',ex.toFixed(1));
+        e.setAttribute('cy',ey.toFixed(1));e.setAttribute('fill',c);});
+      break;}
+    case 'radial':
+      el.querySelectorAll('.rd-seg').forEach((s,i)=>{const mid=(i+0.5)/RADIAL_N;
+        s.setAttribute('stroke',v!==null&&mid<=f?segColor(r,mid):'var(--surface-2)');});
+      break;
+    case 'bars':{
+      const fill=el.querySelector('.tbar-fill'), tip=el.querySelector('.tbar-tip');
+      fill.style.width=(f*100).toFixed(1)+'%';fill.style.background=c;
+      tip.style.background=c;tip.style.color=c;
+      break;}
+    case 'ramp':{
+      const on=Math.round(f*RAMP_N), segs=[...el.querySelectorAll('.tramp-seg')].reverse();
+      segs.forEach((s,i)=>{const lit=v!==null&&i<on, sc=segColor(r,(i+0.5)/RAMP_N);
+        s.style.background=lit?sc:'';
+        s.style.boxShadow=lit&&i===on-1?`0 0 10px ${sc},0 0 2px ${sc}`:'';});
+      break;}
+    }
+  });
+}
+function renderVizSwitch(){
+  $('#vizSwitch').innerHTML=Object.entries(VIZ).map(([id,m])=>`<button class="viz-btn" data-viz="${id}"
+    title="${m.title}" aria-pressed="${S.viz===id}">${svgI(m.icon)}<span
+    class="viz-label">${m.name}</span></button>`).join('');
+}
+
 function vOverview(){
-  return `<div class="grid g3">
-    ${gauge('cpu_temp_c','CPU package','°C',100)}
-    ${gauge('gpu_temp_c','GPU','°C',100)}
-    ${gauge('capacity_pct','Battery','%',100)}
-  </div>
+  return `<div class="grid g3">${READINGS.map(readingCard).join('')}</div>
   <div class="card" style="margin-top:var(--space-4)">
     <div class="row"><div class="kick">CPU package power</div>
       <span class="kv"><span data-t="package_w">—</span> W
         <span class="lbl" style="margin-left:10px">PL1 ${num(S.state.cpu_pl1)}
         · PL2 ${num(S.state.cpu_pl2)} · PL4 ${num(S.state.cpu_pl4)} W</span></span></div>
-    <div class="lbl" style="margin-top:-2px">PL4 governs sub-second peaks; at 1 Hz each
-      sample is a one-second average, so it is not plotted.</div>
+    <div class="lbl" style="margin-top:-2px">PL4 governs sub-second peaks, so it is not plotted.</div>
     <svg class="chart" id="pwrchart"></svg>
   </div>
   <div class="grid g2" style="margin-top:var(--space-4)">
@@ -587,13 +886,9 @@ function vFans(){
         <button data-v="auto" aria-pressed="${!manual}">Auto</button>
         <button data-v="manual" aria-pressed="${manual}">Manual</button></div></div>
     <div class="lbl">Auto leaves the fans to the firmware. Manual writes your curve into the
-      EC's own tables — it honours both the duty and the fall-back temperature, and it is
-      reversible. Verified on this hardware; see DESIGN.md §3.6.</div>
-    <div class="lbl">Two things worth knowing. The EC ramps toward a new duty at about
-      ${S.fan.slew_pct_per_s}%/s, so a change takes seconds to hear — it has not failed.
-      And no point may go below <b>${floor}%</b>: whether the firmware still overrides in a
-      thermal emergency is untested, so a curve that can command zero is not allowed to exist.
-      That means giving up the stock silent-below-55°C band for now.</div>
+      EC's own tables, honouring duty and fall-back temperature.</div>
+    <div class="lbl">No point may go below <b>${floor}%</b>. A new duty takes a few seconds
+      to reach at about ${S.fan.slew_pct_per_s}%/s.</div>
   </div>
   ${manual?`
   <div class="card" style="margin-top:var(--space-4)">
@@ -611,8 +906,6 @@ function vFans(){
   <div class="card" style="margin-top:var(--space-4)">
     <div class="row"><div class="kick">GPU fan</div><span class="kv"><span data-t="fan2_rpm">—</span> rpm</span></div>
     ${curveChart('gpu')}
-    <div class="lbl">A separate table really does drive this fan — SPLIT_TABLES was verified by
-      writing 40% to the CPU table and 75% to this one and watching them diverge.</div>
   </div>
   <div class="card" style="margin-top:var(--space-4)">
     <button class="btn" id="fanapply"${S.fanDirty?'':' disabled'}>Apply curve</button>
@@ -695,8 +988,7 @@ function foundCard(){
   return `<div class="card" style="margin-top:var(--space-4)">
     <div class="row"><div class="kick">Hardware differed at ${esc(f.reason||'apply')}</div>
       <span class="kv">${esc((f.when||'').replace('T',' '))}</span></div>
-    <div class="lbl">Read before your profile was written over it. A setting the
-      hardware kept by itself does not need us to restore it; one it lost does.</div>
+    <div class="lbl">Values read before your profile was applied.</div>
     ${f.differences.map(d=>`<div class="row" style="margin-top:var(--space-2)">
       <span>${esc(d.setting)}</span>
       <span class="kv">had ${esc(JSON.stringify(d.found))} · wanted ${esc(JSON.stringify(d.intent))}</span>
@@ -719,8 +1011,8 @@ function locksCard(){
   const d=l.defaults||{};
   return `<div class="card" style="margin-top:var(--space-4)">
     <div class="kick">Lock keys · built-in keyboard</div>
-    <div class="lbl">On or Off sets it now and restores it at boot, resume and every login.
-      Leave alone lets the desktop decide. External keyboards keep their own state.</div>
+    <div class="lbl">Sets it now and restores it at boot, resume and every login.
+      Leave alone lets the desktop decide.</div>
     ${Object.keys(LOCKNAMES).map(k=>{const cur=d[k]===true?'on':d[k]===false?'off':'none';
       return `<div class="row" style="margin-top:var(--space-3)">
       <div><div style="font-size:13.5px">${LOCKNAMES[k]}</div>
@@ -759,16 +1051,13 @@ function iccCard(){
       <div class="lbl">${esc(st.description||'ICC profile')} · ICC ${esc(st.version||'?')} ·
         ${esc(st.source||'')}</div>
       <div class="lbl kv" style="font-size:10.5px">${esc(st.path)}</div>
-      <div class="lbl" style="margin-top:var(--space-2)">Hyprland with hyprmoncfg — adds it to every saved
-        profile with this panel, and to the current layout:</div>
+      <div class="lbl" style="margin-top:var(--space-2)">Hyprland (hyprmoncfg):</div>
       <div class="lbl kv" style="font-size:10.5px;user-select:all">python3 -m hydroc.cli icc apply</div>
-      <div class="lbl">Without hyprmoncfg, add to this panel's monitor rule:
+      <div class="lbl">Monitor rule:
         <span class="kv" style="user-select:all">${esc(c.hyprland_rule||'')}</span></div>
-      <div class="lbl">GNOME / KDE: import it in the colour settings, or
-        <span class="kv">colormgr import-profile</span>.</div>`:`
-      <div class="lbl">Each panel was measured at the factory. The profile is on Uniwill's
-        server, looked up by this machine's serial number — fetching sends the serial and
-        the panel model there, over plain HTTP, exactly as Control Center does.</div>
+      <div class="lbl">GNOME / KDE: import it in the colour settings.</div>`:`
+      <div class="lbl">Looks up this panel's factory profile by serial number over plain HTTP,
+        exactly as Control Center does.</div>
       <div style="margin-top:var(--space-3)"><button class="btn btn-primary" id="iccfetch">Get factory profile</button></div>`}
     ${S.iccMsg?`<div class="lbl" style="margin-top:var(--space-2);color:${
       S.iccMsg.bad?'var(--color-danger)':'var(--color-accent)'}">${esc(S.iccMsg.text)}</div>`:''}
@@ -793,8 +1082,7 @@ function displayCard(){
   return `<div class="card" style="margin-top:var(--space-4)">
     <div class="row"><div class="kick">Display colour mode</div>
       <span class="kv">${esc((d.applied_to||[]).join(', ')||'not applied')}</span></div>
-    <div class="lbl">Applied on top of the factory calibration, not instead of it.
-      Each mode keeps its own settings.</div>
+    <div class="lbl">Applied on top of the factory calibration.</div>
     <div class="seg" id="dispmode" style="align-self:flex-start;margin-top:var(--space-3)">
       ${d.modes.map(x=>`<button data-v="${x.id}" aria-pressed="${x.id===d.mode}">${esc(x.name)}${x.edited?' •':''}</button>`).join('')}</div>
     ${DISPSLIDERS.map(sl=>{const [lo,hi]=lim[sl.k]||[0,255];const v=m.params[sl.k];
@@ -851,9 +1139,8 @@ function gpuCard(){
     ${pend?`<div class="card" style="margin-top:var(--space-3);border-color:var(--color-warn)">
       <div class="kick">Change to ${esc((g.modes.find(m=>m.id===pend)||{}).label||pend)}?</div>
       <div class="lbl">${esc((g.modes.find(m=>m.id===pend)||{}).note||'')}</div>
-      <div class="lbl">This writes your <b>firmware settings</b>, not the EC. Unlike
-        everything else here, a power cycle will not undo it — the BIOS menu can. It
-        takes effect at the <b>next reboot</b>, not now.</div>
+      <div class="lbl">Writes <b>firmware settings</b> — a power cycle will not undo it, and
+        it takes effect at the <b>next reboot</b>.</div>
       ${(() => {const r=(g.modes.find(m=>m.id===pend)||{}).risks||[];
         if(!r.length)return '';
         return `<div class="card" style="margin-top:var(--space-3);border-color:var(--color-danger)">
@@ -933,14 +1220,13 @@ function vPerf(){
       S.native.map(m=>`<button data-v="${m.id}" aria-pressed="${nat===m.id}">${esc(m.name)}</button>`).join('')}</div>
     <div class="lbl" style="margin-top:var(--space-2)">${nat
       ? esc(natM.desc||'')
-      : 'The EC holds its own power limits and fan curves for these. Picking one '
-        +'hands the machine to it and releases your custom limits below.'}</div>
+      : 'Hands power limits and fan curves to the EC, releasing your presets below.'}</div>
     <div class="row" style="margin-top:var(--space-3)${nat?'':';opacity:.5'}">
       <button class="sw" id="fanboost" aria-pressed="${!!S.state.fan_boost}"
         ${nat?'':'disabled'}><i></i></button>
       <div style="flex:1;line-height:1.25"><div style="font-size:12.5px">Fan boost</div>
         <div class="lbl" style="font-size:10.5px">${nat
-          ? 'EC <span class="kv">0x0751</span> bit 6, on top of the mode — the fans run harder for the same temperature'
+          ? 'Runs the fans harder at the same temperature'
           : 'Belongs to the machine\'s own modes. Pick one above first.'}</div></div>
     </div>
     <div class="lbl" id="nativemsg"></div>
@@ -952,8 +1238,8 @@ function vPerf(){
       S.presets.map(p=>`<button data-v="${p.id}" aria-pressed="${!nat&&S.activePreset===p.id}">${esc(p.name)}</button>`).join('')}
       <button data-v="custom" aria-pressed="${!nat&&S.activePreset==='custom'}" disabled>Custom</button></div>
     <div class="lbl" style="margin-top:var(--space-2)">${nat
-      ? `Held while ${esc(natM.name||'a native mode')} is active. Picking one here takes `
-        +'the machine back off the EC and re-arms the custom-profile latch.'
+      ? `Held while ${esc(natM.name||'a native mode')} is active — pick one here to take the `
+        +'machine back.'
       : esc(pre.desc||'Your own limits. Move any slider below and you land here.')}</div>
     <div class="lbl" id="presetmsg"></div>
   </div>
@@ -961,27 +1247,24 @@ function vPerf(){
     <div class="row"><div class="kick">Profile button</div></div>
     <div class="lbl" style="margin-top:var(--space-2)">${b.listening
       ? 'The button beside the power key cycles whichever of the two you pick here.'
-      : `Inactive — ${esc(b.error||'not listening')}. `
-        +'It only emits an event when the BIOS has it set to performance modes '
-        +'rather than fan profiles.'}</div>
+      : `Inactive — ${esc(b.error||'not listening')}.`}</div>
     <div class="seg" id="bcycle" style="align-self:flex-start;margin-top:var(--space-3)">
       <button data-v="native" aria-pressed="${cyc==='native'}">The machine's modes</button>
       <button data-v="presets" aria-pressed="${cyc==='presets'}">My presets</button></div>
     <div class="lbl" style="margin-top:var(--space-2)">The LED follows the EC in its own
-      modes — green for Office, white for Balanced, purple for Beast. It stays white on
-      a preset, because every preset arms the custom-profile latch.</div>
+      modes; presets leave it white.</div>
     <div class="lbl" id="bcyclemsg"></div>
   </div>
   <div class="card" style="margin-top:var(--space-4)">
     <div class="row"><div><div class="card-title" style="font-size:15px">Custom profile mode</div>
-      <div class="lbl">EC <span class="kv">0x0727</span> bit 6 — required before any power-limit write takes effect.
+      <div class="lbl">Required before any power-limit write takes effect.
       The profile LED beside the power button turns white.</div></div>
       <button class="sw" id="armed" aria-pressed="${armed}"><i></i></button></div>
   </div>
   <div class="card" style="margin-top:var(--space-4);opacity:${armed?1:.5}">
     <div class="kick">CPU power limits</div>
-    <div class="lbl">Three independent limits. PL1 is the sustained ceiling — it is the one
-      the package settles against under a long load. ${S.state.double_pl4?
+    <div class="lbl">PL1 is the sustained ceiling; PL2 and PL4 are boost and peak.
+      ${S.state.double_pl4?
       '<span class="tag">PL4 stored at half scale on this machine</span>':''}</div>
     ${plSlider('cpu_pl1','PL1 sustained',125,armed)}
     ${plSlider('cpu_pl2','PL2 boost',125,armed)}
@@ -1015,10 +1298,8 @@ function vLpp(){
     <div class="lbl" id="lppmsg" style="margin-top:var(--space-3)"></div>
   </div>
   <div class="card" style="margin-top:var(--space-4)">
-    <div class="lbl">The dock forgets its settings when it loses power, like the EC does —
-      <span class="kv">hydroc-lpp</span> re-sends these every time it reconnects.
-      Bluetooth writes are unacknowledged, so these values are what was
-      <em>sent</em>, not read back from the dock.</div>
+    <div class="lbl">The dock forgets these when it loses power; values are what was
+      <em>sent</em>, not read back.</div>
     ${l.last_notification?`<div class="drift">last frame from dock: ${esc(l.last_notification)}</div>`:''}
   </div>`;
 }
@@ -1069,15 +1350,13 @@ function saverCard(){
       <span class="kv">${power} · ${p.active?'engaged':'not engaged'}</span></div>
     <div class="seg" id="saver" style="align-self:flex-start;margin-top:var(--space-3)">
       ${SAVER.map(x=>`<button data-v="${x.id}" aria-pressed="${p.mode===x.id}">${x.name}</button>`).join('')}</div>
-    <div class="lbl">${esc(cur.desc)} While engaged: audio, Wi-Fi and PCI power
-      saving, the power-saver platform profile, lights off, and brightness capped
-      at ${p.brightness_cap_pct}% — never raised. Measured here: about 24 → 20 W idle,
-      plus ~4 W at full brightness. Everything is given back on release, except
-      brightness or a profile you changed yourself.</div>
+    <div class="lbl">${esc(cur.desc)} While engaged: audio, Wi-Fi and PCI power saving,
+      the power-saver platform profile, lights off, and brightness capped
+      at ${p.brightness_cap_pct}% — never raised. Everything is given back on release,
+      except brightness or a profile you changed yourself.</div>
     ${awake?`<div class="lbl" style="color:var(--color-warn)">The RTX is awake${
       r.awake_s!=null?' ('+Math.round(r.awake_s/60)+' min)':''} — on battery that costs
-      more than everything above together. Open on it: ${esc((r.holders||[]).join(', ')||'nothing found')}.
-      Holding is not always using; the app that woke it is usually the one you started last.</div>`:''}
+      more than everything above together. Open on it: ${esc((r.holders||[]).join(', ')||'nothing found')}.</div>`:''}
     ${hzHigh?`<div class="lbl" style="color:var(--color-warn)">The panel is at ${hz} Hz. Power Saver
       leaves refresh rate to hyprmoncfg — switching to ${p.panel_hz_target} Hz there saves more.</div>`:''}
     ${errs.length?`<div class="lbl" style="color:var(--color-danger)">${esc(errs.join(' · '))}</div>`:''}
@@ -1117,11 +1396,8 @@ function vBatt(){
     <div class="seg" id="charge">${CHARGE.map(c=>
       `<button data-v="${c.id}" aria-pressed="${cp===c.id}">${c.name}</button>`).join('')}</div>
     ${CHARGE.map(c=>cp===c.id?`<div class="lbl">${c.desc} <span class="tag">${c.token}</span></div>`:'').join('')}
-    <div class="lbl">Usage patterns rather than percentage caps. Each asks the EC for a
-      voltage reduction — Stationary 200 mV per cell, Balanced 100 — but this pack is
-      already held 275 mV below its rating whatever is selected, so both ask for less
-      protection than it already has. Every measurement so far was taken on Stationary;
-      whether the mode and the threshold interact is untested.</div>
+    <div class="lbl">Each mode asks the EC for a per-cell voltage cut. Measurements so far
+      were taken on Stationary.</div>
   </div>
   <div class="card" style="margin-top:var(--space-4)">
     <div class="row"><div class="kick">Charge threshold</div>
@@ -1130,21 +1406,14 @@ function vBatt(){
     ${S.state.charge_threshold==null ? `
     <div class="lbl">This system does not expose a charge threshold.</div>` : `
     <input type="range" id="thr" min="20" max="100" value="${S.state.charge_threshold||80}">
-    <div class="lbl" style="margin-top:var(--space-2)">Measured: set to 60, charging stopped
-      at <span class="kv">3.93 V</span> per cell. Raised back to 80, it restarted within
-      30 seconds and ran to the voltage ceiling. The control works.</div>
+    <div class="lbl" style="margin-top:var(--space-2)">Measured: set to 60, charging stopped at
+      <span class="kv">3.93 V</span> per cell.</div>
     <div class="lbl" style="margin-top:var(--space-2)"><strong>Above roughly 75 it does
-      nothing</strong>, and that is not a fault. There are two limits and charging stops at
-      whichever comes first: this threshold, and a fixed hold at about
-      <span class="kv">4.175 V</span> per cell against a <span class="kv">4.450 V</span>
-      rating. The voltage ceiling terminates a charge near a reported 77%, so a threshold
-      above that is never reached. It is also why this looked broken for a month — the
-      default is 80, and at 80 it never bites.</div>
+      nothing</strong> — charging also stops at a fixed <span class="kv">4.175 V</span> per
+      cell, near a reported 77%.</div>
     <div class="lbl" style="margin-top:var(--space-2)">The number you set will
-      <em>not</em> match where charging stops. The EC compares against its own state of
-      charge, not the percentage shown here, and the reported figure keeps climbing after
-      the current reaches zero — a charge that really ended at 77% was displayed as 100%
-      ninety seconds later. Set 60 and expect a stop somewhere in the forties.</div>`}
+      <em>not</em> match where charging stops: the EC uses its own state of charge, and the
+      reported figure keeps climbing after the current reaches zero.</div>`}
   </div>
   <div class="card" style="margin-top:var(--space-4)">
     <div class="row"><div class="kick">Volts per cell</div>
@@ -1155,11 +1424,8 @@ function vBatt(){
       <u class="rating" id="vrate" title="what the pack is rated for"></u>
     </div>
     <div class="vscale"><span>3.00</span><span>ceiling 4.175</span><span>rated 4.450</span></div>
-    <div class="lbl">The honest instrument. A percentage on this machine is derived from a
-      capacity the pack never reaches; this is measured. Charging stops at the first marker
-      and the pack is rated to the second, so <strong>the gap on the right is protection you
-      are getting and cannot see anywhere else</strong> — about 275 mV per cell, which is
-      why a full charge yields roughly 4950 mAh of a 6400 mAh rating.</div>
+    <div class="lbl">Measured, not derived. Charging stops at the ceiling marker; the pack is
+      rated to the one on the right.</div>
     <div class="lbl" style="margin-top:var(--space-2)" id="vnote"></div>
   </div>
   <div class="grid g3" style="margin-top:var(--space-4)">
@@ -1180,13 +1446,9 @@ function vBatt(){
         <span class="kv"><span data-t="coulomb_claimed_mah">—</span> mAh</span></div>
       <div class="row"><span class="lbl">Ratio</span>
         <span class="kv" id="cratio">—</span></div>
-      <div class="lbl" style="margin-top:var(--space-2)">Current integrated since the last
-        change of direction, against the change in the figure the OS reports. 1.0 means they
-        agree. A full discharge measured <span class="kv">0.786</span>.</div>
+      <div class="lbl" style="margin-top:var(--space-2)">Current integrated against the change
+        in the figure the OS reports. 1.0 means they agree.</div>
     </div>
-    <div class="card"><div class="kick">Note</div>
-      <div class="lbl">The OS reports <span class="kv">cycle_count = 0</span>; the real count is read
-        from EC <span class="kv">0x04A6</span>.</div></div>
   </div>`;
 }
 function vLight(){
@@ -1213,10 +1475,10 @@ function vLight(){
   </div>`;
 }
 function vEffect(){
-  return `<div class="lbl">Firmware effect — colour comes from an 8-entry palette index, not free RGB.</div>
+  return `<div class="lbl">Colour is an 8-entry palette index, not free RGB.</div>
   <div class="sws">${EFFECTS.map(e=>
     `<button class="btn btn-secondary" data-eff="${e}" aria-pressed="${S.eff===e}" style="font-size:12px">${e}</button>`).join('')}</div>
-  <div class="lbl" style="margin-top:8px">Effect colour — a firmware index, not free RGB</div>
+  <div class="lbl" style="margin-top:8px">Effect colour</div>
   <div class="sws">${FW_COLORS.map(([n,h],i)=>
     `<button class="swatch" data-effcol="${i}" title="${n}" aria-pressed="${S.effColor===i}"
      style="background:${h}">${n==='none'?'':''}</button>`).join('')}</div>
@@ -1238,7 +1500,7 @@ function vPerKey(){
       <div class="kcap" style="background:${bg}"><span style="font-size:${fs}px;color:${fg}">${esc(k.label)}</span></div></div>`;};
   return `<div style="display:flex;gap:var(--space-6);flex-wrap:wrap;align-items:flex-start">
     <div>
-      <div class="row" style="margin-bottom:6px"><span class="lbl">6 × 21 · user mode 0x33</span>
+      <div class="row" style="margin-bottom:6px"><span class="lbl">6 × 21 keys</span>
         <span class="kv" style="font-size:10.5px;color:var(--color-neutral-400)">
         ${S.sel.length?S.sel.length+' key'+(S.sel.length===1?'':'s')+' selected':'no selection'}</span></div>
       <div class="kbwrap">
@@ -1267,8 +1529,8 @@ function vPerKey(){
       <div class="row" style="margin-top:var(--space-3)">
         <button class="sw" id="kbcorrect" aria-pressed="${S.kbCorrect}"><i></i></button>
         <div style="flex:1;line-height:1.25"><div style="font-size:12.5px">White balance</div>
-          <div class="lbl" style="font-size:10.5px">Raw white reads pink on this panel. Corrects
-            white and orange only — other colours are sent as picked</div></div>
+          <div class="lbl" style="font-size:10.5px">Corrects white and orange only for this
+            panel; other colours are sent as picked</div></div>
       </div></div>
     </div>
   </div>`;
@@ -1287,7 +1549,6 @@ function vSys(){
   ${gpuCard()}
   <div class="card" style="margin-top:var(--space-4)">
     <div class="kick">Power behaviour when off</div>
-    <div class="lbl">The driver rejects both being enabled, so this is one choice, not two switches.</div>
     <div class="seg" id="pmode" style="align-self:flex-start">${POWERMODES.map(p=>
       `<button data-v="${p.id}" aria-pressed="${pm===p.id}">${p.name}</button>`).join('')}</div>
     <div class="lbl">${esc((POWERMODES.find(p=>p.id===pm)||{}).desc||'')}</div>
@@ -1295,8 +1556,9 @@ function vSys(){
 }
 
 // ── telemetry paint (no re-render, so sliders keep focus) ──
-function tempColor(pct){
-  return pct>0.85?'var(--color-danger)':pct>0.70?'var(--color-warn)':'var(--color-accent)';
+// The design's thresholds, in degrees: amber above 78 °C, red above 88 °C.
+function tempColorC(c){
+  return c>88?'var(--danger)':c>78?'var(--warn)':'var(--accent)';
 }
 function paintChart(){
   const el=$('#pwrchart'); if(!el) return;
@@ -1304,9 +1566,10 @@ function paintChart(){
   // Match the viewBox to the element's real pixel width so the coordinate
   // system is 1:1. With a fixed viewBox and width:100% the SVG scales
   // non-uniformly, which stretches text glyphs and dash patterns horizontally.
-  const H=92,PAD=6;
+  const H=120,PAD=6;
   const W=Math.max(120,Math.round(el.clientWidth||el.getBoundingClientRect().width||300));
   el.setAttribute('viewBox',`0 0 ${W} ${H}`);
+  if(S.viz==='radial'){el.innerHTML=polarChart(h,W,H);return;}
   const lim=S.state.cpu_pl1||0;
   // PL2 only earns a line when it actually differs from PL1 -- when they match
   // (the default) a second line is noise. PL4 is deliberately not drawn: it
@@ -1322,7 +1585,19 @@ function paintChart(){
     g+=`<line class="grid" x1="0" y1="${yy}" x2="${W}" y2="${yy}"></line>`
       +`<text class="chartlbl" x="2" y="${(+yy-3).toFixed(1)}">${Math.round(peak*f)}W</text>`;});
   let body='';
-  if(h.length>1){
+  if(h.length>1&&S.viz==='bars'){
+    // One bar per one-second sample in 60 fixed slots, filling from the
+    // right, so a fresh page does not draw five bars across the whole width.
+    const bw=W/60, x0=(60-h.length)*bw;
+    body=h.map((v,i)=>{const bh=Math.max(0,H-PAD-y(v)), last=i===h.length-1;
+      return `<rect x="${(x0+i*bw+0.8).toFixed(1)}" y="${(H-PAD-bh).toFixed(1)}" width="${Math.max(1,bw-1.6).toFixed(1)}"
+        height="${bh.toFixed(1)}" rx="1.5" fill="var(${last?'--accent-bright':'--accent'})"${last?' class="spark-pulse"':''}/>`;}).join('');
+  }else if(h.length>1&&S.viz==='ramp'){
+    // A heat strip: each second's cell as bright as its share of the scale.
+    const cw=W/60, x0=(60-h.length)*cw;
+    body=h.map((v,i)=>`<rect x="${(x0+i*cw).toFixed(1)}" y="${PAD}" width="${(cw+0.5).toFixed(1)}" height="${H-PAD*2}"
+      fill="var(--accent)" opacity="${(0.05+clamp01(v/peak)*0.92).toFixed(2)}"/>`).join('');
+  }else if(h.length>1){
     const pts=h.map((v,i)=>`${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
     body=`<polygon class="fill" points="0,${H} ${pts} ${W},${H}"></polygon>`
         +`<polyline class="line" points="${pts}"></polyline>`
@@ -1336,13 +1611,31 @@ function paintChart(){
        style="fill:var(--color-warn)">PL1 ${lim} W</text>`:'';
   el.innerHTML=g+body+lim2Line+limLine;
 }
+// Radial style: a polar histogram of the last minute -- one spoke per second,
+// length proportional to power, inside a filled radar outline, with PL1 (and
+// PL2 when it differs) as dashed rings. Same scale as the linear charts.
+function polarChart(h,W,H){
+  const lim=S.state.cpu_pl1||0, lim2=(S.state.cpu_pl2&&S.state.cpu_pl2!==lim)?S.state.cpu_pl2:0;
+  const peak=Math.max(lim*1.25||0,lim2*1.15||0,...h,20);
+  const cx=W/2, cy=H/2, Rmax=H/2-7, inner=11, n=Math.max(h.length,1);
+  const rOf=v=>inner+clamp01(v/peak)*(Rmax-inner);
+  const pt=(i,v)=>{const a=((i/n)*360-90)*Math.PI/180,rr=rOf(v);return [cx+rr*Math.cos(a),cy+rr*Math.sin(a)];};
+  const rings=[0.25,0.5,0.75,1].map(f=>`<circle cx="${cx}" cy="${cy}" r="${rOf(peak*f).toFixed(1)}"
+    fill="none" stroke="var(--surface-2)" stroke-width="1"/>`).join('');
+  const ring=(v,col,dash)=>v?`<circle cx="${cx}" cy="${cy}" r="${rOf(v).toFixed(1)}" fill="none"
+    stroke="var(${col})" stroke-width="1" stroke-dasharray="${dash}" opacity=".7"/>`:'';
+  const spokes=h.map((v,i)=>{const [x0,y0]=pt(i,0),[x1,y1]=pt(i,v),last=i===h.length-1;
+    return `<line x1="${x0.toFixed(1)}" y1="${y0.toFixed(1)}" x2="${x1.toFixed(1)}" y2="${y1.toFixed(1)}"
+      stroke="var(${last?'--accent-bright':'--accent'})" stroke-width="${last?2.1:1}" stroke-linecap="round"
+      opacity="${(0.28+clamp01(v/peak)*0.72).toFixed(2)}"${last?' class="spark-pulse"':''}/>`;}).join('');
+  const poly=h.length>2?`<polygon points="${h.map((v,i)=>pt(i,v).map(c=>c.toFixed(1)).join(',')).join(' ')}"
+    fill="var(--accent)" opacity=".15"/>`:'';
+  const key=(lim?`<text class="chartlbl" text-anchor="end" x="${W-4}" y="12" style="fill:var(--warn)">PL1 ${lim} W</text>`:'')
+    +(lim2?`<text class="chartlbl" text-anchor="end" x="${W-4}" y="24" style="fill:var(--info)">PL2 ${lim2} W</text>`:'');
+  return rings+ring(lim2,'--info','2 4')+ring(lim,'--warn','3 3')+poly+spokes+key;
+}
 function paintTelemetry(){
-  document.querySelectorAll('[data-gauge]').forEach(c=>{
-    const v=S.tel[c.dataset.gauge], max=+c.dataset.max||100;
-    const pct=v===null||v===undefined?0:Math.max(0,Math.min(1,v/max));
-    c.setAttribute('stroke-dasharray',`${(pct*ARC_SWEEP).toFixed(1)} ${ARC_C}`);
-    c.setAttribute('stroke',c.dataset.gauge==='capacity_pct'?'var(--color-accent)':tempColor(pct));
-  });
+  paintReadings();
   document.querySelectorAll('[data-bar]').forEach(b=>{
     const v=S.tel[b.dataset.bar];
     b.style.width=(v===null||v===undefined?0:Math.max(0,Math.min(100,v/255*100)))+'%';
@@ -1397,9 +1690,19 @@ function paintTelemetry(){
   });
 }
 
+// The filled part of every slider track (see the input[type=range] rule).
+function rangeFill(r){
+  const lo=+r.min||0, hi=r.max===''?100:+r.max, v=+r.value;
+  r.style.setProperty('--fill',(hi>lo?Math.max(0,Math.min(1,(v-lo)/(hi-lo)))*100:0).toFixed(1)+'%');
+}
+function syncRanges(root=document){root.querySelectorAll('input[type=range]').forEach(rangeFill);}
+document.addEventListener('input',e=>{if(e.target.matches&&e.target.matches('input[type=range]'))rangeFill(e.target);});
+
 // ── events ──
 function bind(){
   $('#nav').onclick=e=>{const b=e.target.closest('[data-sec]');if(b){S.section=b.dataset.sec;render();}};
+  $('#vizSwitch').onclick=e=>{const b=e.target.closest('[data-viz]');
+    if(!b||b.dataset.viz===S.viz)return;S.viz=b.dataset.viz;saveViz(S.viz);render();};
   const re=$('#reapply');if(re)re.onclick=()=>applySettings(S.profile,false);
   const dm=$('#dismiss');if(dm)dm.onclick=()=>{S.applyResult=null;render();};
 

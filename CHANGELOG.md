@@ -1,5 +1,41 @@
 # Changelog
 
+## [0.9.7] — 2026-10-19
+
+### A new look
+
+The interface takes on the HydroControl GUI polish design: darker layered
+surfaces, the same green accent, and a title bar that shows the machine it is
+running on and the three things that decide whether a setting takes effect —
+the daemon, the custom-profile latch, and the PL1 the EC holds. The sidebar
+uses icons and folds into a rail on narrow windows.
+
+**Pick how readings are drawn.** Gauge, Bars, Ramp or Radial, from the
+switcher in the title bar — Bars by default. CPU, GPU and battery follow it,
+temperatures turn amber above 78 °C and red above 88 °C, and the power chart
+changes with it. The choice is remembered by the window, not the hardware
+profile, so it never shows as drift.
+
+The design was ported onto the working interface rather than swapped in: it
+ran on placeholder data and covered about half of the app. Nothing was
+removed, and none of its placeholder text came across.
+
+### Corrections
+
+**The keyboard stayed dark after sleep.** It comes back from sleep at
+brightness 0, and nothing resent its lighting — the old kbctrl daemon used to,
+and the resume service cannot reach the keyboard because the daemon owns it.
+The daemon now notices a wake and resends the level the keyboard should have,
+including battery lighting's dimmed or off level when unplugged. Colours and
+effects survive sleep on their own; only the brightness had to come back.
+Needs `hydroc-server` running.
+
+**"charge_threshold: hardware had None" at every boot and resume.** The
+v0.9.5 fix reached the drift banner but not the boot-time record, which
+compared the same missing value. It no longer counts a value it could not read.
+
+748 tests.
+
 ## [0.9.6] — 2026-10-19
 
 ### Lighting on battery

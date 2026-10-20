@@ -46,6 +46,13 @@ class DifferencesTest(unittest.TestCase):
         disagreements, they are absences."""
         self.assertEqual(found.differences({}, {"chin_color": "#FFFFFF"}), [])
 
+    def test_a_reading_of_none_is_an_absence_too(self):
+        """read_state() reports charge_threshold as None since the driver
+        stopped exposing it. That printed "hardware had None, profile wants
+        80" at every boot and resume."""
+        self.assertEqual(found.differences({"charge_threshold": None},
+                                           {"charge_threshold": 80}), [])
+
     def test_readings_that_are_not_settings_are_ignored(self):
         """custom_profile is bookkeeping. Reporting it every boot would teach
         everyone to skip the whole record."""

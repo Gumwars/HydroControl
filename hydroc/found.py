@@ -45,11 +45,15 @@ def differences(found: dict, intent: dict) -> list[dict]:
 
     Only keys present in both are compared -- intent carries settings the
     hardware cannot report, and state carries readings that are not settings.
+    A reading of None is the same case: read_state() reports the key but could
+    not read it, as with charge_threshold since the driver stopped exposing
+    it. "The hardware held None" answers nothing about persistence, and it was
+    printed at every boot and resume (the v0.9.5 drift bug, in its other copy).
     Pure, so the decision can be tested without a machine.
     """
     out = []
     for key in sorted(intent):
-        if key in IGNORE or key not in found:
+        if key in IGNORE or found.get(key) is None:
             continue
         want, have = intent[key], found[key]
         if want != have:

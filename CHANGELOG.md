@@ -1,5 +1,37 @@
 # Changelog
 
+## [0.9.8] — 2026-10-25
+
+### The charge threshold reaches the hardware
+
+0.9.1 put the threshold control back in the UI, and on this machine it has
+read "not available" ever since. The app only offers it when the driver
+exposes `charge_control_end_threshold`, and the driver only does that when
+its HYDROC-16 entry claims a charge limit — which it had stopped doing on
+2026-08-30, when the threshold was believed inert, and never started again
+when that was shown to be wrong. The control was restored; the claim was not.
+
+The driver now claims it. Nothing else about the driver changed: reading,
+writing and restoring the threshold after sleep were already correct, and
+the write is the same one that stopped a charge at 60 in the original test.
+
+What 0.9.1 said still holds. Above roughly 75 the setting does nothing,
+because a fixed hold at about 4.175 V per cell stops the charge first, and
+the number set will not match where charging stops.
+
+**This release needs the kernel module reinstalled.** A daemon restart is not
+enough: `sudo ./install.sh --module` rebuilds the module and reloads it, with
+no reboot. The **Repair** button does the same.
+
+### Corrections
+
+**The documentation still called the threshold inert.** `DESIGN.md`,
+`HANDOFF.md` and the daemon's own comments said the EC never enforces it.
+Those entries are kept as the record of how a default of 80 hid the
+threshold for a month, and marked superseded.
+
+748 tests.
+
 ## [0.9.7] — 2026-10-19
 
 ### A new look

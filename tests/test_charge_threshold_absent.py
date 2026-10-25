@@ -1,11 +1,12 @@
 # SPDX-License-Identifier: MIT
 """A feature the hardware does not have is not a failed write.
 
-The EC stores a charge threshold and never enforces it (DESIGN.md §3.2), so
-hydroc16g1_descriptor no longer claims BATTERY_CHARGE_LIMIT and the driver stops
-exposing charge_control_end_threshold. Profiles written before that change still
-carry charge_threshold, and apply() must skip it rather than reporting a failed
-write on every boot -- noise that would train people to ignore the change log.
+The EC enforces the charge threshold below a fixed ~4.175 V/cell ceiling
+(DESIGN.md §3.2), and hydroc16g1_descriptor claims BATTERY_CHARGE_LIMIT. Driver
+builds from between 2026-08-30 and that correction do not, so the attribute
+can be missing while a saved profile still carries charge_threshold. apply()
+must skip it rather than reporting a failed write on every boot -- noise that
+would train people to ignore the change log.
 """
 
 import os
@@ -116,7 +117,7 @@ class ThresholdAbsentTest(unittest.TestCase):
 
 
 class DescriptorTest(unittest.TestCase):
-    """The driver must not claim a feature measured not to work."""
+    """The driver claims what was measured to work, and says where it stops."""
 
     def setUp(self):
         root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -125,18 +126,24 @@ class DescriptorTest(unittest.TestCase):
             src = fh.read()
         i = src.index("hydroc16g1_descriptor")
         self.desc = src[i:src.index("};", i)]
+        # The .features expression alone, so a mention in the comment cannot
+        # pass for a claim.
+        j = self.desc.index(".features")
+        self.features = self.desc[j:self.desc.index(",\n", j)]
 
-    def test_charge_limit_is_not_claimed(self):
-        self.assertNotIn("UNIWILL_FEATURE_BATTERY_CHARGE_LIMIT", self.desc,
-                         "descriptor claims a charge limit the EC never enforces")
+    def test_charge_limit_is_claimed(self):
+        # Measured 2026-10-03: at 60, charging stopped at 3.93 V/cell.
+        self.assertIn("UNIWILL_FEATURE_BATTERY_CHARGE_LIMIT", self.features)
 
     def test_charge_modes_is_still_claimed(self):
         # Separate feature, separately inconclusive -- not removed on this
         # evidence.
-        self.assertIn("UNIWILL_FEATURE_BATTERY_CHARGE_MODES", self.desc)
+        self.assertIn("UNIWILL_FEATURE_BATTERY_CHARGE_MODES", self.features)
 
-    def test_the_reason_is_recorded_next_to_the_decision(self):
-        self.assertIn("CHARGE_CTRL_REACHED", self.desc)
+    def test_the_ceiling_is_recorded_next_to_the_decision(self):
+        # Above ~75 the fixed voltage target at 0x0522 stops the charge first;
+        # the claim is only honest with that caveat beside it.
+        self.assertIn("0x0522", self.desc)
 
 
 if __name__ == "__main__":

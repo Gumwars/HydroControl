@@ -135,10 +135,11 @@ def device_info(dmi: str = "/sys/class/dmi/id") -> dict:
 def _charge_threshold_exposed() -> bool:
     """Does the driver offer a charge threshold at all?
 
-    Not on the HYDROC-16: the EC stores one and never enforces it, so the
-    descriptor stopped claiming BATTERY_CHARGE_LIMIT (DESIGN.md §3.2). apply()
-    and drift() both key on this, so a saved threshold can neither fail a
-    write nor raise a banner on a machine with no control for it.
+    Only if the loaded driver claims BATTERY_CHARGE_LIMIT. The HYDROC-16 EC
+    enforces the threshold below its fixed ~4.175 V/cell ceiling (DESIGN.md
+    §3.2), but driver builds from before that was measured do not claim it.
+    apply() and drift() both key on this, so a saved threshold can neither
+    fail a write nor raise a banner on a machine with no control for it.
     """
     return os.path.exists(os.path.join(BAT, "charge_control_end_threshold"))
 
@@ -528,9 +529,8 @@ class Hardware:
             changes.append(ch)
 
         # The driver only exposes this when the descriptor claims
-        # BATTERY_CHARGE_LIMIT, and on this chassis it deliberately does not:
-        # the EC stores a threshold and never enforces it (DESIGN.md §3.2). A
-        # profile written before that change still carries the key, so skip it
+        # BATTERY_CHARGE_LIMIT, which older builds for this chassis do not
+        # (DESIGN.md §3.2). A saved profile may still carry the key, so skip it
         # rather than reporting a failed write on every boot. Absent hardware
         # is not an error.
         if differs("charge_threshold") and not _charge_threshold_exposed():

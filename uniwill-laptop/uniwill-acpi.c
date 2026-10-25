@@ -357,7 +357,7 @@
 #define UNIWILL_FEATURE_TOUCHPAD_TOGGLE		BIT(2)
 #define UNIWILL_FEATURE_LIGHTBAR		BIT(3)
 #define UNIWILL_FEATURE_BATTERY_CHARGE_LIMIT	BIT(4)
-/* Mutually exclusive with the charge limit feature */
+/* May be combined with the charge limit; see uniwill_battery_extension() */
 #define UNIWILL_FEATURE_BATTERY_CHARGE_MODES	BIT(5)
 #define UNIWILL_FEATURE_CPU_TEMP		BIT(6)
 #define UNIWILL_FEATURE_GPU_TEMP		BIT(7)
@@ -2674,6 +2674,7 @@ static struct uniwill_device_descriptor hydroc16g1_descriptor __initdata = {
 	.features = UNIWILL_FEATURE_FN_LOCK |
 		    UNIWILL_FEATURE_SUPER_KEY |
 		    UNIWILL_FEATURE_TOUCHPAD_TOGGLE |
+		    UNIWILL_FEATURE_BATTERY_CHARGE_LIMIT |
 		    UNIWILL_FEATURE_BATTERY_CHARGE_MODES |
 		    UNIWILL_FEATURE_CPU_TEMP |
 		    UNIWILL_FEATURE_GPU_TEMP |
@@ -2688,15 +2689,23 @@ static struct uniwill_device_descriptor hydroc16g1_descriptor __initdata = {
 	 * registers are accepted but have no visible effect, so the LIGHTBAR
 	 * feature is deliberately not claimed here.
 	 *
-	 * BATTERY_CHARGE_LIMIT is not claimed either, for the same reason and on
-	 * the same evidence. EC_ADDR_CHARGE_CTRL (0x07B9) accepts a threshold,
-	 * reads it back and holds it indefinitely -- and the EC never acts on it.
-	 * Measured over a full cycle on 2026-08-30: with the register holding 80%
-	 * throughout, the pack charged 76% -> 100% without pausing, and
-	 * CHARGE_CTRL_REACHED (bit 7) never armed at any point, including at
-	 * 100%. The EC is not failing to hold the threshold; it never evaluates
-	 * it. Nothing in the EC advertises a charge limit either, so this bit was
-	 * only ever an assumption carried over from sibling chassis.
+	 * BATTERY_CHARGE_LIMIT is claimed. EC_ADDR_CHARGE_CTRL (0x07B9) bits 6:0
+	 * are a real charge ceiling (the DSDT calls them CGLM), but it is one of
+	 * two limits and charging stops at whichever arrives first. The other is
+	 * a fixed voltage target of 16800 mV at 0x0522, about 4.175 V/cell.
+	 * Measured 2026-10-03 (CHARGE-CEILING-TRIGGER-CHAIN.md): with the
+	 * threshold moved 80 -> 60 during a charge from 2%, current fell to zero
+	 * at 3.9348 V/cell after 3054 mAh; raising it back to 80 restarted
+	 * charging within one 30-second sample. The write was the same
+	 * read-modify-write through ECRW that this driver's regmap performs,
+	 * preserving bit 7.
+	 *
+	 * Two caveats belong with anything that reads this attribute. At the
+	 * default of 80 and above (in practice above roughly 75) the voltage
+	 * target arrives first, so those settings do nothing -- which is why a
+	 * month of testing at 80 called the register inert (2026-08-30). And the
+	 * EC compares against its own state of charge, not the reported capacity:
+	 * the 60% run stopped at a reported 47%.
 	 *
 	 * 0x078E bit 3 does not advertise it. That bit is the vendor's capability
 	 * flag for the charging *profiles*, which is a different feature:
@@ -2705,8 +2714,9 @@ static struct uniwill_device_descriptor hydroc16g1_descriptor __initdata = {
 	 * that tuxedo-drivers has no numeric charge limit for Uniwill anywhere --
 	 * its only charge_control_end_threshold is Clevo's FlexiCharger, a
 	 * different platform. On the reference implementation, Uniwill battery care
-	 * *is* the profiles, which is a further reason to doubt that 0x07B9 was ever
-	 * a live feature on this line rather than only on this SKU.
+	 * *is* the profiles; the Windows Control Center (5.23.50.2) likewise writes
+	 * only 0x07A6 and has setters for 0x07B9 that nothing calls. That made
+	 * 0x07B9 look unused, but unused by the vendor is not inert in the EC.
 	 *
 	 * BATTERY_CHARGE_MODES is claimed. 0x078E reads 0xFC (2026-09-06), so the
 	 * capability bit is SET, and the value is trustworthy: 0x0780-0x079F is
@@ -2750,18 +2760,12 @@ static struct uniwill_device_descriptor hydroc16g1_descriptor __initdata = {
 	 * arrives, the protocol completes, the EC does nothing with it.
 	 *
 	 * Open question, deliberately not acted on here: if the profiles do
-	 * nothing, claiming BATTERY_CHARGE_MODES exposes charge_types for the same
-	 * reason this comment refuses to expose charge_control_end_threshold below
-	 * -- a control that silently does nothing is worse than a missing one.
+	 * nothing, claiming BATTERY_CHARGE_MODES exposes charge_types that do
+	 * nothing -- a control that silently does nothing is worse than a missing
+	 * one.
 	 * The claim is left standing only because the capability bit is genuinely
 	 * set and no one has yet explained the gap between this machine and the
 	 * reports; dropping it should follow an explanation, not precede one.
-	 *
-	 * Claiming the charge limit exposes charge_control_end_threshold, which
-	 * is a standard interface: GNOME, TLP and anything else reading it would
-	 * report a battery limit that does not exist. A missing feature is
-	 * discoverable; a limit that silently does nothing is worse than none,
-	 * because it is why someone leaves a machine plugged in permanently.
 	 */
 };
 

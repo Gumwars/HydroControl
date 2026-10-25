@@ -572,6 +572,12 @@ above must not be read as more than it is:
 `compat_probe.py` should report `0x078E` bit 3 read-only for sibling chassis --
 it is a runtime capability check we could use instead of a DMI assertion.
 
+**Superseded 2026-10-03: the charge threshold works below a ~4.175 V/cell
+ceiling,** and the descriptor claims `BATTERY_CHARGE_LIMIT` again. At 80 the
+voltage ceiling arrives first, which is what the run below measured; at 60 the
+threshold stopped the charge at 3.93 V/cell. See DESIGN.md §3.2 and
+`CHARGE-CEILING-TRIGGER-CHAIN.md`. The original entry follows.
+
 **The charge threshold is never enforced — answered, and the feature dropped.**
 A full cycle logged on 2026-08-30 with `charge_ctrl_watch.py`: with `0x07B9`
 holding **80% unchanged**, the pack charged **76% → 100% without pausing**, and
@@ -633,10 +639,11 @@ external outputs are wired to the dGPU so **iGPU-only kills external displays**.
    at Tjmax. That answer decides whether `MIN_DUTY` (currently 25%) can come
    down and the stock silent-below-55 °C band can come back — right now we give
    it up on purpose, and the UI says so.
-3. **Charge threshold — done, and the answer was no.** Measured, not enforced,
-   feature bit dropped. If it is ever revisited, the open part is whether any
-   gate exists that switches EC enforcement on; `0x0497` bit 5 and `0x0984`
-   bit 3 are both dead ends and are recorded as such in DESIGN.md §3.2.
+3. **Charge threshold — works below the voltage ceiling (2026-10-03).** The
+   earlier "not enforced" was an artefact of testing only at the default 80.
+   Feature bit restored. Open: `CHARGE_CTRL_REACHED` at the stop, the 47-vs-60
+   gap, a clean run with 60 set before AC, profile × threshold interaction, and
+   `0x07D0` (the lower threshold, never read). See DESIGN.md §3.2.
 4. **LPP**: decode the `0x31` reply frame; probe the ASCII console (`?`, `help`)
    carefully — it drives a pump.
 5. **GPU mode in the app**, if it is wanted: read the byte for status, write

@@ -165,7 +165,24 @@ would write two registers that cannot be written, one that sits outside both win
 and one the overlay invented for its own readback. There is no shadow set to
 synchronise.
 
-**ANSWERED 2026-08-30: the threshold is never enforced.** A full cycle was
+**CORRECTED 2026-10-03: the threshold is enforced, below a voltage ceiling.**
+Moved from 80 to 60 during a charge from 2%, charging stopped at 3.9348 V/cell
+after 3054 mAh (reported 47%); raised back to 80, it restarted within one
+30-second sample. There are two limits and charging stops at whichever arrives
+first: `0x07B9` bits 6:0 (the DSDT's `CGLM`) and a fixed voltage target of
+16800 mV at `0x0522`, about 4.175 V/cell. At the default of 80 the voltage
+target arrives first, which is why every test below, all at 80, saw nothing.
+Settings above roughly 75 therefore do nothing, and the EC compares against its
+own state of charge, not the reported capacity. `hydroc16g1_descriptor` claims
+`UNIWILL_FEATURE_BATTERY_CHARGE_LIMIT` again. Full record:
+`CHARGE-CEILING-TRIGGER-CHAIN.md`. Still open: `CHARGE_CTRL_REACHED` at the
+stop, the 47-vs-60 gap, a clean run with 60 set before AC is attached, and
+whether the charging profile interacts (every run so far was on Stationary).
+
+The 2026-08-30 conclusion below is kept as the record of how the default hid
+the threshold. **Its conclusion is superseded.**
+
+**ANSWERED 2026-08-30 (superseded): the threshold is never enforced.** A full cycle was
 logged with `charge_ctrl_watch.py`. With `0x07B9` holding **80% unchanged
 throughout**, the pack charged **76% → 100% without pausing**, and
 `CHARGE_CTRL_REACHED` (bit 7) **never armed at any sample, including at 100%**.
@@ -917,7 +934,7 @@ launcher-dependent until tested under each launcher.
 | Charging profile (`0x07A6`) | EC RAM | **No** — observed reverting to `HIGH_CAPACITY` after reboot |
 | Custom-profile latch (`0x0727` bit 6) | EC RAM | No |
 | CPU power limits (`0x0783`/`0x0784`) | EC RAM | No |
-| Charge threshold (`0x07B9`) | EC RAM | Moot — the EC stores it and never enforces it, and the driver no longer exposes it; see §3.2 |
+| Charge threshold (`0x07B9`) | EC RAM | Restored by the driver on resume; enforced below the ~4.175 V/cell ceiling, see §3.2 |
 | Platform toggles (`INOU0000:00`) | EC | Believed yes — unverified |
 
 This corrects an earlier assumption that the EC keeps its own persistent copy. It does
@@ -991,7 +1008,9 @@ which is another argument for keeping EC access daemon-side.
    4.21 V/cell). Hypothesis: a long-horizon hold-low policy invisible to one cycle.
    **Do not present these as percentage caps.**
 
-2. **Answered: the charge threshold is never enforced.** Measured over a full
+2. **Superseded 2026-10-03 — the threshold is enforced below the voltage
+   ceiling; see §3.2.** The original entry, measured only at the default 80:
+   **Answered: the charge threshold is never enforced.** Measured over a full
    cycle (§3.2) — the register held 80% while the pack charged 76% → 100% and
    `CHARGE_CTRL_REACHED` never armed. Not a clobber, not hysteresis: the EC
    simply does not evaluate it. `UNIWILL_FEATURE_BATTERY_CHARGE_LIMIT` was our

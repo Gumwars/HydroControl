@@ -349,7 +349,7 @@ def call(request: dict, path: str | None = None, timeout: float = 3.0) -> dict:
         except (OSError, ValueError):
             continue
     return {"running": False, "ok": False,
-            "error": "hydroc-display is not running in your session -- "
+            "error": "hydroc-display is not running in your session — "
                      "systemctl --user start hydroc-display"}
 
 

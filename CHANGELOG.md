@@ -1,5 +1,65 @@
 # Changelog
 
+## [0.9.9] — 2026-11-18
+
+### Security: two ways from your account to root
+
+Both were found in an audit of the OS this runs on. Neither needed a password.
+
+**Root imported Python from every home directory.** Keyboard RGB needs
+ite8291r3-ctl, which pipx keeps out of the system path, so kbctrl searched
+every home on the machine for it and put each one's pipx venv and
+`~/.local/lib/python*/site-packages` first on the import path — inside the
+daemon, which runs as root. A file any account dropped into its own
+site-packages ran as root the first time the keyboard was touched, ahead of the
+standard library. As root, kbctrl now looks only at a global pipx install, and
+only when that whole tree is root-owned and writable by nobody else.
+
+**The window ran your checkout's code through pkexec.** Repair ran
+`pkexec bash install.sh` from the checkout, and starting the daemon without its
+service ran the checkout's package. Whatever could edit the checkout decided
+what you then approved in a genuine password dialog. pkexec is now only offered
+a tree that root alone can change, and Repair refuses otherwise.
+
+**Keyboard RGB needs a reinstall.** A copy of ite8291r3-ctl in your home is now
+deliberately not loaded by the daemon:
+
+```bash
+sudo pipx install --global ite8291r3-ctl
+```
+
+**Not fixed yet.** A default install still runs the root daemon directly from
+the checkout, so anything that can write to the checkout can still change what
+root runs at the next restart. Until the installer deploys a root-owned copy
+itself, the upgrade note shows how to do it by hand. The local API also still
+accepts any process on the machine that sends no `Origin` header.
+
+### A quieter interface
+
+Green now marks selections, the power trace and the fan curve, and nothing
+else: meters and slider fills are neutral, and temperatures still turn amber
+above 78 °C and red above 88 °C. The background washes, glows, glass title bar
+and glossy logo are gone. Spacing sits on a 4 px grid, type uses six sizes
+instead of eleven with nothing under 11 px outside the keycaps, and section
+labels are in sentence case. The power chart is now the largest thing on
+Overview, and the fan curve's labels stay readable at any window width.
+
+### Corrections
+
+**The window was blank for 5–10 seconds on first load.** It made about fifteen
+requests one after another before drawing anything. The sidebar now appears at
+once and the page as soon as the first readings arrive, in under two seconds.
+
+**Hardware Differed showed raw keys** such as `"long_haul"`. It now uses the
+names the rest of the interface uses.
+
+### Also
+
+`CHARGE-TEST-PLAN.md` lists the tests the charge threshold still owes,
+starting with whether it works without a deep discharge first.
+
+759 tests.
+
 ## [0.9.8] — 2026-10-25
 
 ### The charge threshold reaches the hardware

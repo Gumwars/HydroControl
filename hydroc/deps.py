@@ -59,18 +59,18 @@ DEPS: dict[str, Dep] = {
     ),
     "ite8291r3-ctl": Dep(
         label="ite8291r3-ctl (keyboard RGB)",
-        # Ask kbctrl itself rather than guessing at a path: it injects the pipx
-        # venv site-packages of every home, and a check that reimplemented that
-        # search would drift out of agreement with the daemon.
+        # Ask kbctrl itself rather than guessing at a path: it decides where
+        # root may import from, and a check that reimplemented that search
+        # would drift out of agreement with the daemon.
         probe=("import sys;"
                f"sys.path.insert(0, {os.path.join(_ROOT, 'kbctrl')!r});"
                "import kbctrl.hardware as h;"
                "sys.stdout.write(h.ite_version() if h.HAS_ITE else '');"
                "sys.exit(0 if h.HAS_ITE else 1)"),
-        remedy=("Keyboard RGB only. Install as your own user, not root:\n"
-                "  pipx install ite8291r3-ctl\n"
-                "The daemon searches every home's pipx venv, so it is found\n"
-                "wherever it lands -- but it must be installed somewhere."),
+        remedy=("Keyboard RGB only. Install it globally, for root:\n"
+                "  sudo pipx install --global ite8291r3-ctl\n"
+                "The daemon runs as root and imports only from root-owned\n"
+                "paths, so a copy in your home directory is not used."),
     ),
 }
 

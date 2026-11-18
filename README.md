@@ -52,7 +52,8 @@ white throughout. See [DESIGN.md](DESIGN.md) §3.7.
 - `base-devel`, `python3` ≥ 3.10
 - `acpi_call-dkms` — how the daemon reaches the EC
 - `pipx` + `ite8291r3-ctl` — for keyboard RGB. `./install.sh --check` flags it if
-  missing; install it **as your own user, not root**. Versions **0.3 and 0.4**
+  missing; install it **globally** with `sudo pipx install --global ite8291r3-ctl`.
+  The daemon runs as root and will not load a copy from your home. Versions **0.3 and 0.4**
   both work; `doctor` prints which one you have
 - `bleak` — only if you own the **LPP cooling dock**. Optional; without it
   everything else works and the dock section simply does not appear

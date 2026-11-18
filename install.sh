@@ -83,16 +83,14 @@ dep_check() {
   fi
 }
 
-# RGB_USER is who must own the install -- under sudo, pipx installs into root's
-# home where the daemon will still find it, but the user running `pipx list`
-# later would not see it.
-RGB_USER="${SUDO_USER:-$USER}"
+# Global, not per-user: the daemon runs as root and imports only from
+# root-owned paths, so a copy in someone's home is deliberately not used.
 dep_check ite8291r3-ctl
 case $dep_rc in
   0) c_ok "ite8291r3-ctl (keyboard RGB) $dep_detail" ;;
   2) c_warn "ite8291r3-ctl (keyboard RGB) -- not checked; re-run with sudo" ;;
   *) c_bad "ite8291r3-ctl not found (keyboard RGB will be unavailable)"
-     MISSING+=("ite8291r3-ctl  --  run as $RGB_USER, not root:  pipx install ite8291r3-ctl") ;;
+     MISSING+=("ite8291r3-ctl  --  sudo pipx install --global ite8291r3-ctl") ;;
 esac
 
 if ! command -v pipx >/dev/null; then
@@ -117,7 +115,7 @@ if ((${#MISSING[@]})); then
   printf '\nInstall these first:\n'
   printf '  %s\n' "${MISSING[@]}"
   printf '\n  paru -S acpi_call-dkms base-devel python pipx linux-cachyos-headers\n'
-  printf '  pipx install ite8291r3-ctl        # as %s, not root\n' "$RGB_USER"
+  printf '  sudo pipx install --global ite8291r3-ctl\n'
   die "missing prerequisites"
 fi
 

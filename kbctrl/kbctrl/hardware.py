@@ -2,8 +2,8 @@
 """
 kbctrl.hardware — ITE 8291 keyboard + ITE 8233 lightbar drivers.
 
-Handles the bcdDevice bypass needed for HYDROC-16 (PID 0x600B) and the
-pipx venv path injection required when running under sudo.
+Handles the bcdDevice bypass needed for HYDROC-16 (PID 0x600B) and finding
+ite8291r3-ctl, which pipx keeps out of the system sys.path.
 """
 
 from __future__ import annotations
@@ -12,36 +12,76 @@ import array
 import fcntl
 import glob as _glob
 import os
+import stat as _stat
 import sys
 
-# ── pipx venv path injection (needed under sudo) ─────────────────────────────
-# Under sudo, HOME changes and pipx's venv leaves sys.path. Search the invoking
-# user's home (SUDO_USER) as well as the current one, so this works for anybody.
-# Where to look for ite8291r3-ctl.
+# ── where ite8291r3-ctl may be imported from ─────────────────────────────────
+# Root imports only from directories root alone can write.
 #
-# $HOME plus ~$SUDO_USER is NOT enough. Under `sudo` SUDO_USER is set and the
-# user's pipx venv is found; started by systemd (which is how the desktop app
-# starts it, via pkexec) HOME is /root and SUDO_USER is unset, so the same
-# machine reports "ite8291r3_ctl not installed" while the library sits happily
-# in the user's home. That produced a bug report where the advice -- reinstall
-# it -- could never have worked.
+# This used to search every home on the machine (/home/*, ~$SUDO_USER, ~) and
+# put each one's pipx venv and ~/.local site-packages FIRST on sys.path. The
+# daemon runs as root, so anything any account dropped into its own
+# ~/.local/lib/python*/site-packages ran as root -- ahead of the standard
+# library -- the first time the keyboard was touched. Moving the daemon's code
+# to a root-owned tree did not help, because the search itself lived there.
 #
-# Root can read every home, so search them all rather than guessing which user
-# installed it.
-_homes = [os.path.expanduser("~"), "/root"]
-if os.environ.get("SUDO_USER"):
-    _homes.append(os.path.expanduser("~" + os.environ["SUDO_USER"]))
-_homes += sorted(_glob.glob("/home/*"))
-_candidates = []
-for _h in dict.fromkeys(_homes):          # de-duplicated, order preserved
-    _candidates += _glob.glob(
-        os.path.join(_h, ".local/share/pipx/venvs/ite8291r3-ctl/lib/python*/site-packages"))
-    # `pip install --user` puts it here instead; root's sys.path has neither.
-    _candidates += _glob.glob(
-        os.path.join(_h, ".local/lib/python*/site-packages"))
-for _p in _candidates:
+# As root the only candidate is now a global pipx install
+# (`sudo pipx install --global ite8291r3-ctl`, under $PIPX_GLOBAL_HOME or
+# /opt/pipx), and only when every directory up to / and every file in the
+# venv's site-packages is root-owned and writable by nobody else. An
+# unprivileged run keeps its own home, which is its own code either way, and
+# no longer reaches into anyone else's. Paths are appended, never inserted
+# first, so they cannot shadow anything already importable.
+
+def _root_only(path: str) -> bool:
+    """True if `path` and every directory above it is root's alone."""
+    try:
+        p = os.path.realpath(path)
+        while True:
+            st = os.stat(p)
+            if st.st_uid != 0 or st.st_mode & 0o022:
+                return False
+            up = os.path.dirname(p)
+            if up == p:
+                return True
+            p = up
+    except OSError:
+        return False
+
+
+def _tree_root_only(top: str) -> bool:
+    """_root_only(top), and nothing under it is a symlink or non-root's."""
+    if not _root_only(top):
+        return False
+    for d, dirs, files in os.walk(top):
+        for name in dirs + files:
+            try:
+                st = os.lstat(os.path.join(d, name))
+            except OSError:
+                return False
+            if (_stat.S_ISLNK(st.st_mode) or st.st_uid != 0
+                    or st.st_mode & 0o022):
+                return False
+    return True
+
+
+_VENV_SITE = "venvs/ite8291r3-ctl/lib/python*/site-packages"
+
+
+def _ite_search_paths(euid: int | None = None) -> list[str]:
+    """Extra sys.path entries for ite8291r3-ctl, safe for this process."""
+    if (os.geteuid() if euid is None else euid) == 0:
+        base = os.environ.get("PIPX_GLOBAL_HOME") or "/opt/pipx"
+        return [p for p in sorted(_glob.glob(os.path.join(base, _VENV_SITE)))
+                if _tree_root_only(p)]
+    home = os.path.expanduser("~")
+    return (sorted(_glob.glob(os.path.join(home, ".local/share/pipx", _VENV_SITE)))
+            + sorted(_glob.glob(os.path.join(home, ".local/lib/python*/site-packages"))))
+
+
+for _p in _ite_search_paths():
     if _p not in sys.path:
-        sys.path.insert(0, _p)
+        sys.path.append(_p)
 
 try:
     from ite8291r3_ctl import ite8291r3 as _ite

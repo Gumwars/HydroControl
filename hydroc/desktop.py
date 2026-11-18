@@ -29,6 +29,8 @@ import socket
 import subprocess
 import sys
 
+from . import trust
+
 # -- WebKit on an NVIDIA-only machine ------------------------------------
 #
 # This has to run before WebKit spawns its web process, which is why it sits
@@ -275,14 +277,40 @@ def launch_state(rep: dict, polkit: bool = True) -> dict:
             "action": "start", "extra": "\n\n".join(notes) or None}
 
 
+# Where a root-owned copy is deployed. The launcher runs this window from the
+# checkout, which is fine for the window -- it runs as you -- and not for what
+# pkexec runs as root.
+INSTALL_ROOT = "/opt/hydrocontrol"
+
+
+def privileged_root(here: str | None = None) -> tuple[str | None, str]:
+    """The install pkexec may run as root, or None and why not.
+
+    pkexec used to run install.sh and the daemon straight from the checkout.
+    Anything able to edit the checkout could change what ran, and the user
+    then approved it in a genuine password dialog. Only a tree in which the
+    installer, the package, kbctrl and the driver source are all root's alone
+    is offered to pkexec: this checkout if it is one, else INSTALL_ROOT.
+    """
+    here = here or os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    for root in dict.fromkeys([here, INSTALL_ROOT]):
+        if (trust.root_only(os.path.join(root, "install.sh"))
+                and all(trust.tree_root_only(os.path.join(root, d))
+                        for d in ("hydroc", "kbctrl/kbctrl", "uniwill-laptop"))):
+            return root, ""
+    return None, (f"Refusing to ask for root: {here} can be changed without root, "
+                  f"and no root-owned copy was found at {INSTALL_ROOT}. Run "
+                  f"'sudo ./install.sh --module' from a terminal instead.")
+
+
 def repair_now() -> tuple[bool, str]:
     """Run the installer's module path with authentication."""
     if not shutil.which("pkexec"):
         return False, "pkexec is not installed, so this cannot ask for permission"
-    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    root, why = privileged_root()
+    if root is None:
+        return False, why
     script = os.path.join(root, "install.sh")
-    if not os.path.isfile(script):
-        return False, f"the installer is not where it was expected ({script})"
     try:
         r = subprocess.run(["pkexec", "bash", script, "--module"],
                            capture_output=True, text=True, timeout=900)
@@ -309,7 +337,9 @@ def start_daemon() -> tuple[bool, str]:
     if service_installed():
         cmd = ["pkexec", "systemctl", "start", SERVICE]
     else:
-        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        root, why = privileged_root()
+        if root is None:
+            return False, why
         cmd = ["pkexec", "env", f"PYTHONPATH={root}",
                sys.executable, "-m", "hydroc.server"]
     try:

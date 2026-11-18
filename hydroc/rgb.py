@@ -98,8 +98,9 @@ def keyboard_available() -> tuple[bool, str]:
     except ImportError as e:
         return False, f"kbctrl not importable: {e}"
     if not h.HAS_ITE:
-        return False, ("ite8291r3_ctl not importable. Install it as your normal "
-                       "user (NOT as root):  pipx install ite8291r3-ctl")
+        return False, ("ite8291r3_ctl not importable. The daemon runs as root and "
+                       "only loads it from a root-owned install:  "
+                       "sudo pipx install --global ite8291r3-ctl")
     ver = h.ite_version()
     try:
         kbd = _keyboard()

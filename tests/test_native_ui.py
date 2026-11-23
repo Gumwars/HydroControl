@@ -88,7 +88,8 @@ class ButtonCycleRouteTest(unittest.TestCase):
         req = urllib.request.Request(
             f"http://127.0.0.1:{self.port}{route}",
             data=json.dumps(payload).encode(),
-            headers={"Content-Type": "application/json"}, method="POST")
+            headers={"Content-Type": "application/json",
+                     server.apitoken.HEADER: server._tokens.token}, method="POST")
         try:
             with urllib.request.urlopen(req, timeout=5) as r:
                 return r.status, json.loads(r.read() or b"{}")

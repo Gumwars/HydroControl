@@ -38,7 +38,8 @@ class OriginTest(unittest.TestCase):
         req = urllib.request.Request(
             f"http://127.0.0.1:{self.port}{route}",
             data=json.dumps(payload).encode(),
-            headers={"Content-Type": "application/json", **(headers or {})},
+            headers={"Content-Type": "application/json",
+                     server.apitoken.HEADER: server._tokens.token, **(headers or {})},
             method="POST")
         try:
             with urllib.request.urlopen(req, timeout=5) as r:

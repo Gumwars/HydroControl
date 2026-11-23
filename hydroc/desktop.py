@@ -277,6 +277,19 @@ def launch_state(rep: dict, polkit: bool = True) -> dict:
             "action": "start", "extra": "\n\n".join(notes) or None}
 
 
+def app_url() -> str:
+    """The UI's address, carrying the daemon's POST token when we can read it.
+
+    In the fragment, which the page reads and the browser never sends, so the
+    token stays out of server logs and request lines. The daemon hands the
+    token file to whoever is at the keyboard (hydroc/apitoken.py); without it
+    the page still loads, read-only.
+    """
+    from .apitoken import read_token
+    t = read_token()
+    return f"{URL}#t={t}" if t else URL
+
+
 # Where a root-owned copy is deployed. The launcher runs this window from the
 # checkout, which is fine for the window -- it runs as you -- and not for what
 # pkexec runs as root.
@@ -525,7 +538,7 @@ class Window(Gtk.ApplicationWindow):
             if not self._loaded:
                 self._loaded = True
                 self._waited = None
-                self.view.load_uri(URL)
+                self.view.load_uri(app_url())
                 self.stack.set_visible_child_name("app")
             return GLib.SOURCE_CONTINUE
 

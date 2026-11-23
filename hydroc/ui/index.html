@@ -519,9 +519,25 @@ function picker(id,hex,label='Colour'){
   </div>`;
 }
 
+// The daemon refuses a POST without its token (hydroc/apitoken.py). The window
+// passes it in the fragment, which the browser never sends anywhere; it is kept
+// for reloads in this tab and cleared from the address bar.
+const TOKEN=(()=>{
+  try{
+    const m=location.hash.match(/[#&]t=([0-9a-f]+)/);
+    if(m){sessionStorage.setItem('hydroc-token',m[1]);
+      history.replaceState(null,'',location.pathname+location.search);return m[1];}
+    return sessionStorage.getItem('hydroc-token')||'';
+  }catch(_){return '';}
+})();
 async function api(path,opts){
-  try{const r=await fetch(path,opts);return await r.json();}
-  catch(e){return null;}
+  try{
+    if(opts&&opts.method&&opts.method!=='GET')
+      opts={...opts,headers:{...(opts.headers||{}),'X-HydroControl-Token':TOKEN}};
+    const r=await fetch(path,opts),j=await r.json();
+    if(r.status===403&&j&&j.token===false&&!S.readOnly){S.readOnly=true;render();}
+    return j;
+  }catch(e){return null;}
 }
 async function refreshState(){
   const d=await api('/api/state');
@@ -634,6 +650,12 @@ function renderHealth(){
 }
 function renderBanners(){
   let h='';
+  // Without the daemon's token this page can read but not change anything:
+  // opened in a browser rather than the app, or the user at the keyboard
+  // changed since the window opened (the token is re-issued then).
+  if(!TOKEN||S.readOnly)
+    h+=`<div class="banner warn"><div style="flex:1"><b>Read-only.</b> Changes need the
+      HydroControl app${TOKEN?' — the session changed since it opened, so reopen it':''}.</div></div>`;
   // A system update breaking the driver shows up as "hwmon down", which tells a
   // user nothing about what to do. Say what broke, why, and offer the fix.
   const hz=S.health;

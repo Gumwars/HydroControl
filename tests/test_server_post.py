@@ -41,7 +41,7 @@ class PostRoutesAnswerTest(unittest.TestCase):
         req = urllib.request.Request(
             f"http://127.0.0.1:{self.port}{route}",
             data=json.dumps(payload).encode(),
-            headers={"Content-Type": "application/json"},
+            headers={"Content-Type": "application/json", server.apitoken.HEADER: server._tokens.token},
             method="POST")
         def decode(raw):
             try:

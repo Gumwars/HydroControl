@@ -12,6 +12,10 @@ a narrow JSON surface:
     POST /api/apply       reconcile hardware to a settings dict
     POST /api/profile     persist the saved profile
 
+Every POST needs the X-HydroControl-Token header (hydroc/apitoken.py): loopback
+is shared by every process on the machine, and only root and the user at the
+keyboard can read the token.
+
 Deliberately no external dependencies -- stdlib only, so it runs anywhere the
 rest of the tooling does.
 
@@ -31,7 +35,7 @@ from .cli import (PROFILE_PATHS, REPAIR_MODPROBE, REPAIR_MODULE, REPAIR_RELOAD,
 from .hardware import Hardware
 from . import fancurve, found, gpumode, presets, rgb
 from . import nativemode
-from . import batterylight, colorprofile, displayd, lockkeys, powersaver
+from . import apitoken, batterylight, colorprofile, displayd, lockkeys, powersaver
 from .hotkeys import ProfileButton
 
 # The LPP dock lives behind a sidecar daemon (hydroc.lppd) because BLE is async
@@ -71,6 +75,38 @@ UI_DIR = os.path.join(os.path.dirname(__file__), "ui")
 HOST, PORT = "127.0.0.1", 8781
 
 _hw = Hardware()
+_tokens = apitoken.TokenKeeper()
+
+
+class Sampled:
+    """One reading shared by every client, taken at most once per `max_age`.
+
+    Each /api/telemetry used to read the EC itself, so EC traffic grew with the
+    number of clients: the window, a shell widget, a script. Sustained EC
+    traffic is the one load this project has seen stop the fans (DESIGN.md
+    §4.2). Concurrent requests wait for the one read in flight rather than
+    starting their own, and nobody asking means no reads at all.
+    """
+
+    def __init__(self, read, max_age: float = 0.9, clock=None) -> None:
+        import time
+        self._read = read
+        self._max_age = max_age
+        self._clock = clock or time.monotonic
+        self._lock = threading.Lock()
+        self._value = None
+        self._at: float | None = None
+
+    def get(self):
+        with self._lock:
+            now = self._clock()
+            if self._at is None or now - self._at >= self._max_age:
+                self._value = self._read()
+                self._at = self._clock()
+            return self._value
+
+
+_telemetry = Sampled(lambda: _hw.telemetry())
 
 
 def apply_preset(name: str) -> dict:
@@ -465,7 +501,7 @@ class Handler(BaseHTTPRequestHandler):
         if route == "/api/status":
             return self._json(_hw.status())
         if route == "/api/telemetry":
-            return self._json(_hw.telemetry())
+            return self._json(_telemetry.get())
         if route == "/api/rgb/status":
             kb_ok, kb_why = rgb.keyboard_available()
             cb_ok, cb_why = rgb.chinbar_available()
@@ -579,9 +615,11 @@ class Handler(BaseHTTPRequestHandler):
 
         A browser always sends Origin on a cross-origin POST and cannot
         suppress it, so rejecting a foreign Origin stops this. A *missing*
-        Origin is allowed, because curl and the project's own scripts do not
-        send one and locking them out buys nothing -- an attacker who can run
-        curl here does not need the daemon.
+        Origin is allowed here, because curl and the project's own scripts do
+        not send one. That used to be the whole check, on the argument that
+        anyone able to run curl here did not need the daemon -- true of the
+        owner, not of other accounts or sandboxed apps sharing loopback. The
+        token check in do_POST covers those (hydroc/apitoken.py).
 
         Host is checked too, which is what stops DNS rebinding: a name that
         resolves to 127.0.0.1 arrives with its own Host.
@@ -600,6 +638,10 @@ class Handler(BaseHTTPRequestHandler):
         bad = self._cross_site()
         if bad:
             return self._json({"ok": False, "error": f"refused: {bad}"}, 403)
+        if not _tokens.check(self.headers.get(apitoken.HEADER)):
+            return self._json({"ok": False, "token": False,
+                               "error": "refused: this needs the HydroControl app "
+                                        f"(no valid {apitoken.HEADER})"}, 403)
         payload = self._body()
 
         if route == "/api/gpu/set":
@@ -889,6 +931,7 @@ def main() -> int:
     if os.geteuid() != 0:
         print("warning: not root -- EC values and writes will be unavailable",
               file=sys.stderr)
+    _tokens.start()
     _button.start()
     _sessions.start()
     _power.start()

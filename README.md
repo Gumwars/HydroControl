@@ -97,7 +97,14 @@ sudo python3 -m hydroc.server
 
 and open **http://127.0.0.1:8781**.
 
-It binds to loopback only — nothing is exposed to your network.
+It binds to loopback only — nothing is exposed to your network. Opened in a
+plain browser the page is **read-only**: every change needs the token in
+`/run/hydroc/token`, which only root and the user at the keyboard can read, and
+the HydroControl window passes it for you. Scripts send it as a header:
+
+```bash
+curl -H "X-HydroControl-Token: $(cat /run/hydroc/token)" -X POST ...
+```
 
 ---
 

@@ -1,0 +1,13 @@
+{
+    "id": "hydroControl",
+    "name": "HydroControl",
+    "description": "Power modes, battery charging, fans and live readings for the Eluktronics HYDROC-16, from the bar. Talks to the hydroc-server daemon.",
+    "version": "0.1.0",
+    "author": "gumwars",
+    "icon": "speed",
+    "type": "widget",
+    "capabilities": ["dankbar-widget"],
+    "component": "./HydroWidget.qml",
+    "settings": "./HydroSettings.qml",
+    "permissions": ["settings_read", "settings_write", "network"]
+}

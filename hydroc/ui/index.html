@@ -74,7 +74,12 @@ h1,h2,h3,h4{font-weight:500;line-height:1.12;margin:0}
 em{font-style:normal;color:var(--fg)}
 :focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
 ::selection{background:var(--accent-soft)}
-@keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+/* Nothing here animates forever. With the DMA-BUF renderer off -- the
+   NVIDIA-only workaround in hydroc/desktop.py -- WebKit draws every frame on the
+   CPU, and one pulsing status dot held the window at 95% of a core; with no
+   animation it idles at 7%. `.lite` is set by the window in that mode, and also
+   drops the transitions, which redraw for 0.4 s after every 1 Hz reading. */
+.lite *,.lite *::before,.lite *::after{animation:none!important;transition:none!important}
 
 /* ── shell: title bar over sidebar + content ── */
 .app{display:flex;flex-direction:column;height:100vh}
@@ -93,7 +98,7 @@ em{font-style:normal;color:var(--fg)}
   border:1px solid var(--border);color:var(--muted)}
 .chip .dot{width:6px;height:6px;margin:0;border-radius:50%;flex:none}
 .chip.live{color:var(--fg)}
-.chip.live .dot{background:var(--accent);animation:pulse 2.2s ease-in-out infinite}
+.chip.live .dot{background:var(--accent)}
 .chip.warn{color:var(--warn);border-color:color-mix(in oklab,var(--warn) 40%,transparent)}
 .chip.warn .dot{background:var(--warn)}
 .chip.bad{color:var(--danger);border-color:color-mix(in oklab,var(--danger) 40%,transparent)}
@@ -522,11 +527,15 @@ function picker(id,hex,label='Colour'){
 // The daemon refuses a POST without its token (hydroc/apitoken.py). The window
 // passes it in the fragment, which the browser never sends anywhere; it is kept
 // for reloads in this tab and cleared from the address bar.
+// `lite` arrives the same way: the window draws on the CPU, so skip motion.
 const TOKEN=(()=>{
   try{
-    const m=location.hash.match(/[#&]t=([0-9a-f]+)/);
-    if(m){sessionStorage.setItem('hydroc-token',m[1]);
-      history.replaceState(null,'',location.pathname+location.search);return m[1];}
+    const h=new URLSearchParams(location.hash.slice(1));
+    if(h.has('lite'))sessionStorage.setItem('hydroc-lite','1');
+    if(sessionStorage.getItem('hydroc-lite'))document.documentElement.classList.add('lite');
+    const t=h.get('t');
+    if(location.hash)history.replaceState(null,'',location.pathname+location.search);
+    if(t&&/^[0-9a-f]+$/.test(t)){sessionStorage.setItem('hydroc-token',t);return t;}
     return sessionStorage.getItem('hydroc-token')||'';
   }catch(_){return '';}
 })();

@@ -286,8 +286,15 @@ def app_url() -> str:
     the page still loads, read-only.
     """
     from .apitoken import read_token
+    frag = []
     t = read_token()
-    return f"{URL}#t={t}" if t else URL
+    if t:
+        frag.append(f"t={t}")
+    # Without the DMA-BUF renderer WebKit draws on the CPU, and every frame of
+    # motion is paid for there: the page drops its animations (`lite`).
+    if os.environ.get("WEBKIT_DISABLE_DMABUF_RENDERER"):
+        frag.append("lite=1")
+    return f"{URL}#{'&'.join(frag)}" if frag else URL
 
 
 # Where a root-owned copy is deployed. The launcher runs this window from the

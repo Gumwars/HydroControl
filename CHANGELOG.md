@@ -1,5 +1,50 @@
 # Changelog
 
+## [0.9.10] — 2026-11-23
+
+### The window no longer costs a core to leave open
+
+On a machine running on the NVIDIA GPU alone, the window turns off WebKit's
+DMA-BUF renderer to avoid a display bug, and WebKit then draws every frame on
+the CPU. A pulsing status dot that never stopped held the window at about 105%
+of a core, with temperatures to match. The dot is now steady, nothing in the
+page animates forever, and in that rendering mode the window also drops the
+meters' transitions. Measured with the same renderer settings: **105% before,
+7% after**. Machines that render on the GPU keep the smooth meters.
+
+### Changes need the HydroControl app
+
+The daemon runs as root on loopback, and loopback is shared by every account,
+container and sandboxed app on the machine. The existing checks stopped web
+pages but not a local process, which sends no `Origin` at all. Every change now
+needs a token from `/run/hydroc/token`. Only root and the person at the keyboard
+(the active user on the seat, as logind sees it) can read it, and it is
+re-issued when that person changes. There is nothing to install and no group to
+join. The window passes the token for you. Opened in a plain browser, the page
+is read-only. Scripts send it as a header:
+
+```bash
+curl -H "X-HydroControl-Token: $(cat /run/hydroc/token)" -X POST ...
+```
+
+### One telemetry read for every client
+
+Each telemetry request used to read the EC itself, so EC traffic grew with every
+client polling it. Sustained EC traffic has stopped the fans before. Readings are
+now taken at most once every 0.9 s and shared, which is what makes a desktop
+shell widget safe to add next.
+
+### Corrections
+
+**hydroc-apply failed on some boots, with every setting applied.** It sets Num
+Lock with a keypress and checks the keyboard LED. The DMS greeter's niri turns
+Num Lock on by itself just before, so the LED could read off, the press then
+turned Num Lock *off*, and one failed key failed the whole unit. At boot the
+keys are now left to any compositor other than Hyprland, whose state can't be
+read directly. A lock key that does not take is a warning, never a failed unit.
+
+780 tests.
+
 ## [0.9.9] — 2026-11-18
 
 ### Security: two ways from your account to root

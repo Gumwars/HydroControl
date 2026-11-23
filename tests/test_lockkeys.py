@@ -168,5 +168,70 @@ class GraphicalSessionsTest(unittest.TestCase):
         self.assertEqual(lockkeys.graphical_sessions("/nonexistent/hydroc"), set())
 
 
+class BootApplyTest(unittest.TestCase):
+    """cli apply at boot: press only when the result can be verified.
+
+    dms-greeter's niri turns Num Lock on itself, about five seconds before
+    hydroc-apply runs. The LED read raced it, the press turned Num Lock off,
+    and the unit failed on 2 boots in 12 with every EC setting applied.
+    """
+
+    NO_HYPR = "/nonexistent/hypr/*/.socket.sock"
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.sessions = self.tmp.name
+
+    def session(self, sid, typ="wayland", cls="greeter"):
+        with open(os.path.join(self.sessions, sid), "w") as fh:
+            fh.write(f"UID=947\nTYPE={typ}\nCLASS={cls}\n")
+
+    def boot(self, profile, **kw):
+        with mock.patch.object(lockkeys, "apply_defaults",
+                               return_value=[{"lock": "num", "ok": True}]) as m:
+            out = lockkeys.apply_at_boot(profile, root=self.sessions, **kw)
+        return out, m
+
+    def test_a_greeter_compositor_is_left_alone(self):
+        self.session("c1")
+        out, m = self.boot({"numlock_default": True}, pattern=self.NO_HYPR)
+        self.assertIn("compositor", out["skipped"])
+        self.assertEqual(out["results"], [])
+        m.assert_not_called()
+
+    def test_on_a_vt_it_still_presses(self):
+        self.session("2", typ="tty", cls="user")
+        out, m = self.boot({"numlock_default": True}, pattern=self.NO_HYPR)
+        self.assertIsNone(out["skipped"])
+        m.assert_called_once()
+
+    def test_hyprland_can_be_verified_so_it_still_presses(self):
+        self.session("3", cls="user")
+        with mock.patch.object(lockkeys, "hyprland_state",
+                               return_value={"num": False, "caps": False}):
+            out, m = self.boot({"numlock_default": True})
+        self.assertIsNone(out["skipped"])
+        m.assert_called_once()
+
+    def test_no_defaults_says_nothing(self):
+        self.session("c1")
+        out, m = self.boot({}, pattern=self.NO_HYPR)
+        self.assertEqual(out, {"skipped": None, "results": []})
+        m.assert_not_called()
+
+
+class ApplyExitCodeTest(unittest.TestCase):
+    """A lock key that did not take must not fail hydroc-apply."""
+
+    def test_lock_results_do_not_reach_the_exit_code(self):
+        import inspect
+        from hydroc import cli
+        src = inspect.getsource(cli.main)
+        tail = src[src.index("lockkeys.apply_at_boot"):]
+        ret = tail[tail.index("return 0 if"):].splitlines()[0]
+        self.assertNotIn("lock", ret)
+
+
 if __name__ == "__main__":
     unittest.main()

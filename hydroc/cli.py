@@ -538,19 +538,26 @@ def main(argv=None) -> int:
             print(f"  chin bar: FAILED -- {res.get('error')}", file=sys.stderr)
 
     # Lock keys are not EC state either -- they belong to whoever reads the
-    # keyboard. At boot that is the VT; a compositor starting later resets
-    # them, which the daemon's SessionWatcher covers.
-    locks_ok = True
+    # keyboard. On a VT that is the kernel; once a compositor holds it, only
+    # Hyprland's state can be verified, so any other is left to its own default
+    # (lockkeys.unreadable_owner). A compositor starting later resets them,
+    # which the daemon's SessionWatcher covers.
+    #
+    # A lock key that did not take is a warning, not a failed unit: it is a
+    # desktop convenience, and a failed hydroc-apply reads as "the hardware
+    # settings did not apply" when every one of them did.
     if not args.dry_run:
         from . import lockkeys
-        for r in lockkeys.apply_defaults(profile):
-            locks_ok &= r["ok"]
+        boot = lockkeys.apply_at_boot(profile)
+        if boot["skipped"]:
+            print(f"  lock keys: left alone -- {boot['skipped']}")
+        for r in boot["results"]:
             print(f"  {r['lock']} lock: "
                   + (f"{'on' if r['now'] else 'off'}" if r["ok"]
-                     else f"FAILED -- {r['error']}"),
+                     else f"warning -- {r['error']}"),
                   file=sys.stdout if r["ok"] else sys.stderr)
 
-    return 0 if (all(c.ok for c in changes) and chin_ok and locks_ok) else 1
+    return 0 if (all(c.ok for c in changes) and chin_ok) else 1
 
 
 def icc_command(argv: list[str], as_json: bool) -> int:

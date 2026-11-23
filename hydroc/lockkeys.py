@@ -27,6 +27,9 @@ Defaults (`numlock_default`, `capslock_default`: True / False / None) are
 applied at boot and resume by `cli apply`, and -- because a compositor starting
 up resets every keyboard to its own default -- again when a graphical session
 starts, by `SessionWatcher` inside the daemon. None means leave it alone.
+`cli apply` skips them when a compositor other than Hyprland already holds the
+keyboard, because the LED cannot be trusted to report that compositor's state
+in time (`unreadable_owner`).
 
 Lock state is deliberately **not** part of `Hardware.read_state()`: the user
 pressing Num Lock is not drift, and a banner offering to undo it would be wrong.
@@ -244,6 +247,42 @@ def apply_defaults(profile: dict, keyboard=None, **kw) -> list[dict]:
         return []
     kb = keyboard or find_keyboard()
     return [set_lock(lock, on, keyboard=kb, **kw) for lock, on in want.items()]
+
+
+def unreadable_owner(root: str = SESSIONS, pattern: str = HYPR_SOCKETS) -> str | None:
+    """Why a press made now could not be verified, or None if it could.
+
+    On a VT the kernel owns the lock state and the LED reports it. Once a
+    compositor holds the keyboard the state is the compositor's, and only
+    Hyprland's can be asked for directly. Any other compositor is read through
+    the LED, and that read races the compositor's own startup default.
+
+    The greeter is where this bit. dms-greeter starts niri with `numlock` in its
+    built-in config, about five seconds before hydroc-apply runs. On 2 boots in
+    12 the LED still read off, the press then turned Num Lock *off*, the LED
+    never showed on, and apply failed -- with every EC setting already written.
+    """
+    if not graphical_sessions(root):
+        return None
+    if hyprland_state(pattern=pattern) is not None:
+        return None
+    return ("a compositor other than Hyprland owns the keyboard and its lock "
+            "state cannot be read, so it is left to the compositor's own default")
+
+
+def apply_at_boot(profile: dict, root: str = SESSIONS, pattern: str = HYPR_SOCKETS,
+                  **kw) -> dict:
+    """apply_defaults() for `cli apply`, unless the result could not be verified.
+
+    {"skipped": reason or None, "results": [...]}. A login is covered either
+    way: SessionWatcher applies the defaults again when a session starts.
+    """
+    if not defaults(profile):
+        return {"skipped": None, "results": []}
+    why = unreadable_owner(root, pattern)
+    if why:
+        return {"skipped": why, "results": []}
+    return {"skipped": None, "results": apply_defaults(profile, **kw)}
 
 
 def graphical_sessions(root: str = SESSIONS) -> set[str]:

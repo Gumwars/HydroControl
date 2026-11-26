@@ -1320,6 +1320,26 @@ function vPerf(){
       <span class="kv">${num(S.state.gpu_ctgp_offset)} W</span></div>
     <input type="range" id="ctgp" min="0" max="25" step="1" value="${S.state.gpu_ctgp_offset||0}">
     <div class="lbl">Watts on top of base TGP. Setting the maximum leaves no headroom for Dynamic Boost.</div>
+  </div>
+  ${tccCard()}`;
+}
+// CPU temperature limit -- the TCC offset. The CPU throttles at TjMax minus the
+// offset. Set at EC 0x0786 the way Control Center sets it; the "running" line
+// is what the CPU itself reports through the kernel, which only the EC puts
+// there. When the two differ the card says so rather than showing the setting
+// as if it had taken.
+function tccCard(){
+  const st=S.state, tj=st.cpu_tjmax||100, on=!!st.cpu_tcc_enable, ap=st.cpu_tcc_applied;
+  if(st.cpu_tcc_enable===undefined&&ap==null)return '';
+  const off=on?(st.cpu_tcc_offset||0):0;
+  return `<div class="card" style="margin-top:var(--space-4)">
+    <div class="row"><div><div class="card-title" style="font-size:14px">CPU temperature limit</div>
+      <div class="lbl">${on?`Throttles at <span class="kv">${tj-off} °C</span>, ${off} below TjMax`
+        :'Firmware default for the current mode'}</div></div>
+      <button class="sw" id="tccon" aria-pressed="${on}"${st.cpu_tcc_enable===undefined?' disabled':''}><i></i></button></div>
+    ${on?`<input type="range" id="tcc" min="0" max="40" step="1" value="${off}">`:''}
+    <div class="lbl">The CPU is running <span class="kv">${ap==null?'—':'−'+ap+' °C'}</span>${ap==null?'':` and throttles at ${tj-ap} °C`}.${
+      on&&ap!=null&&ap!==off?' <b>That is not what is set</b> — the EC has not applied it, or has put its own value back.':''}</div>
   </div>`;
 }
 function vLpp(){
@@ -1756,6 +1776,13 @@ function bind(){
     r.onchange=()=>applySettings({[r.dataset.pl]:+r.value}));
   const ctgp=$('#ctgp');
   if(ctgp)ctgp.onchange=()=>applySettings({gpu_ctgp_offset:+ctgp.value});
+  // Turning the limit on starts from the offset already in force, so the
+  // switch alone changes nothing the CPU does.
+  const tccon=$('#tccon'),tccr=$('#tcc');
+  if(tccon)tccon.onclick=()=>applySettings(S.state.cpu_tcc_enable
+    ?{cpu_tcc_enable:false}
+    :{cpu_tcc_enable:true,cpu_tcc_offset:Math.min(40,S.state.cpu_tcc_applied??5)});
+  if(tccr)tccr.onchange=()=>applySettings({cpu_tcc_enable:true,cpu_tcc_offset:+tccr.value});
   const ch=$('#charge');
   if(ch)ch.onclick=e=>{const b=e.target.closest('[data-v]');if(b)applySettings({charge_profile:b.dataset.v});};
 

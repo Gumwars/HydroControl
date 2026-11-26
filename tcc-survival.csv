@@ -1,0 +1,67 @@
+time,label,applied,tjmax,ec_0786,ec_enable,ec_offset,default_balanced,default_office,default_beast,mode_0751,mode,custom_latch,ac
+2026-11-26T10:17:36,baseline,5,100,0x00,0,0,5,15,5,0x00,balanced,1,1
+2026-11-26T10:18:45,baseline,10,100,0x8A,1,10,5,15,5,0x00,balanced,1,1
+2026-11-26T10:21:25,before set-ec,10,100,0x8A,1,10,5,15,5,0x00,balanced,1,1
+2026-11-26T10:21:25,after set-ec off,10,100,0x00,0,0,5,15,5,0x00,balanced,1,1
+2026-11-26T10:21:26,after set-ec off,5,100,0x00,0,0,5,15,5,0x00,balanced,1,1
+2026-11-26T10:21:52,before set-ec,5,100,0x00,0,0,5,15,5,0x00,balanced,1,1
+2026-11-26T10:21:52,after set-ec 10,10,100,0x8A,1,10,5,15,5,0x00,balanced,1,1
+2026-11-26T10:22:16,before set-ec,10,100,0x8A,1,10,5,15,5,0x00,balanced,1,1
+2026-11-26T10:22:17,after set-ec off,10,100,0x00,0,0,5,15,5,0x00,balanced,1,1
+2026-11-26T10:22:18,after set-ec off,5,100,0x00,0,0,5,15,5,0x00,balanced,1,1
+2026-11-26T10:25:48,before set-ec,5,100,0x00,0,0,5,15,5,0x00,balanced,1,1
+2026-11-26T10:25:48,after set-ec off,5,100,0x00,0,0,5,15,5,0x00,balanced,1,1
+2026-11-26T10:26:49,after set-ec off (end),5,100,0x00,0,0,5,15,5,0x00,balanced,1,1
+2026-11-26T10:28:32,before set-ec,5,100,0x00,0,0,5,15,5,0x00,balanced,1,1
+2026-11-26T10:28:32,after set-ec 10,5,100,0x8A,1,10,5,15,5,0x00,balanced,1,1
+2026-11-26T10:28:33,after set-ec 10,10,100,0x8A,1,10,5,15,5,0x00,balanced,1,1
+2026-11-26T10:29:33,after set-ec 10 (end),10,100,0x8A,1,10,5,15,5,0x00,balanced,1,1
+2026-11-26T10:29:35,before set-ec,10,100,0x8A,1,10,5,15,5,0x00,balanced,1,1
+2026-11-26T10:29:35,after set-ec off,10,100,0x00,0,0,5,15,5,0x00,balanced,1,1
+2026-11-26T10:29:36,after set-ec off,5,100,0x00,0,0,5,15,5,0x00,balanced,1,1
+2026-11-26T10:30:36,after set-ec off (end),5,100,0x00,0,0,5,15,5,0x00,balanced,1,1
+2026-11-26T10:32:43,before set-msr,5,100,0x00,0,0,5,15,5,0x00,balanced,1,1
+2026-11-26T10:32:43,after set-msr 10,10,100,0x00,0,0,5,15,5,0x00,balanced,1,1
+2026-11-26T10:33:44,after set-msr 10 (end),10,100,0x00,0,0,5,15,5,0x00,balanced,1,1
+2026-11-26T10:34:54,watch,10,100,0x00,0,0,5,15,5,0x00,balanced,1,1
+2026-11-26T10:44:58,watch (end),10,100,0x00,0,0,5,15,5,0x00,balanced,1,1
+2026-11-26T10:53:03,before set-ec,10,100,0x00,0,0,5,15,5,0x00,balanced,1,1
+2026-11-26T10:53:03,after set-ec 20,10,100,0x94,1,20,5,15,5,0x00,balanced,1,1
+2026-11-26T10:53:04,after set-ec 20,20,100,0x94,1,20,5,15,5,0x00,balanced,1,1
+2026-11-26T10:54:04,after set-ec 20 (end),20,100,0x94,1,20,5,15,5,0x00,balanced,1,1
+2026-11-26T10:59:37,before set-msr,20,100,0x94,1,20,5,15,5,0x00,balanced,1,1
+2026-11-26T10:59:37,after set-msr 10,10,100,0x94,1,20,5,15,5,0x00,balanced,1,1
+2026-11-26T11:00:38,after set-msr 10 (end),10,100,0x94,1,20,5,15,5,0x00,balanced,1,1
+2026-11-26T11:01:51,watch,10,100,0x94,1,20,5,15,5,0x00,balanced,1,1
+2026-11-26T11:11:55,watch (end),10,100,0x94,1,20,5,15,5,0x00,balanced,1,1
+2026-11-26T11:16:29,before set-msr,10,100,0x94,1,20,5,15,5,0x00,balanced,1,1
+2026-11-26T11:16:29,after set-msr 10,10,100,0x94,1,20,5,15,5,0x00,balanced,1,1
+2026-11-26T11:16:50,after set-msr 10 (stopped),10,100,0x94,1,20,5,15,5,0x00,balanced,1,1
+2026-11-26T11:16:51,before set-ec,10,100,0x94,1,20,5,15,5,0x00,balanced,1,1
+2026-11-26T11:16:52,after set-ec 20,10,100,0x94,1,20,5,15,5,0x00,balanced,1,1
+2026-11-26T11:17:02,after set-ec 20 (stopped),10,100,0x94,1,20,5,15,5,0x00,balanced,1,1
+2026-11-26T11:17:10,before set-msr,10,100,0x94,1,20,5,15,5,0x00,balanced,1,1
+2026-11-26T11:17:10,after set-msr 10,10,100,0x94,1,20,5,15,5,0x00,balanced,1,1
+2026-11-26T11:17:13,after set-msr 10 (stopped),10,100,0x94,1,20,5,15,5,0x00,balanced,1,1
+2026-11-26T11:17:49,T4.3 unplugged,10,100,0x94,1,20,5,15,5,0x00,balanced,1,1
+2026-11-26T11:18:48,T4.3 unplugged,10,100,0x94,1,20,5,15,5,0x00,balanced,0,1
+2026-11-26T11:19:28,T4.3 unplugged,10,100,0x94,1,20,5,15,5,0x00,balanced,0,0
+2026-11-26T11:20:09,T4.3 unplugged,10,100,0x94,1,20,5,15,5,0x00,balanced,0,0
+2026-11-26T11:20:32,before set-ec,10,100,0x94,1,20,5,15,5,0x00,balanced,0,0
+2026-11-26T11:20:32,after set-ec off,10,100,0x00,0,0,5,15,5,0x00,balanced,0,0
+2026-11-26T11:20:33,after set-ec off,5,100,0x00,0,0,5,15,5,0x00,balanced,0,0
+2026-11-26T11:20:35,after set-ec off (stopped),5,100,0x00,0,0,5,15,5,0x00,balanced,0,0
+2026-11-26T11:20:58,before set-msr,5,100,0x00,0,0,5,15,5,0x00,balanced,0,0
+2026-11-26T11:20:58,after set-msr 10,10,100,0x00,0,0,5,15,5,0x00,balanced,0,0
+2026-11-26T11:21:10,after set-msr 10,10,100,0x00,0,0,5,15,5,0x00,balanced,0,1
+2026-11-26T11:21:59,after set-msr 10 (end),10,100,0x00,0,0,5,15,5,0x00,balanced,0,1
+2026-11-26T11:29:53,T4.1 latch on,10,100,0x00,0,0,5,15,5,0x00,balanced,1,1
+2026-11-26T11:30:01,T4.2 native office,10,100,0x00,0,0,5,15,5,0x00,balanced,1,1
+2026-11-26T11:30:32,T4.2 native office,10,100,0x00,0,0,5,15,5,0x00,balanced,0,1
+2026-11-26T11:30:51,T4.2 back to preset,10,100,0x00,0,0,5,15,5,0x00,balanced,1,1
+2026-11-26T11:31:05,before set-msr,10,100,0x00,0,0,5,15,5,0x00,balanced,1,1
+2026-11-26T11:31:05,after set-msr 10,10,100,0x00,0,0,5,15,5,0x00,balanced,1,1
+2026-11-26T11:31:07,after set-msr 10 (stopped),10,100,0x00,0,0,5,15,5,0x00,balanced,1,1
+2026-11-26T11:33:12,before set-msr,5,100,0x00,0,0,5,15,5,0x00,balanced,1,1
+2026-11-26T11:33:12,after set-msr 10,10,100,0x00,0,0,5,15,5,0x00,balanced,1,1
+2026-11-26T11:34:13,after set-msr 10 (end),10,100,0x00,0,0,5,15,5,0x00,balanced,1,1

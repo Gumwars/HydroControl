@@ -41,6 +41,11 @@ DEFAULT_PROFILE = {
     "cpu_pl2": 75,
     "cpu_pl4": 124,          # even: PL4 is stored at half scale, odd watts round down
     "gpu_ctgp_offset": 0,
+    # CPU temperature limit (TCC offset): the CPU throttles at TjMax minus the
+    # offset. Written to the EC at 0x0786 as Control Center does; enable False
+    # hands it back to the firmware's per-mode default. None leaves it alone.
+    "cpu_tcc_enable": None,
+    "cpu_tcc_offset": None,
     "fn_lock": False,
     "super_key_enable": True,
     "touchpad_toggle_enable": True,

@@ -34,6 +34,7 @@ SINGLES = [
     (0x0783, "PL1_SETTING  (0 = firmware default)", {}),
     (0x0784, "PL2_SETTING  (0 = firmware default)", {}),
     (0x0785, "PL4_SETTING  (0 = firmware default, half scale)", {}),
+    (0x0786, "TCC_OFFSET   (b7 enable, b6:0 degrees; 0 = firmware default)", {}),
     (0x046A, "PL1_LIVE", {}),
     (0x046B, "PL2_LIVE", {}),
     (0x046E, "PL3_LIVE", {}),

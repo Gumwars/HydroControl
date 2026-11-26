@@ -20,6 +20,7 @@ this module is therefore read back and verified.
 
 from __future__ import annotations
 
+import fcntl
 import os
 import threading
 import time
@@ -39,9 +40,24 @@ REG_TDP_BASE       = 0x0783
 # OEM software does. Going faster stops the fans -- see EC._call.
 EC_DELAY_S = 0.006
 
+# Cross-process half of EC._lock. The daemon and a probe run side by side, and
+# /proc/acpi/call is one global request/response file: without this, each can
+# read the other's answer.
+LOCK_PATH = "/run/hydroc/ec.lock"
+
 REG_PL1_SETTING    = 0x0783     # watts, 0 = firmware default
 REG_PL2_SETTING    = 0x0784
 REG_PL4_SETTING    = 0x0785     # NOTE: half-scale when double-PL4 is set
+# CPU TCC offset: b7 enable, b6:0 degrees below TjMax. Control Center's
+# SetCpuTccOffset(offset, enable) writes 0x80|offset, or 0 when disabled, here
+# and nowhere else -- never the CPU's MSR. ADDR_TimAP_TccOffset_Setting in its
+# RamFan1p5 map; the generic map reuses 0x0786 for a fan PWM default, but this
+# machine runs MyFanManager_RamFan1p5 (TCC-SERVICE-FINDINGS.md).
+REG_TCC_OFFSET     = 0x0786
+TCC_ENABLE         = 0x80
+TCC_OFFSET_MAX     = 63         # the MSR field is 6 bits; the kernel agrees
+# The EC's per-mode default offsets, read by GetTccDefaultValue.
+REG_TCC_DEFAULTS   = {"balanced": 0x07D8, "office": 0x07D9, "beast": 0x07DA}
 REG_FAN_CTRL       = 0x078E     # b3 charging-profile capable, b6 fan control
 REG_OEM_4          = 0x07A6     # bits 5:4 charging profile
 REG_CHARGE_CTRL    = 0x07B9     # bits 0:6 charge threshold
@@ -115,6 +131,20 @@ class EC:
 
     _lock = threading.RLock()          # class-level: one EC, one lock
     _last_access = 0.0                 # class-level: the EC is one device
+    _lockfd: int | None = None         # class-level: the cross-process lock
+
+    @classmethod
+    def _process_lock(cls) -> int | None:
+        """The cross-process lock's fd, opened once; None where it cannot be
+        (not root -- and then the EC is unavailable anyway)."""
+        if cls._lockfd is None:
+            try:
+                os.makedirs(os.path.dirname(LOCK_PATH), mode=0o755, exist_ok=True)
+                cls._lockfd = os.open(LOCK_PATH, os.O_RDWR | os.O_CREAT
+                                      | os.O_CLOEXEC | os.O_NOFOLLOW, 0o600)
+            except OSError:
+                cls._lockfd = -1
+        return cls._lockfd if cls._lockfd >= 0 else None
 
     def __init__(self, path: str = CALL):
         self.path = path
@@ -131,6 +161,17 @@ class EC:
 
     def _call(self, expr: str) -> str:
         with self._lock:
+            # Another process holding the lock has just used the EC, and its
+            # access is not in our _last_access: give the EC its full settling
+            # time after taking the lock from it.
+            fd = EC._process_lock()
+            waited = False
+            if fd is not None:
+                try:
+                    fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                except BlockingIOError:
+                    fcntl.flock(fd, fcntl.LOCK_EX)
+                    waited = True
             # The EC needs settling time between accesses. uniwill-acpi.c:
             #
             #   /* The OEM software always sleeps up to 6 ms after reading/
@@ -151,7 +192,9 @@ class EC:
             # Not optional, and not a probe-only concern: read_state() reads a
             # dozen registers back to back, once per UI poll.
             elapsed = time.monotonic() - EC._last_access
-            if elapsed < EC_DELAY_S:
+            if waited:
+                time.sleep(EC_DELAY_S)
+            elif elapsed < EC_DELAY_S:
                 time.sleep(EC_DELAY_S - elapsed)
             try:
                 with open(self.path, "w") as fh:
@@ -162,6 +205,8 @@ class EC:
                 raise ECUnavailable(f"{self.path}: {e}") from e
             finally:
                 EC._last_access = time.monotonic()
+                if fd is not None:
+                    fcntl.flock(fd, fcntl.LOCK_UN)
 
     # -- primitives -------------------------------------------------------
 
@@ -309,6 +354,35 @@ class EC:
             if idx == 2 and self.has_double_pl4():
                 value = watts // 2
             self.write_verify(REG_TDP_BASE + idx, value)
+
+    # -- CPU temperature limit ---------------------------------------------
+
+    def get_tcc_offset(self) -> dict:
+        """{"enabled", "offset", "raw"} from 0x0786. Offset is 0 when disabled."""
+        raw = self.read(REG_TCC_OFFSET)
+        on = bool(raw & TCC_ENABLE)
+        return {"enabled": on, "offset": (raw & 0x7F) if on else 0, "raw": raw}
+
+    def set_tcc_offset(self, enabled: bool, offset: int = 0) -> None:
+        """Byte for byte what Control Center writes: 0x80|offset, or 0.
+
+        0 hands the limit back to the firmware. What the EC then applies, and
+        whether it re-applies its own value on its own, is what
+        tcc_survival_probe.py measures.
+        """
+        if enabled:
+            if not 0 <= offset <= TCC_OFFSET_MAX:
+                raise ValueError(f"TCC offset {offset} out of range (0-{TCC_OFFSET_MAX})")
+            value = TCC_ENABLE | offset
+        else:
+            value = 0
+        with self._lock:
+            self.write_verify(REG_TCC_OFFSET, value)
+
+    def get_tcc_defaults(self) -> dict:
+        """The EC's stored default offset for each of its own modes."""
+        with self._lock:
+            return {m: self.read(a) for m, a in REG_TCC_DEFAULTS.items()}
 
     # -- battery -----------------------------------------------------------
 

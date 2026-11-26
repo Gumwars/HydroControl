@@ -26,7 +26,7 @@ import time
 from dataclasses import dataclass, field
 
 from . import fancurve
-from . import nativemode, gpumode
+from . import nativemode, gpumode, tcc
 from .ec import EC, ECUnavailable, ECWriteRejected
 
 # What a native mode takes over, listed once because apply() and drift() have
@@ -62,6 +62,13 @@ TOGGLES = ("fn_lock", "super_key_enable", "touchpad_toggle_enable",
 
 # The driver rejects both of these being on at once.
 EXCLUSIVE = ("ac_auto_boot", "usb_powershare_high")
+
+
+def _tcc_label(enabled, offset) -> str:
+    """How a TCC setting reads in an apply log: "firmware" or "-10 °C"."""
+    if enabled is None:
+        return "unknown"
+    return f"-{offset} °C" if enabled else "firmware"
 
 
 @dataclass
@@ -340,6 +347,12 @@ class Hardware:
         v = _read(os.path.join(PLATFORM, "ctgp_offset"))
         state["gpu_ctgp_offset"] = int(v) if v else None
 
+        # The TCC offset the CPU is running, from the kernel, beside the one
+        # set at 0x0786 below. Not settings: what the CPU holds is the EC's
+        # business, and the gap between the two is what is being measured.
+        state["cpu_tcc_applied"] = tcc.applied()
+        state["cpu_tjmax"] = tcc.tjmax()
+
         # Firmware GPU mode. Read from the EFI variables rather than stored
         # intent -- and separately from the live PCI topology, so "written but
         # not yet rebooted" is visible instead of looking like a failure.
@@ -367,6 +380,9 @@ class Hardware:
                 state["cpu_pl2_live"] = pl["pl2_live"]
                 state["cpu_pl4_live"] = pl["pl4_live"]
                 state["charge_cycles"] = self.ec.get_charge_cycles()
+                t = self.ec.get_tcc_offset()
+                state["cpu_tcc_enable"] = t["enabled"]
+                state["cpu_tcc_offset"] = t["offset"]
                 # Read the enable bit rather than trusting what we last wrote.
                 # A power cycle clears it, so stored intent goes stale on every
                 # boot -- and reporting "Manual" while the firmware is actually
@@ -400,6 +416,10 @@ class Hardware:
         persisting. Same failure mode as a renamed key (see LEGACY_KEYS).
         """
         out = dict(desired)
+        # Disabled, 0x0786 holds 0 whatever offset the profile kept, so a
+        # remembered offset under a disabled limit would be drift forever.
+        if out.get("cpu_tcc_enable") is False:
+            out["cpu_tcc_offset"] = 0
         if out.get("cpu_pl4") is not None:
             try:
                 out["cpu_pl4"] = self.ec.quantize_power_limit(
@@ -511,6 +531,40 @@ class Hardware:
             if not dry_run:
                 try:
                     self.ec.set_power_limit(which, int(desired[key]))
+                except (ECUnavailable, ECWriteRejected, ValueError) as e:
+                    ch.ok, ch.error = False, str(e)
+            changes.append(ch)
+
+        # 2b. CPU temperature limit, through the EC as Control Center sets it.
+        #     Enable and offset share one byte, so one write covers both, and
+        #     a key the profile leaves unset keeps what the EC holds. Not
+        #     NATIVE_OWNED: Control Center writes it in every mode.
+        #
+        #     The EC puts 0x0786 into the CPU only when the byte changes
+        #     (TCC-OFFSET-TESTS.md, T2/T3), and a boot resets the CPU to the
+        #     mode default (T4). So an EC byte that already matches proves
+        #     nothing: if the CPU is not running the enabled offset, the byte is
+        #     dropped to 0 and set again, giving the EC the change it acts on.
+        #     Two single writes, never a loop.
+        en = desired.get("cpu_tcc_enable")
+        en = bool(actual.get("cpu_tcc_enable")) if en is None else bool(en)
+        off = desired.get("cpu_tcc_offset")
+        off = (actual.get("cpu_tcc_offset") or 0) if off is None else int(off)
+        stale = (desired.get("cpu_tcc_enable") is True
+                 and actual.get("cpu_tcc_enable") is True
+                 and actual.get("cpu_tcc_offset") == off
+                 and actual.get("cpu_tcc_applied") is not None
+                 and actual["cpu_tcc_applied"] != off)
+        if differs("cpu_tcc_enable") or differs("cpu_tcc_offset") or stale:
+            was = _tcc_label(actual.get("cpu_tcc_enable"), actual.get("cpu_tcc_offset"))
+            if stale:
+                was += f" (CPU at -{actual['cpu_tcc_applied']} °C)"
+            ch = Change("cpu_tcc_offset", was, _tcc_label(en, off))
+            if not dry_run:
+                try:
+                    if stale:
+                        self.ec.set_tcc_offset(False)
+                    self.ec.set_tcc_offset(en, off)
                 except (ECUnavailable, ECWriteRejected, ValueError) as e:
                     ch.ok, ch.error = False, str(e)
             changes.append(ch)

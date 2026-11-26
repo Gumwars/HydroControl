@@ -7,6 +7,8 @@ what you reach for often:
 - **Live** — CPU and GPU temperature, package power with a one-minute trace,
   fan speeds
 - **Power mode** — your presets, or the machine's own modes
+- **CPU temperature limit** — type the temperature the CPU should throttle at
+  and press Set (95 °C is an offset of −5); the header shows what is in force
 - **Battery** — charging mode, charge limit, Power Saver
 - **Fans** — firmware control or a curve, and which preset curve
 - **Graphics** — the current mode; switching opens the full app, because it is

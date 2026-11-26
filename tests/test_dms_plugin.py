@@ -65,6 +65,27 @@ class DaemonContractTest(unittest.TestCase):
     def test_it_reads_the_token_where_the_daemon_writes_it(self):
         self.assertIn(f'path: "{apitoken.TOKEN_PATH}"', self.qml)
 
+    def _tcc_card(self):
+        i = self.qml.index('title: "CPU temperature limit"')
+        return self.qml[i:self.qml.index("// ── battery", i)]
+
+    def test_the_temperature_limit_uses_the_daemons_keys(self):
+        card = self._tcc_card()
+        self.assertIn("cpu_tcc_enable: true", card)
+        self.assertIn("cpu_tcc_offset: root.tjmax - t", card)
+
+    def test_the_temperature_limit_writes_only_on_set_or_enter(self):
+        # Applying on blur fought the user mid-entry in the app.
+        card = self._tcc_card()
+        self.assertIn("onAccepted: tccCard.set()", card)
+        self.assertIn("onClicked: tccCard.set()", card)
+        for auto in ("onEditingFinished", "onTextChanged", "onTextEdited: tccCard.set",
+                     "onFocusStateChanged"):
+            self.assertNotIn(auto, card)
+
+    def test_a_refresh_never_overwrites_the_field_being_typed_in(self):
+        self.assertIn("if (!tccField.inputFocused)", self._tcc_card())
+
     def test_the_mux_is_never_switched_from_the_flyout(self):
         # A firmware write that needs a reboot does not belong one click away
         # in a panel; the flyout opens the app for it.

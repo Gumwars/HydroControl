@@ -166,6 +166,14 @@ PluginComponent {
         const cur = JSON.stringify(hw.fan_curve_cpu || null);
         return curveNames.findIndex(k => JSON.stringify(fan.presets[k].cpu) === cur);
     }
+    // CPU temperature limit: entered as the temperature, stored and written as
+    // the offset below TjMax (EC 0x0786; TCC-OFFSET-TESTS.md).
+    readonly property int tjmax: hw.cpu_tjmax || 100
+    readonly property int tccRange: 40
+    readonly property bool tccKnown: hw.cpu_tcc_enable !== undefined
+    readonly property int tccSet: tjmax - (hw.cpu_tcc_enable ? (hw.cpu_tcc_offset || 0)
+                                                               : (hw.cpu_tcc_applied || 0))
+    readonly property bool tccApplied: typeof hw.cpu_tcc_applied === "number"
     readonly property real chartMax: Math.max((hw.cpu_pl1 || 0) * 1.25,
                                               ...pkgHist, 20)
 
@@ -439,6 +447,108 @@ PluginComponent {
                             if (selected && index !== root.nativeIndex)
                                 root.post("/api/native", { mode: root.nativeList[index].id });
                         }
+                    }
+                }
+
+                // ── CPU temperature limit ─────────────────────────────────
+                // Written only on Set or Enter. The app's first version applied
+                // on blur and on its spinner, and fought the user mid-entry; the
+                // field here is only refreshed from the hardware while it does
+                // not have focus.
+                Card {
+                    id: tccCard
+                    title: "CPU temperature limit"
+                    note: root.tccApplied ? `In force ${root.tjmax - root.hw.cpu_tcc_applied} °C` : ""
+                    visible: root.tccKnown
+                    property string error: ""
+
+                    function set() {
+                        const raw = tccField.text.trim(), t = Number(raw), lo = root.tjmax - root.tccRange;
+                        if (!/^\d+$/.test(raw) || t < lo || t > root.tjmax) {
+                            error = `Enter a whole number from ${lo} to ${root.tjmax} °C`;
+                            return;
+                        }
+                        error = "";
+                        if (root.tjmax - t !== root.hw.cpu_tcc_offset)
+                            root.apply({ cpu_tcc_enable: true, cpu_tcc_offset: root.tjmax - t });
+                    }
+
+                    DC.DToggle {
+                        width: parent.width
+                        text: root.hw.cpu_tcc_enable ? "Throttle at a set temperature" : "Firmware default"
+                        checked: !!root.hw.cpu_tcc_enable
+                        enabled: !root.readOnly && !root.busy
+                        // Turning it on starts from what the CPU already runs,
+                        // so the switch alone changes nothing it does.
+                        onToggled: on => {
+                            tccCard.error = "";
+                            root.apply(on ? { cpu_tcc_enable: true,
+                                              cpu_tcc_offset: Math.min(root.tccRange, root.hw.cpu_tcc_applied ?? 5) }
+                                          : { cpu_tcc_enable: false });
+                        }
+                    }
+
+                    Row {
+                        width: parent.width
+                        spacing: Theme.spacingS
+                        visible: !!root.hw.cpu_tcc_enable
+
+                        DC.StyledText {
+                            id: tccLabel
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: "Throttle at"
+                            color: Theme.surfaceVariantText
+                        }
+
+                        DC.DTextField {
+                            id: tccField
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: parent.width - tccLabel.width - tccUnit.width - tccSetButton.width - Theme.spacingS * 3
+                            maximumLength: 3
+                            isError: tccCard.error.length > 0
+                            enabled: !root.readOnly
+                            validator: IntValidator { bottom: 0; top: 999 }
+                            onAccepted: tccCard.set()
+                            onTextEdited: tccCard.error = ""
+                            Component.onCompleted: text = String(root.tccSet)
+
+                            Connections {
+                                target: root
+                                function onHwChanged() {
+                                    if (!tccField.inputFocused)
+                                        tccField.text = String(root.tccSet);
+                                }
+                            }
+                        }
+
+                        DC.StyledText {
+                            id: tccUnit
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: "°C"
+                            color: Theme.surfaceVariantText
+                        }
+
+                        DC.DButton {
+                            id: tccSetButton
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: "Set"
+                            variant: "tonal"
+                            enabled: !root.readOnly && !root.busy
+                            onClicked: tccCard.set()
+                        }
+                    }
+
+                    DC.StyledText {
+                        width: parent.width
+                        wrapMode: Text.WordWrap
+                        font.pixelSize: Theme.fontSizeSmall
+                        readonly property bool mismatch: !!root.hw.cpu_tcc_enable && root.tccApplied
+                                                         && root.hw.cpu_tcc_applied !== root.hw.cpu_tcc_offset
+                        color: tccCard.error ? Theme.error : mismatch ? Theme.warning : Theme.surfaceVariantText
+                        text: tccCard.error ? tccCard.error
+                            : mismatch ? `The CPU is running ${root.tjmax - root.hw.cpu_tcc_applied} °C, not the ${root.tjmax - root.hw.cpu_tcc_offset} °C set.`
+                            : root.hw.cpu_tcc_enable ? `${root.tjmax - root.tccRange}–${root.tjmax} °C. An offset of −${root.hw.cpu_tcc_offset || 0} below TjMax ${root.tjmax} °C.`
+                            : `The firmware's default for the current mode.`
                     }
                 }
 

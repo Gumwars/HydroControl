@@ -217,17 +217,37 @@ class CardTest(unittest.TestCase):
         with open(os.path.join(root, "hydroc", "ui", "index.html"), encoding="utf8") as fh:
             self.src = fh.read()
 
-    def test_the_limit_is_typed_as_a_temperature(self):
-        self.assertIn('type="number" class="tempin" id="tcc"', self.src)
+    def _bind(self):
+        i = self.src.index("if(tccr){")
+        return self.src[i:self.src.index("$('#tccset').onclick=set;", i)]
+
+    def test_the_limit_is_typed_as_a_temperature_with_no_spinner(self):
+        # A number input's arrows fought the user mid-entry; text has none.
+        self.assertIn('type="text" class="tempin" id="tcc" data-keep', self.src)
+        self.assertNotIn('type="number" class="tempin"', self.src)
         self.assertNotIn('type="range" id="tcc"', self.src)
+
+    def test_only_set_or_enter_writes(self):
+        b = self._bind()
+        self.assertIn('id="tccset"', self.src)
+        self.assertIn("e.key==='Enter'", b)
+        for auto in ("tccr.onblur", "tccr.onchange", "setTimeout"):
+            self.assertNotIn(auto, b, f"{auto} would write without Set")
+        # Typing only records the draft.
+        oninput = b[b.index("tccr.oninput"):b.index("const set=")]
+        self.assertNotIn("applySettings", oninput)
 
     def test_the_temperature_is_converted_to_the_offset(self):
         # 95 on a 100 degree part is an offset of 5.
-        self.assertIn("cpu_tcc_offset:sent", self.src)
-        self.assertIn("sent=tj-t", self.src)
+        self.assertIn("cpu_tcc_offset:tj-t", self._bind())
 
     def test_only_whole_degrees_inside_the_range_are_sent(self):
-        self.assertIn("Number.isInteger(t)&&t>=lo&&t<=tj", self.src)
+        self.assertIn(r"!/^\d+$/.test(raw)||t<lo||t>tj", self._bind())
+
+    def test_a_refresh_keeps_what_is_being_typed(self):
+        # The draft lives in S, and render() restores focus to data-keep.
+        self.assertIn("value=\"${esc(draft??cur)}\"", self.src)
+        self.assertIn("ae.hasAttribute('data-keep')", self.src)
 
 
 class CrossProcessLockTest(unittest.TestCase):

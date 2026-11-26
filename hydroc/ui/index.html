@@ -259,6 +259,7 @@ input[type=range]:disabled{opacity:.4;cursor:not-allowed}
   font-variant-numeric:tabular-nums}
 .tempin:focus{outline:1px solid var(--accent-ring);background:var(--surface-3)}
 .tempin[aria-invalid="true"]{border-color:var(--danger)}
+.tccset{display:inline-flex;align-items:center;gap:8px}
 .hexin:focus{outline:1px solid var(--accent-ring);background:var(--surface-3)}
 /* R/G/B slider tracks tinted so the axis being dragged is obvious */
 .ch[data-ch=r]{background:linear-gradient(90deg,#000,#FF3B30)}
@@ -634,10 +635,17 @@ function sizeCurves(){
     c.style.setProperty('--cs',((c.clientWidth||CW)/CW).toFixed(3)));
 }
 function render(){
+  // A rebuild replaces every element, so a field being typed in loses focus
+  // and caret on each 10 s refresh. Fields marked data-keep -- whose draft
+  // survives the rebuild in S -- get both back.
+  const ae=document.activeElement, keep=ae&&ae.id&&ae.hasAttribute('data-keep')?ae.id:null;
+  const caret=keep?[ae.selectionStart,ae.selectionEnd]:null;
   renderNav();
   renderTitlebar();renderVizSwitch();renderHealth();renderBanners();
   $('#view').innerHTML=({overview:vOverview,perf:vPerf,batt:vBatt,fans:vFans,light:vLight,lpp:vLpp,sys:vSys})[S.section]();
   paintTelemetry();bind();syncRanges();sizeCurves();
+  if(keep){const el=document.getElementById(keep);
+    if(el){el.focus();try{el.setSelectionRange(...caret);}catch(_){}}}
 }
 // Title bar: the device it is running on, and the three things that decide
 // whether a setting takes effect -- the daemon, the custom-profile latch (PL
@@ -1337,6 +1345,28 @@ function vPerf(){
 // The "in force" line is what the CPU itself reports through the kernel, which
 // only the EC puts there, and the card says so when it differs from the set one.
 const TCC_RANGE=40;                 // offsets 0..40: a limit from TjMax-40 to TjMax
+// Nothing is written until Set (or Enter). The field used to apply on blur
+// and after the spinner settled, and the 10 s state refresh rebuilt it under
+// the user's cursor -- three ways to fight someone mid-entry. Plain text, so
+// no spinner; what is typed lives in S.tccDraft, so a refresh keeps it; and
+// data-keep has render() put focus and the caret back.
+function tccField(tj,off){
+  const lo=tj-TCC_RANGE, cur=String(tj-off);
+  // A draft the hardware now matches is done; until then it stays, so the
+  // field does not flick back to the old value while Set is in flight.
+  if(S.tccDraft!=null&&S.tccDraft.trim()===cur)S.tccDraft=null;
+  const draft=S.tccDraft;
+  const pending=draft!=null&&draft.trim()!==cur;
+  const msg=S.tccError?`<span style="color:var(--color-danger)">${esc(S.tccError)}</span>`
+    :pending?`Set to apply ${esc(draft.trim())} °C.`
+    :`${lo}–${tj} °C. TjMax is ${tj} °C, so this is an offset of −${off}.`;
+  return `<div class="row"><label class="lbl" for="tcc">Throttle at</label>
+      <span class="tccset"><input type="text" class="tempin" id="tcc" data-keep inputmode="numeric"
+        maxlength="3" autocomplete="off" spellcheck="false" value="${esc(draft??cur)}"
+        aria-invalid="${S.tccError?'true':'false'}"> <span class="lbl">°C</span>
+        <button class="btn btn-secondary" id="tccset">Set</button></span></div>
+    <div class="lbl" id="tccmsg">${msg}</div>`;
+}
 function tccCard(){
   const st=S.state, tj=st.cpu_tjmax||100, on=!!st.cpu_tcc_enable, ap=st.cpu_tcc_applied;
   if(st.cpu_tcc_enable===undefined&&ap==null)return '';
@@ -1346,10 +1376,7 @@ function tccCard(){
       <div class="lbl">${on?'The CPU slows itself down at this temperature'
         :'Firmware default for the current mode'}</div></div>
       <button class="sw" id="tccon" aria-pressed="${on}"${st.cpu_tcc_enable===undefined?' disabled':''}><i></i></button></div>
-    ${on?`<div class="row"><label class="lbl" for="tcc">Throttle at</label>
-      <span><input type="number" class="tempin" id="tcc" min="${tj-TCC_RANGE}" max="${tj}" step="1"
-        value="${tj-off}" inputmode="numeric"> <span class="lbl">°C</span></span></div>
-      <div class="lbl" id="tccmsg">${tj-TCC_RANGE}–${tj} °C. TjMax is ${tj} °C, so this is an offset of −${off}.</div>`:''}
+    ${on?tccField(tj,off):''}
     <div class="lbl">In force now: <span class="kv">${ap==null?'—':`throttles at ${tj-ap} °C`}</span>${ap==null?'':` (−${ap})`}.${
       on&&ap!=null&&ap!==off?' <b>That is not what is set</b> — the EC has not applied it, or has put its own value back.':''}</div>
   </div>`;
@@ -1791,28 +1818,26 @@ function bind(){
   // Turning the limit on starts from the offset already in force, so the
   // switch alone changes nothing the CPU does.
   const tccon=$('#tccon'),tccr=$('#tcc');
-  if(tccon)tccon.onclick=()=>applySettings(S.state.cpu_tcc_enable
+  if(tccon)tccon.onclick=()=>{S.tccDraft=null;S.tccError=null;applySettings(S.state.cpu_tcc_enable
     ?{cpu_tcc_enable:false}
-    :{cpu_tcc_enable:true,cpu_tcc_offset:Math.min(40,S.state.cpu_tcc_applied??5)});
+    :{cpu_tcc_enable:true,cpu_tcc_offset:Math.min(40,S.state.cpu_tcc_applied??5)});};
   // Typed as a temperature, written as the offset. Enter, leaving the field,
   // or a pause after the spinner arrows applies it -- never one EC write per
   // arrow click.
   if(tccr){
     const tj=S.state.cpu_tjmax||100, lo=tj-TCC_RANGE;
-    let timer=null, sent=null;
-    const commit=()=>{
-      clearTimeout(timer);
-      const t=Number(tccr.value), ok=Number.isInteger(t)&&t>=lo&&t<=tj;
-      tccr.setAttribute('aria-invalid',ok?'false':'true');
-      if(!ok){$('#tccmsg').textContent=`Enter a whole number from ${lo} to ${tj} °C.`;return;}
-      // Enter then leaving the field would otherwise send it twice.
-      if(tj-t===S.state.cpu_tcc_offset||tj-t===sent)return;
-      sent=tj-t;
-      applySettings({cpu_tcc_enable:true,cpu_tcc_offset:sent});
+    tccr.oninput=()=>{S.tccDraft=tccr.value;S.tccError=null;
+      tccr.setAttribute('aria-invalid','false');};
+    const set=()=>{
+      const raw=tccr.value.trim(), t=Number(raw);
+      if(!/^\d+$/.test(raw)||t<lo||t>tj){
+        S.tccDraft=tccr.value;S.tccError=`Enter a whole number from ${lo} to ${tj} °C.`;render();return;}
+      S.tccError=null;
+      if(tj-t===S.state.cpu_tcc_offset){S.tccDraft=null;render();return;}
+      applySettings({cpu_tcc_enable:true,cpu_tcc_offset:tj-t});
     };
-    tccr.onkeydown=e=>{if(e.key==='Enter')commit();};
-    tccr.onchange=()=>{clearTimeout(timer);timer=setTimeout(commit,700);};
-    tccr.onblur=commit;
+    tccr.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();set();}};
+    $('#tccset').onclick=set;
   }
   const ch=$('#charge');
   if(ch)ch.onclick=e=>{const b=e.target.closest('[data-v]');if(b)applySettings({charge_profile:b.dataset.v});};

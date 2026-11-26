@@ -1,5 +1,56 @@
 # Changelog
 
+## [0.9.11] — 2026-11-26
+
+### CPU temperature limit
+
+Performance has a new card: **CPU temperature limit**. Type the temperature the
+CPU should slow itself down at and press Set. On this CPU, TjMax is 100 °C, so
+95 is an offset of −5 and 85 is −15. It accepts whole degrees from 60 to 100 °C.
+Switch it off to hand the limit back to the firmware, whose default for
+Balanced is 95 °C (−5). The card also shows the limit the CPU is actually
+running, and says so when that isn't the one you set.
+
+**It is set the way Control Center sets it.** Read from the Windows service:
+the limit lives at EC `0x0786` (bit 7 enable, the low bits the offset), and
+Control Center writes it there on every profile apply and nowhere else.
+Measured on this machine:
+
+- the EC puts the setting into the CPU within a second of it changing;
+- it does so only when that byte changes, so a boot, which resets the CPU to
+  the firmware's default, leaves the CPU disagreeing with the EC;
+- unplugging AC, toggling the custom profile and an s2idle suspend leave it
+  alone.
+
+So the daemon re-applies it at boot and resume, and re-writes it whenever the
+CPU isn't running the enabled limit, even if the EC byte already matches. The
+runs are in `TCC-OFFSET-TESTS.md`.
+
+### HydroControl in the DMS bar
+
+`dms-plugin/hydrocontrol` is a bar widget and flyout for DMS, on Hyprland or
+niri. The bar shows the CPU temperature or package power. The flyout carries
+the controls reached for most:
+
+- live temperatures, package power with a one-minute trace, and fan speeds;
+- power mode, your presets or the machine's own;
+- charging mode, the charge limit and Power Saver;
+- fans, firmware or a preset curve;
+- the GPU mode, shown only: switching it opens the app, because it is a
+  firmware write that needs a reboot.
+
+It uses the shell's own theme, and is a client of the daemon running as you.
+See its README to install it.
+
+### Corrections
+
+**A probe and the daemon could read each other's EC answers.**
+`/proc/acpi/call` is one shared request/response file, and only threads within
+one process were serialised. Every EC access now also takes a lock in
+`/run/hydroc`, with the 6 ms settling time kept across processes.
+
+819 tests.
+
 ## [0.9.10] — 2026-11-23
 
 ### The window no longer costs a core to leave open

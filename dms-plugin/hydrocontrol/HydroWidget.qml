@@ -361,8 +361,25 @@ PluginComponent {
                 }
             }
 
-            Column {
+            // The popout takes its height from its content, uncapped, so a
+            // long flyout ran off the bottom of the screen. The body is as tall
+            // as its content but never taller than the screen leaves room for,
+            // and scrolls past that with DMS's own scrollbar.
+            DC.DFlickable {
+                id: body
                 width: parent.width
+                readonly property real room: (root.parentScreen ? root.parentScreen.height : 900)
+                                             - root.barThickness - pop.headerHeight
+                                             - pop.detailsHeight - Theme.spacingL * 4
+                height: Math.min(content.implicitHeight, Math.max(240, room))
+                contentWidth: width
+                contentHeight: content.implicitHeight
+                clip: true
+                boundsBehavior: Flickable.StopAtBounds
+
+            Column {
+                id: content
+                width: body.width
                 spacing: Theme.spacingS
                 opacity: root.online ? 1 : 0.5
                 enabled: root.online
@@ -721,6 +738,7 @@ PluginComponent {
                     font.pixelSize: Theme.fontSizeSmall
                     color: root.messageBad ? Theme.error : Theme.surfaceVariantText
                 }
+            }
             }
         }
     }

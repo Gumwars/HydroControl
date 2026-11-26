@@ -86,6 +86,17 @@ class DaemonContractTest(unittest.TestCase):
     def test_a_refresh_never_overwrites_the_field_being_typed_in(self):
         self.assertIn("if (!tccField.inputFocused)", self._tcc_card())
 
+    def test_the_flyout_never_runs_off_the_screen(self):
+        # DMS sizes a popout to its content with no cap, so adding the
+        # temperature limit pushed the last sections off the bottom. The body
+        # scrolls inside a height the screen can hold.
+        pop = self.qml[self.qml.index("popoutContent: Component"):]
+        self.assertIn("DC.DFlickable", pop)
+        self.assertIn("root.parentScreen.height", pop)
+        self.assertIn("height: Math.min(content.implicitHeight", pop)
+        # A fixed popoutHeight would bring back a blank gap on a short flyout.
+        self.assertNotRegex(self.qml, r"popoutHeight:\s*[1-9]")
+
     def test_the_mux_is_never_switched_from_the_flyout(self):
         # A firmware write that needs a reboot does not belong one click away
         # in a panel; the flyout opens the app for it.

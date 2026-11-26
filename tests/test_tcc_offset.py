@@ -209,6 +209,27 @@ class DriftTest(unittest.TestCase):
                                      "cpu_tcc_applied": 5}), {})
 
 
+class CardTest(unittest.TestCase):
+    """The card speaks in degrees; the profile and EC keep the offset."""
+
+    def setUp(self):
+        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        with open(os.path.join(root, "hydroc", "ui", "index.html"), encoding="utf8") as fh:
+            self.src = fh.read()
+
+    def test_the_limit_is_typed_as_a_temperature(self):
+        self.assertIn('type="number" class="tempin" id="tcc"', self.src)
+        self.assertNotIn('type="range" id="tcc"', self.src)
+
+    def test_the_temperature_is_converted_to_the_offset(self):
+        # 95 on a 100 degree part is an offset of 5.
+        self.assertIn("cpu_tcc_offset:sent", self.src)
+        self.assertIn("sent=tj-t", self.src)
+
+    def test_only_whole_degrees_inside_the_range_are_sent(self):
+        self.assertIn("Number.isInteger(t)&&t>=lo&&t<=tj", self.src)
+
+
 class CrossProcessLockTest(unittest.TestCase):
     """The daemon and a probe share /proc/acpi/call; neither may read the
     other's answer."""

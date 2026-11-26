@@ -252,6 +252,13 @@ input[type=range]:disabled{opacity:.4;cursor:not-allowed}
 .hexin{width:88px;background:var(--surface-2);
   color:inherit;border:1px solid var(--border);border-radius:var(--radius-sm);
   padding:4px 8px;font:400 12px var(--font-mono);text-transform:uppercase}
+/* Throttle temperature, typed: a figure, so mono and right-aligned like the
+   readings it sits beside. */
+.tempin{width:72px;background:var(--surface-2);color:inherit;border:1px solid var(--border);
+  border-radius:var(--radius-sm);padding:4px 8px;font:400 13px var(--font-mono);text-align:right;
+  font-variant-numeric:tabular-nums}
+.tempin:focus{outline:1px solid var(--accent-ring);background:var(--surface-3)}
+.tempin[aria-invalid="true"]{border-color:var(--danger)}
 .hexin:focus{outline:1px solid var(--accent-ring);background:var(--surface-3)}
 /* R/G/B slider tracks tinted so the axis being dragged is obvious */
 .ch[data-ch=r]{background:linear-gradient(90deg,#000,#FF3B30)}
@@ -1323,22 +1330,27 @@ function vPerf(){
   </div>
   ${tccCard()}`;
 }
-// CPU temperature limit -- the TCC offset. The CPU throttles at TjMax minus the
-// offset. Set at EC 0x0786 the way Control Center sets it; the "running" line
-// is what the CPU itself reports through the kernel, which only the EC puts
-// there. When the two differ the card says so rather than showing the setting
-// as if it had taken.
+// CPU temperature limit -- the TCC offset, entered as the temperature it
+// produces. The CPU throttles at TjMax minus the offset, so on a 100 °C part
+// typing 95 sets -5 and 85 sets -15. Stored and written as the offset (EC
+// 0x0786, the way Control Center sets it); only this card speaks in degrees.
+// The "in force" line is what the CPU itself reports through the kernel, which
+// only the EC puts there, and the card says so when it differs from the set one.
+const TCC_RANGE=40;                 // offsets 0..40: a limit from TjMax-40 to TjMax
 function tccCard(){
   const st=S.state, tj=st.cpu_tjmax||100, on=!!st.cpu_tcc_enable, ap=st.cpu_tcc_applied;
   if(st.cpu_tcc_enable===undefined&&ap==null)return '';
   const off=on?(st.cpu_tcc_offset||0):0;
   return `<div class="card" style="margin-top:var(--space-4)">
     <div class="row"><div><div class="card-title" style="font-size:14px">CPU temperature limit</div>
-      <div class="lbl">${on?`Throttles at <span class="kv">${tj-off} °C</span>, ${off} below TjMax`
+      <div class="lbl">${on?'The CPU slows itself down at this temperature'
         :'Firmware default for the current mode'}</div></div>
       <button class="sw" id="tccon" aria-pressed="${on}"${st.cpu_tcc_enable===undefined?' disabled':''}><i></i></button></div>
-    ${on?`<input type="range" id="tcc" min="0" max="40" step="1" value="${off}">`:''}
-    <div class="lbl">The CPU is running <span class="kv">${ap==null?'—':'−'+ap+' °C'}</span>${ap==null?'':` and throttles at ${tj-ap} °C`}.${
+    ${on?`<div class="row"><label class="lbl" for="tcc">Throttle at</label>
+      <span><input type="number" class="tempin" id="tcc" min="${tj-TCC_RANGE}" max="${tj}" step="1"
+        value="${tj-off}" inputmode="numeric"> <span class="lbl">°C</span></span></div>
+      <div class="lbl" id="tccmsg">${tj-TCC_RANGE}–${tj} °C. TjMax is ${tj} °C, so this is an offset of −${off}.</div>`:''}
+    <div class="lbl">In force now: <span class="kv">${ap==null?'—':`throttles at ${tj-ap} °C`}</span>${ap==null?'':` (−${ap})`}.${
       on&&ap!=null&&ap!==off?' <b>That is not what is set</b> — the EC has not applied it, or has put its own value back.':''}</div>
   </div>`;
 }
@@ -1782,7 +1794,26 @@ function bind(){
   if(tccon)tccon.onclick=()=>applySettings(S.state.cpu_tcc_enable
     ?{cpu_tcc_enable:false}
     :{cpu_tcc_enable:true,cpu_tcc_offset:Math.min(40,S.state.cpu_tcc_applied??5)});
-  if(tccr)tccr.onchange=()=>applySettings({cpu_tcc_enable:true,cpu_tcc_offset:+tccr.value});
+  // Typed as a temperature, written as the offset. Enter, leaving the field,
+  // or a pause after the spinner arrows applies it -- never one EC write per
+  // arrow click.
+  if(tccr){
+    const tj=S.state.cpu_tjmax||100, lo=tj-TCC_RANGE;
+    let timer=null, sent=null;
+    const commit=()=>{
+      clearTimeout(timer);
+      const t=Number(tccr.value), ok=Number.isInteger(t)&&t>=lo&&t<=tj;
+      tccr.setAttribute('aria-invalid',ok?'false':'true');
+      if(!ok){$('#tccmsg').textContent=`Enter a whole number from ${lo} to ${tj} °C.`;return;}
+      // Enter then leaving the field would otherwise send it twice.
+      if(tj-t===S.state.cpu_tcc_offset||tj-t===sent)return;
+      sent=tj-t;
+      applySettings({cpu_tcc_enable:true,cpu_tcc_offset:sent});
+    };
+    tccr.onkeydown=e=>{if(e.key==='Enter')commit();};
+    tccr.onchange=()=>{clearTimeout(timer);timer=setTimeout(commit,700);};
+    tccr.onblur=commit;
+  }
   const ch=$('#charge');
   if(ch)ch.onclick=e=>{const b=e.target.closest('[data-v]');if(b)applySettings({charge_profile:b.dataset.v});};
 

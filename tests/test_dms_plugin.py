@@ -66,7 +66,7 @@ class DaemonContractTest(unittest.TestCase):
         self.assertIn(f'path: "{apitoken.TOKEN_PATH}"', self.qml)
 
     def _tcc_card(self):
-        i = self.qml.index('title: "CPU temperature limit"')
+        i = self.qml.index('heading: "CPU temperature limit"')
         return self.qml[i:self.qml.index("// ── battery", i)]
 
     def test_the_temperature_limit_uses_the_daemons_keys(self):
@@ -96,6 +96,28 @@ class DaemonContractTest(unittest.TestCase):
         self.assertIn("height: Math.min(content.implicitHeight", pop)
         # A fixed popoutHeight would bring back a blank gap on a short flyout.
         self.assertNotRegex(self.qml, r"popoutHeight:\s*[1-9]")
+
+    def test_the_flyout_is_built_from_the_shells_own_parts(self):
+        # Matched to DMS's native popouts (BatteryPopoutContent.qml), so it
+        # reads as part of the shell rather than a page on top of it.
+        pop = self.qml[self.qml.index("popoutContent: Component"):]
+        for part in ("DC.DCard", "DC.DRingGauge", "StatTile", "PopoutMetrics.contentGap",
+                     "DC.DCollapsibleSection"):
+            self.assertIn(part, pop)
+        self.assertNotIn("Theme.surfaceContainerHigh", self.qml,
+                         "the hand-made card surface is back")
+
+    def test_segmented_groups_fill_the_width_without_check_marks(self):
+        pop = self.qml[self.qml.index("popoutContent: Component"):]
+        groups = pop.count("DC.DButtonGroup {")
+        self.assertGreater(groups, 0)
+        # The group's own property, not Layout.fillWidth inside the section.
+        self.assertEqual(len(re.findall(r"(?m)^\s+fillWidth: true", pop)), groups)
+        self.assertEqual(pop.count("checkEnabled: false"), groups)
+
+    def test_section_titles_use_the_accent(self):
+        sec = self.qml[self.qml.index("component Section:"):self.qml.index("component Caption:")]
+        self.assertIn("color: Theme.primary", sec)
 
     def test_the_mux_is_never_switched_from_the_flyout(self):
         # A firmware write that needs a reboot does not belong one click away

@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Layouts
 import Quickshell
 import Quickshell.Io
 import qs.Common
@@ -269,97 +270,139 @@ PluginComponent {
     // ── flyout ────────────────────────────────────────────────────────────
     popoutWidth: 440
 
-    component Card: DC.StyledRect {
-        id: card
-        default property alias content: inner.data
-        property string title: ""
+    // Built the way DMS builds its own popouts (Modules/DBar/Popouts/
+    // BatteryPopoutContent.qml): a hero DCard, a row of grouped stat tiles,
+    // then DCards with accent section titles and full-width segmented groups.
+    // Nothing of this plugin's own on top of the shell's look.
+
+    function tempRing(c) {
+        if (typeof c !== "number")
+            return Theme.onSurfaceVariant;
+        return c > 88 ? Theme.error : c > 78 ? Theme.warning : Theme.primary;
+    }
+
+    // A section: an accent title, an optional note on the right, then content.
+    component Section: DC.DCard {
+        id: sec
+        default property alias body: col.data
+        property string heading: ""
         property string note: ""
         width: parent ? parent.width : 0
-        height: inner.implicitHeight + Theme.spacingM * 2
-        radius: Theme.cornerRadius
-        color: Theme.surfaceContainerHigh
+        height: col.implicitHeight + pad * 2
+        restRadius: Theme.cornerRadiusL
 
         Column {
-            id: inner
-            x: Theme.spacingM
-            y: Theme.spacingM
-            width: parent.width - Theme.spacingM * 2
+            id: col
+            width: parent.width
             spacing: Theme.spacingS
 
             Item {
                 width: parent.width
-                height: titleText.implicitHeight
-                visible: card.title.length > 0
+                height: headingText.implicitHeight
+                visible: sec.heading.length > 0
 
                 DC.StyledText {
-                    id: titleText
-                    text: card.title
+                    id: headingText
+                    text: sec.heading
                     font.pixelSize: Theme.fontSizeSmall
-                    font.weight: Font.Medium
-                    color: Theme.surfaceVariantText
+                    font.weight: Theme.fontWeightMedium
+                    color: Theme.primary
                 }
 
                 DC.StyledText {
                     anchors.right: parent.right
-                    text: card.note
+                    anchors.baseline: headingText.baseline
+                    text: sec.note
                     font.pixelSize: Theme.fontSizeSmall
                     font.features: { "tnum": 1 }
-                    color: Theme.surfaceVariantText
+                    color: Theme.onSurfaceVariant
                 }
             }
         }
     }
 
-    component Reading: Column {
-        id: rd
-        property string label: ""
-        property string value: "—"
-        property string unit: ""
-        property color valueColor: Theme.surfaceText
-        spacing: 0
+    // A small caption under a control.
+    component Caption: DC.StyledText {
+        width: parent ? parent.width : 0
+        wrapMode: Text.WordWrap
+        font.pixelSize: Theme.fontSizeSmall
+        color: Theme.onSurfaceVariant
+    }
 
-        Row {
-            spacing: 2
+    // DMS's StatTile, as BatteryPopoutContent draws it: a small ring with an
+    // icon, the figure, the label, corners that join the tiles into a group.
+    component StatTile: DC.DCard {
+        id: tile
+        property string label: ""
+        property string value: ""
+        property string iconName: ""
+        property real ratio: -1
+        property color valueColor: Theme.onSurface
+        property color ringColor: Theme.primary
+        property bool first: false
+        property bool last: false
+        readonly property real startRadius: first ? Theme.cornerRadiusL : Theme.groupedListInnerRadius
+        readonly property real endRadius: last ? Theme.cornerRadiusL : Theme.groupedListInnerRadius
+        height: tileColumn.implicitHeight + pad * 2
+        restRadius: Theme.groupedListInnerRadius
+        topLeftRadius: startRadius
+        bottomLeftRadius: startRadius
+        topRightRadius: endRadius
+        bottomRightRadius: endRadius
+
+        Column {
+            id: tileColumn
+            width: parent.width
+            spacing: Theme.spacingXS
+
+            DC.DRingGauge {
+                width: Theme.buttonHeightXS
+                height: width
+                anchors.horizontalCenter: parent.horizontalCenter
+                value: tile.ratio
+                strokeWidth: Theme.outlineWidthFocused + Theme.dividerWidth
+                trackGap: Theme.spacingXXS
+                ringColor: tile.ringColor
+                animated: root.interactionActive
+
+                DC.DIcon {
+                    anchors.centerIn: parent
+                    name: tile.iconName
+                    size: Theme.iconSizeSmall
+                    color: tile.ringColor
+                }
+            }
+
             DC.StyledText {
-                id: valueText
-                text: rd.value
-                font.pixelSize: Theme.fontSizeLarge + 6
+                width: parent.width
+                text: tile.value
+                font.pixelSize: Theme.fontSizeMedium
+                font.weight: Theme.fontWeightMedium
                 font.features: { "tnum": 1 }
-                color: rd.valueColor
+                color: tile.valueColor
+                horizontalAlignment: Text.AlignHCenter
+                elide: Text.ElideRight
             }
+
             DC.StyledText {
-                text: rd.unit
+                width: parent.width
+                text: tile.label
                 font.pixelSize: Theme.fontSizeSmall
-                color: Theme.surfaceVariantText
-                anchors.baseline: valueText.baseline
+                color: Theme.onSurfaceVariant
+                horizontalAlignment: Text.AlignHCenter
+                elide: Text.ElideRight
             }
-        }
-        DC.StyledText {
-            text: rd.label
-            font.pixelSize: Theme.fontSizeSmall
-            color: Theme.surfaceVariantText
         }
     }
+
+    readonly property var presetIcons: ({ office: "eco", balanced: "speed", performance: "bolt" })
+    readonly property var nativeIcons: ({ office: "eco", balanced: "speed", beast: "local_fire_department" })
 
     popoutContent: Component {
         PopoutComponent {
             id: pop
-            headerText: "HydroControl"
-            detailsText: !root.online ? "hydroc-server is not running"
-                : root.readOnly ? "Read-only — /run/hydroc/token cannot be read"
-                : root.activeName + (root.hw.custom_profile ? "" : " · custom profile off")
-
-            headerActions: Component {
-                DC.DActionButton {
-                    iconName: "open_in_new"
-                    tooltipText: "Open HydroControl"
-                    onClicked: {
-                        Quickshell.execDetached(["hydrocontrol"]);
-                        if (pop.closePopout)
-                            pop.closePopout();
-                    }
-                }
-            }
+            headerText: ""
+            detailsText: ""
 
             // The popout takes its height from its content, uncapped, so a
             // long flyout ran off the bottom of the screen. The body is as tall
@@ -380,66 +423,142 @@ PluginComponent {
             Column {
                 id: content
                 width: body.width
-                spacing: Theme.spacingS
-                opacity: root.online ? 1 : 0.5
-                enabled: root.online
+                spacing: PopoutMetrics.contentGap
 
-                // ── live ──────────────────────────────────────────────────
-                Card {
-                    title: "Live"
-                    note: root.online ? `PL1 ${root.num(root.hw.cpu_pl1)} W` : ""
+                // ── hero: the CPU against its limit, and the power trace ──
+                // The flyout's one moment: the ring fills toward TjMax and
+                // turns amber above 78 °C and red above 88 °C, the bar pill's
+                // rule. The trace under it is the package power, PL1 the scale.
+                DC.DCard {
+                    width: parent.width
+                    height: heroColumn.implicitHeight + pad * 2
+                    restRadius: Theme.cornerRadiusL
 
-                    Row {
+                    Column {
+                        id: heroColumn
                         width: parent.width
-                        Reading {
-                            width: parent.width / 3
-                            label: "CPU"
-                            value: root.num(root.tel.cpu_temp_c)
-                            unit: "°C"
-                            valueColor: root.tempColor(root.tel.cpu_temp_c)
-                        }
-                        Reading {
-                            width: parent.width / 3
-                            label: "GPU"
-                            value: root.num(root.tel.gpu_temp_c)
-                            unit: "°C"
-                            valueColor: root.tempColor(root.tel.gpu_temp_c)
-                        }
-                        Reading {
-                            width: parent.width / 3
-                            label: "Package"
-                            value: root.num(root.tel.package_w, 1)
-                            unit: "W"
-                        }
-                    }
+                        spacing: Theme.spacingS
 
-                    // The trace is the flyout's one moment of colour.
-                    DC.DSparkline {
-                        width: parent.width
-                        height: 56
-                        values: root.pkgHist
-                        historyLength: 60
-                        minimum: 0
-                        maximum: root.chartMax
-                        lineColor: Theme.primary
-                    }
+                        Row {
+                            width: parent.width
+                            spacing: Theme.spacingM
 
-                    DC.StyledText {
-                        width: parent.width
-                        text: `Fans  ${root.num(root.tel.fan1_rpm)} · ${root.num(root.tel.fan2_rpm)} rpm`
-                        font.pixelSize: Theme.fontSizeSmall
-                        font.features: { "tnum": 1 }
-                        color: Theme.surfaceVariantText
+                            DC.DRingGauge {
+                                id: heroGauge
+                                width: Theme.iconButtonSize + Theme.spacingM
+                                height: width
+                                anchors.verticalCenter: parent.verticalCenter
+                                value: typeof root.tel.cpu_temp_c === "number"
+                                       ? Math.min(1, root.tel.cpu_temp_c / root.tjmax) : -1
+                                trackGap: Theme.spacingXXS
+                                ringColor: root.tempRing(root.tel.cpu_temp_c)
+                                animated: root.interactionActive
+
+                                DC.DIcon {
+                                    anchors.centerIn: parent
+                                    name: "memory"
+                                    size: Theme.iconSize
+                                    color: root.tempRing(root.tel.cpu_temp_c)
+                                }
+                            }
+
+                            Column {
+                                width: parent.width - heroGauge.width - openButton.width - parent.spacing * 2
+                                anchors.verticalCenter: parent.verticalCenter
+                                spacing: Theme.spacingXXS
+
+                                DC.StyledText {
+                                    width: parent.width
+                                    text: root.online ? root.num(root.tel.cpu_temp_c) + "°C" : "Offline"
+                                    font.pixelSize: Theme.fontSizeXXLarge
+                                    font.features: { "tnum": 1 }
+                                    color: root.online ? root.tempColor(root.tel.cpu_temp_c) : Theme.onSurfaceVariant
+                                }
+
+                                DC.StyledText {
+                                    width: parent.width
+                                    text: !root.online ? "hydroc-server is not running"
+                                        : root.readOnly ? "Read-only, /run/hydroc/token cannot be read"
+                                        : `CPU · ${root.activeName} · PL1 ${root.num(root.hw.cpu_pl1)} W`
+                                    font.pixelSize: Theme.fontSizeSmall
+                                    color: Theme.onSurfaceVariant
+                                    elide: Text.ElideRight
+                                }
+                            }
+
+                            DC.DActionButton {
+                                id: openButton
+                                anchors.verticalCenter: parent.verticalCenter
+                                iconName: "open_in_new"
+                                tooltipText: "Open HydroControl"
+                                onClicked: {
+                                    Quickshell.execDetached(["hydrocontrol"]);
+                                    if (pop.closePopout)
+                                        pop.closePopout();
+                                }
+                            }
+                        }
+
+                        DC.DSparkline {
+                            width: parent.width
+                            height: 40
+                            visible: root.online
+                            values: root.pkgHist
+                            historyLength: 60
+                            minimum: 0
+                            maximum: root.chartMax
+                            lineColor: Theme.primary
+                        }
                     }
                 }
 
-                // ── mode ──────────────────────────────────────────────────
-                Card {
-                    title: "Power mode"
+                // ── stats ─────────────────────────────────────────────────
+                Row {
+                    id: statsRow
+                    width: parent.width
+                    spacing: Theme.groupedListGap
+                    visible: root.online
+                    readonly property real tileWidth: (width - spacing * 2) / 3
+
+                    StatTile {
+                        width: statsRow.tileWidth
+                        first: true
+                        label: "GPU"
+                        value: root.num(root.tel.gpu_temp_c) + "°C"
+                        iconName: "developer_board"
+                        ratio: typeof root.tel.gpu_temp_c === "number" ? Math.min(1, root.tel.gpu_temp_c / 100) : -1
+                        ringColor: root.tempRing(root.tel.gpu_temp_c)
+                        valueColor: root.tempColor(root.tel.gpu_temp_c)
+                    }
+
+                    StatTile {
+                        width: statsRow.tileWidth
+                        label: "Package"
+                        value: root.num(root.tel.package_w, 1) + " W"
+                        iconName: "bolt"
+                        ratio: typeof root.tel.package_w === "number" && root.hw.cpu_pl1
+                               ? Math.min(1, root.tel.package_w / root.hw.cpu_pl1) : -1
+                    }
+
+                    StatTile {
+                        width: statsRow.tileWidth
+                        last: true
+                        label: "CPU fan"
+                        value: root.num(root.tel.fan1_rpm) + " rpm"
+                        iconName: "mode_fan"
+                        ratio: typeof root.tel.pwm1 === "number" ? root.tel.pwm1 / 255 : -1
+                    }
+                }
+
+                // ── power mode ────────────────────────────────────────────
+                Section {
+                    heading: "Power mode"
 
                     DC.DButtonGroup {
                         width: parent.width
-                        model: root.presetList.map(p => p.name)
+                        fillWidth: true
+                        checkEnabled: false
+                        model: root.presetList.map(p => ({ text: p.name, icon: root.presetIcons[p.id] || "tune" }))
                         currentIndex: root.presetIndex
                         enabled: !root.readOnly && !root.busy
                         onSelectionChanged: (index, selected) => {
@@ -448,21 +567,23 @@ PluginComponent {
                         }
                     }
 
-                    DC.StyledText {
-                        text: "The machine's own modes"
-                        font.pixelSize: Theme.fontSizeSmall
-                        color: Theme.surfaceVariantText
-                    }
-
-                    DC.DButtonGroup {
+                    DC.DCollapsibleSection {
                         width: parent.width
-                        size: "small"
-                        model: root.nativeList.map(p => p.name)
-                        currentIndex: root.nativeIndex
-                        enabled: !root.readOnly && !root.busy
-                        onSelectionChanged: (index, selected) => {
-                            if (selected && index !== root.nativeIndex)
-                                root.post("/api/native", { mode: root.nativeList[index].id });
+                        title: "The machine's own modes"
+                        expanded: !!root.presets.native_active
+
+                        DC.DButtonGroup {
+                            Layout.fillWidth: true
+                            fillWidth: true
+                            checkEnabled: false
+                            size: "small"
+                            model: root.nativeList.map(p => ({ text: p.name, icon: root.nativeIcons[p.id] || "tune" }))
+                            currentIndex: root.nativeIndex
+                            enabled: !root.readOnly && !root.busy
+                            onSelectionChanged: (index, selected) => {
+                                if (selected && index !== root.nativeIndex)
+                                    root.post("/api/native", { mode: root.nativeList[index].id });
+                            }
                         }
                     }
                 }
@@ -472,17 +593,17 @@ PluginComponent {
                 // on blur and on its spinner, and fought the user mid-entry; the
                 // field here is only refreshed from the hardware while it does
                 // not have focus.
-                Card {
+                Section {
                     id: tccCard
-                    title: "CPU temperature limit"
-                    note: root.tccApplied ? `In force ${root.tjmax - root.hw.cpu_tcc_applied} °C` : ""
+                    heading: "CPU temperature limit"
+                    note: root.tccApplied ? `In force ${root.tjmax - root.hw.cpu_tcc_applied}°C` : ""
                     visible: root.tccKnown
                     property string error: ""
 
                     function set() {
                         const raw = tccField.text.trim(), t = Number(raw), lo = root.tjmax - root.tccRange;
                         if (!/^\d+$/.test(raw) || t < lo || t > root.tjmax) {
-                            error = `Enter a whole number from ${lo} to ${root.tjmax} °C`;
+                            error = `Enter a whole number from ${lo} to ${root.tjmax}°C`;
                             return;
                         }
                         error = "";
@@ -490,37 +611,43 @@ PluginComponent {
                             root.apply({ cpu_tcc_enable: true, cpu_tcc_offset: root.tjmax - t });
                     }
 
-                    DC.DToggle {
+                    Item {
                         width: parent.width
-                        text: root.hw.cpu_tcc_enable ? "Throttle at a set temperature" : "Firmware default"
-                        checked: !!root.hw.cpu_tcc_enable
-                        enabled: !root.readOnly && !root.busy
-                        // Turning it on starts from what the CPU already runs,
-                        // so the switch alone changes nothing it does.
-                        onToggled: on => {
-                            tccCard.error = "";
-                            root.apply(on ? { cpu_tcc_enable: true,
-                                              cpu_tcc_offset: Math.min(root.tccRange, root.hw.cpu_tcc_applied ?? 5) }
-                                          : { cpu_tcc_enable: false });
+                        height: Math.max(tccToggleLabel.implicitHeight, tccToggle.height)
+
+                        DC.StyledText {
+                            id: tccToggleLabel
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: root.hw.cpu_tcc_enable ? "Throttle at a set temperature" : "Firmware default"
+                            color: Theme.onSurface
+                        }
+
+                        DC.DToggle {
+                            id: tccToggle
+                            anchors.right: parent.right
+                            anchors.verticalCenter: parent.verticalCenter
+                            hideText: true
+                            checked: !!root.hw.cpu_tcc_enable
+                            enabled: !root.readOnly && !root.busy
+                            // Turning it on starts from what the CPU already
+                            // runs, so the switch alone changes nothing.
+                            onToggled: on => {
+                                tccCard.error = "";
+                                root.apply(on ? { cpu_tcc_enable: true,
+                                                  cpu_tcc_offset: Math.min(root.tccRange, root.hw.cpu_tcc_applied ?? 5) }
+                                              : { cpu_tcc_enable: false });
+                            }
                         }
                     }
 
                     Row {
-                        width: parent.width
                         spacing: Theme.spacingS
                         visible: !!root.hw.cpu_tcc_enable
-
-                        DC.StyledText {
-                            id: tccLabel
-                            anchors.verticalCenter: parent.verticalCenter
-                            text: "Throttle at"
-                            color: Theme.surfaceVariantText
-                        }
 
                         DC.DTextField {
                             id: tccField
                             anchors.verticalCenter: parent.verticalCenter
-                            width: parent.width - tccLabel.width - tccUnit.width - tccSetButton.width - Theme.spacingS * 3
+                            width: 88
                             maximumLength: 3
                             isError: tccCard.error.length > 0
                             enabled: !root.readOnly
@@ -539,14 +666,12 @@ PluginComponent {
                         }
 
                         DC.StyledText {
-                            id: tccUnit
                             anchors.verticalCenter: parent.verticalCenter
                             text: "°C"
-                            color: Theme.surfaceVariantText
+                            color: Theme.onSurfaceVariant
                         }
 
                         DC.DButton {
-                            id: tccSetButton
                             anchors.verticalCenter: parent.verticalCenter
                             text: "Set"
                             variant: "tonal"
@@ -555,28 +680,29 @@ PluginComponent {
                         }
                     }
 
-                    DC.StyledText {
-                        width: parent.width
-                        wrapMode: Text.WordWrap
-                        font.pixelSize: Theme.fontSizeSmall
+                    Caption {
                         readonly property bool mismatch: !!root.hw.cpu_tcc_enable && root.tccApplied
                                                          && root.hw.cpu_tcc_applied !== root.hw.cpu_tcc_offset
-                        color: tccCard.error ? Theme.error : mismatch ? Theme.warning : Theme.surfaceVariantText
+                        color: tccCard.error ? Theme.error : mismatch ? Theme.warning : Theme.onSurfaceVariant
                         text: tccCard.error ? tccCard.error
-                            : mismatch ? `The CPU is running ${root.tjmax - root.hw.cpu_tcc_applied} °C, not the ${root.tjmax - root.hw.cpu_tcc_offset} °C set.`
-                            : root.hw.cpu_tcc_enable ? `${root.tjmax - root.tccRange}–${root.tjmax} °C. An offset of −${root.hw.cpu_tcc_offset || 0} below TjMax ${root.tjmax} °C.`
-                            : `The firmware's default for the current mode.`
+                            : mismatch ? `The CPU is running ${root.tjmax - root.hw.cpu_tcc_applied}°C, not the ${root.tjmax - root.hw.cpu_tcc_offset}°C set`
+                            : root.hw.cpu_tcc_enable ? `${root.tjmax - root.tccRange}–${root.tjmax}°C · −${root.hw.cpu_tcc_offset || 0} from TjMax`
+                            : "The current mode's own limit"
                     }
                 }
 
                 // ── battery ───────────────────────────────────────────────
-                Card {
-                    title: "Battery"
-                    note: root.online ? `${root.num(root.tel.capacity_pct)} % · ${root.tel.status || ""}` : ""
+                Section {
+                    heading: "Battery"
+                    note: root.online ? `${root.num(root.tel.capacity_pct)}% · ${root.tel.status || ""}` : ""
 
                     DC.DButtonGroup {
                         width: parent.width
-                        model: root.chargeModes.map(m => m.name)
+                        fillWidth: true
+                        checkEnabled: false
+                        model: [{ text: "Stationary", icon: "power" },
+                                { text: "Balanced", icon: "balance" },
+                                { text: "Long Haul", icon: "battery_full" }]
                         currentIndex: root.chargeIndex
                         enabled: !root.readOnly && !root.busy
                         onSelectionChanged: (index, selected) => {
@@ -621,23 +747,19 @@ PluginComponent {
                             }
                         }
 
-                        DC.StyledText {
-                            width: parent.width
-                            wrapMode: Text.WordWrap
-                            text: `Charge limit ${threshold.value} %. Above about 75 it does nothing: a fixed 4.175 V per cell stops charging first.`
-                            font.pixelSize: Theme.fontSizeSmall
-                            color: Theme.surfaceVariantText
+                        Caption {
+                            text: `Charge limit ${threshold.value}% · above 75% the 4.175 V cell ceiling stops it first`
                         }
                     }
 
-                    DC.StyledText {
+                    Caption {
                         text: "Power Saver" + (root.saver.active ? " · engaged" : "")
-                        font.pixelSize: Theme.fontSizeSmall
-                        color: Theme.surfaceVariantText
                     }
 
                     DC.DButtonGroup {
                         width: parent.width
+                        fillWidth: true
+                        checkEnabled: false
                         size: "small"
                         model: ["Auto", "On", "Off"]
                         currentIndex: root.saverIndex
@@ -650,12 +772,15 @@ PluginComponent {
                 }
 
                 // ── fans ──────────────────────────────────────────────────
-                Card {
-                    title: "Fans"
+                Section {
+                    heading: "Fans"
+                    note: root.online ? `${root.num(root.tel.fan1_rpm)} · ${root.num(root.tel.fan2_rpm)} rpm` : ""
 
                     DC.DButtonGroup {
                         width: parent.width
-                        model: ["Firmware", "Curve"]
+                        fillWidth: true
+                        checkEnabled: false
+                        model: [{ text: "Firmware", icon: "memory" }, { text: "Curve", icon: "show_chart" }]
                         currentIndex: root.hw.fan_mode === "manual" ? 1 : root.hw.fan_mode === "auto" ? 0 : -1
                         enabled: !root.readOnly && !root.busy && !!root.fan.cpu
                         onSelectionChanged: (index, selected) => {
@@ -671,6 +796,8 @@ PluginComponent {
 
                     DC.DButtonGroup {
                         width: parent.width
+                        fillWidth: true
+                        checkEnabled: false
                         size: "small"
                         visible: root.hw.fan_mode === "manual" && root.curveNames.length > 0
                         model: root.curveNames.map(k => root.cap(k))
@@ -684,21 +811,17 @@ PluginComponent {
                         }
                     }
 
-                    DC.StyledText {
-                        width: parent.width
-                        wrapMode: Text.WordWrap
+                    Caption {
                         visible: root.hw.fan_mode === "manual" && root.curveIndex < 0
-                        text: "A curve edited in the app is running. Pick one here to replace it."
-                        font.pixelSize: Theme.fontSizeSmall
-                        color: Theme.surfaceVariantText
+                        text: "A curve edited in the app is running. Pick one here to replace it"
                     }
                 }
 
                 // ── graphics ──────────────────────────────────────────────
                 // Shown, not switched: the MUX is a firmware write that needs a
                 // reboot, which does not belong one click away in a panel.
-                Card {
-                    title: "Graphics"
+                Section {
+                    heading: "Graphics"
                     visible: !!root.gpu.supported
 
                     Item {
@@ -709,17 +832,17 @@ PluginComponent {
                             id: gpuText
                             anchors.verticalCenter: parent.verticalCenter
                             width: parent.width - gpuButton.width - Theme.spacingS
-                            wrapMode: Text.WordWrap
+                            elide: Text.ElideRight
                             text: (root.gpu.label || root.gpu.mode || "—")
                                   + (root.gpu.reboot_pending ? " · reboot to apply" : "")
-                            color: root.gpu.reboot_pending ? Theme.warning : Theme.surfaceText
+                            color: root.gpu.reboot_pending ? Theme.warning : Theme.onSurface
                         }
 
                         DC.DButton {
                             id: gpuButton
                             anchors.right: parent.right
                             anchors.verticalCenter: parent.verticalCenter
-                            text: "Change…"
+                            text: "Change"
                             variant: "tonal"
                             onClicked: {
                                 Quickshell.execDetached(["hydrocontrol"]);
@@ -730,13 +853,10 @@ PluginComponent {
                     }
                 }
 
-                DC.StyledText {
-                    width: parent.width
+                Caption {
                     visible: root.message.length > 0
-                    wrapMode: Text.WordWrap
                     text: root.message
-                    font.pixelSize: Theme.fontSizeSmall
-                    color: root.messageBad ? Theme.error : Theme.surfaceVariantText
+                    color: root.messageBad ? Theme.error : Theme.onSurfaceVariant
                 }
             }
             }
